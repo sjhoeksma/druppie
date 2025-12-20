@@ -1740,6 +1740,25 @@
         // Init Mermaid
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
+        // Configure Marked Renderer for Relative Images
+        // This ensures images in subfolders (like story/images/...) are loaded correctly relative to the markdown file
+        const renderer = new marked.Renderer();
+        const originalImage = renderer.image;
+
+        renderer.image = function (href, title, text) {
+            // Check if relative path
+            if (typeof href === 'string' && !href.startsWith('http') && !href.startsWith('https') && !href.startsWith('/') && !href.startsWith('data:')) {
+                // Prepend current directory if available
+                if (typeof currentPath !== 'undefined' && currentPath && currentPath.includes('/')) {
+                    const dir = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                    href = dir + href;
+                }
+            }
+            return originalImage.call(this, href, title, text);
+        };
+
+        marked.setOptions({ renderer });
+
 
         // --- NAVIGATION & FILESYSTEM LOGIC ---
 

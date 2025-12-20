@@ -43,6 +43,7 @@ const DOC_REGISTRY = {
         { name: "IAM", path: "compliance/iam.md" }
     ],
     "general": [
-        { name: "Project Readme", path: "README.md" }
+        { name: "Project Readme", path: "README.md" },
+        { name: "Het Verhaal Druppie", path: "story/story.md" }
     ]
 };
