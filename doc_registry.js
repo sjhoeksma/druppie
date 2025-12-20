@@ -30,7 +30,8 @@ const DOC_REGISTRY = {
         { name: "Runtime Info", path: "runtime/runtime.md" },
         { name: "Role Based Access Control (RBAC)", path: "runtime/rbac.md" },
         { name: "MCP Interface", path: "runtime/mcp_interface.md" },
-        { name: "Dynamic Slot", path: "runtime/dynamic_slot.md" }
+        { name: "Dynamic Slot", path: "runtime/dynamic_slot.md" },
+        { name: "Git", path: "runtime/git.md" }
     ],
     "compliance": [
         { name: "Overview", path: "compliance/overview.md" },
