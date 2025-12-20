@@ -763,6 +763,13 @@
                     <div class="text-xs font-bold">Bouwen & Goedkeuring</div>
                 </div>
             </button>
+
+            <!-- Login Button -->
+            <button onclick="toggleLogin()" id="btn-login"
+                class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition flex items-center gap-2 text-slate-400">
+                <i data-lucide="lock" class="w-4 h-4" id="icon-login"></i>
+                <span class="text-xs font-bold" id="text-login">Login</span>
+            </button>
         </div>
     </nav>
 
@@ -1698,6 +1705,30 @@
 
     </div> <!-- End flex-grow container -->
 
+    <!-- LOGIN MODAL -->
+    <div id="login-modal"
+        class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-lg shadow-2xl p-6 w-80 border border-slate-200">
+            <h3 class="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                <i data-lucide="shield-lock" class="w-4 h-4 text-blue-600"></i>
+                Editor Login
+            </h3>
+            <input type="password" id="login-pwd"
+                class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 mb-4 font-mono"
+                placeholder="Wachtwoord..." onkeyup="if(event.key === 'Enter') submitLogin()">
+            <div class="flex justify-end gap-2">
+                <button onclick="closeLogin()"
+                    class="px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded">
+                    Annuleren
+                </button>
+                <button onclick="submitLogin()"
+                    class="px-3 py-1.5 text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 rounded shadow-sm">
+                    Inloggen
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Markdown & Mermaid -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
@@ -1723,6 +1754,10 @@
         if (isFileSystem) {
             fsInd.innerHTML = '<span class="text-orange-400 font-bold">⚠️ Lokaal Bestand Systeem</span><br>Beperkte functionaliteit.';
             localAccessUI.classList.remove('hidden');
+            // Hide Login in File Mode (can't save anyway without handle, but handle requires user interaction first)
+            // Actually, we can save if we have a handle. But user asked to hide it.
+            const btnLogin = document.getElementById('btn-login');
+            if (btnLogin) btnLogin.classList.add('hidden');
         } else {
             fsInd.innerHTML = '<span class="text-green-400 font-bold">● Web Server Mode</span><br>Volledige functionaliteit.';
         }
@@ -1735,6 +1770,10 @@
                 // Update UI
                 fsInd.innerHTML = '<span class="text-green-400 font-bold">● Local Access Active</span><br>Read/Write enabled.';
                 localAccessUI.classList.add('hidden');
+
+                // Enable Login Button now that we have write access
+                const btnLogin = document.getElementById('btn-login');
+                if (btnLogin) btnLogin.classList.remove('hidden');
 
                 alert("Verbonden met lokale map! Je kunt nu bestanden lezen en bewerken.");
 
@@ -1799,6 +1838,94 @@
 
         let currentCategory = null;
         let currentDocIndex = -1;
+        let isEditor = false; // Security State
+        const EDITOR_HASH = "9bf3fd2d2ab098919dc054bc4e67dfc7da370feb3e281dd45e5165ef2c1f98a6"; // SHA-256 for 'DruppieAI'
+
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+
+        // Login Logic
+        function toggleLogin() {
+            if (!isEditor) {
+                // Show Modal
+                const modal = document.getElementById('login-modal');
+                const input = document.getElementById('login-pwd');
+                modal.classList.remove('hidden');
+                input.value = '';
+                setTimeout(() => input.focus(), 100);
+            } else {
+                // Logout
+                if (confirm("Uitloggen?")) {
+                    isEditor = false;
+                    updateLoginUI();
+
+                    // Refresh views
+                    if (currentCategory) {
+                        renderDocList(currentCategory);
+                        if (currentDocIndex !== -1) selectDoc(currentDocIndex);
+                    }
+                }
+            }
+        }
+
+        function closeLogin() {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+
+        async function submitLogin() {
+            const input = document.getElementById('login-pwd');
+            const pwd = input.value;
+
+            if (!pwd) return;
+
+            const hash = await sha256(pwd);
+
+            if (hash === EDITOR_HASH) {
+                isEditor = true;
+                closeLogin();
+                updateLoginUI();
+
+                // Refresh views
+                if (currentCategory) {
+                    renderDocList(currentCategory);
+                    if (currentDocIndex !== -1) selectDoc(currentDocIndex);
+                }
+            } else {
+                alert("Ongeldig wachtwoord.");
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        function updateLoginUI() {
+            const btn = document.getElementById('btn-login');
+            const icon = document.getElementById('icon-login');
+            const text = document.getElementById('text-login');
+
+            if (isEditor) {
+                btn.classList.replace('bg-slate-800', 'bg-blue-900');
+                btn.classList.replace('border-slate-600', 'border-blue-700');
+                btn.classList.replace('text-slate-400', 'text-blue-100');
+                // Lucide icon replacement manually by re-rendering or assuming class change triggers enough? 
+                // Lucide icons are SVGs replaced at runtime. We need to reset innerHTML effectively or just rely on text.
+                // Simpler: Just refresh icon
+                icon.setAttribute('data-lucide', 'unlock');
+                text.innerText = "Editor";
+            } else {
+                btn.classList.replace('bg-blue-900', 'bg-slate-800');
+                btn.classList.replace('border-blue-700', 'border-slate-600');
+                btn.classList.replace('text-blue-100', 'text-slate-400');
+                icon.setAttribute('data-lucide', 'lock');
+                text.innerText = "Login";
+            }
+            lucide.createIcons();
+        }
+
 
         // Render the Sidebar List for a Category
         function renderDocList(category) {
@@ -1807,11 +1934,11 @@
             const catTitle = document.getElementById('md-category-title');
             const btnAdd = document.getElementById('btn-add-doc');
 
-            // Hide Add Button in File Mode
-            if (isFileSystem) {
-                if (btnAdd) btnAdd.classList.add('hidden');
+            // Gate Add Button behind isEditor
+            if (isEditor) {
+                btnAdd.classList.remove('hidden');
             } else {
-                if (btnAdd) btnAdd.classList.remove('hidden');
+                btnAdd.classList.add('hidden');
             }
 
             if (!DOC_REGISTRY[category]) return;
@@ -1843,11 +1970,11 @@
             const doc = DOC_REGISTRY[currentCategory][index];
             const btnDelete = document.getElementById('btn-delete-doc');
 
-            // Hide Delete Button in File Mode
-            if (isFileSystem) {
-                if (btnDelete) btnDelete.classList.add('hidden');
+            // Gate Delete Button
+            if (isEditor) {
+                btnDelete.classList.remove('hidden');
             } else {
-                if (btnDelete) btnDelete.classList.remove('hidden');
+                btnDelete.classList.add('hidden');
             }
 
             if (doc) {
@@ -1860,6 +1987,7 @@
 
         // Add New Document (Real Persistence)
         async function addNewDoc() {
+            if (!isEditor) return;
             const name = prompt("Naam van nieuw document:");
             if (!name) return;
 
@@ -1889,6 +2017,7 @@
         }
 
         async function deleteCurrentDoc() {
+            if (!isEditor) return;
             if (currentDocIndex === -1) return;
             if (!confirm("Weet je zeker dat je dit bestand wilt verwijderen? (Dit is definitief)")) return;
 
@@ -1915,6 +2044,7 @@
         }
 
         async function saveDoc() {
+            if (!isEditor) return;
             const content = document.getElementById('md-editor').value;
             try {
                 if (projectHandle) {
@@ -1995,11 +2125,11 @@
             mdLoading.classList.remove('hidden');
             document.getElementById('md-title').innerText = path;
 
-            // Configure buttons based on Environment
-            if (isFileSystem) {
-                btnEdit.classList.add('hidden');
-            } else {
+            // Gate Edit Button
+            if (isEditor) {
                 btnEdit.classList.remove('hidden');
+            } else {
+                btnEdit.classList.add('hidden');
             }
 
             try {
