@@ -1,4 +1,4 @@
-# Runtime (AKS)
+# Runtime
 
 ## Beschrijving
 Een hardware infrastructuur waarop wij veilig en compliant zonder menselijk tussenkomst snel Bouwblokken kunnen deployen.
