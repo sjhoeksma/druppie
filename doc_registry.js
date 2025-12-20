@@ -4,6 +4,16 @@ const DOC_REGISTRY = {
     "bouwblokken": [
         { name: "Overview", path: "bouwblokken/overview.md" },
         { name: "Bouwblok Definities", path: "bouwblokken/bouwblok_definities.md" },
+        { name: "CI/CD Pipeline (Tekton)", path: "bouwblokken/ci_cd_tekton.md" },
+        { name: "Database (PostgreSQL)", path: "bouwblokken/database_postgres.md" },
+        { name: "Geo-Database (PostGIS)", path: "bouwblokken/database_postgis.md" },
+        { name: "Webserver & Certificaten (Ingress)", path: "bouwblokken/webserver_ingress.md" },
+        { name: "GitOps & State (Flux)", path: "bouwblokken/gitops_flux.md" },
+        { name: "Observability (PLG Stack)", path: "bouwblokken/observability_plg.md" },
+        { name: "Git & Versiebeheer (Gitea)", path: "bouwblokken/git_gitea.md" },
+        { name: "Traceability (Tempo & OTEL)", path: "bouwblokken/traceability_otel.md" },
+        { name: "IAM (Keycloak & Azure AD)", path: "bouwblokken/iam_keycloak.md" },
+        { name: "MCP Server Host", path: "bouwblokken/mcp_server.md" },
         { name: "Build Plane", path: "bouwblokken/build_plane.md" },
         { name: "Compliance Layer", path: "bouwblokken/compliance_layer.md" },
         { name: "Druppie Core", path: "bouwblokken/druppie_core.md" },
@@ -41,6 +51,11 @@ const DOC_REGISTRY = {
         { name: "Overview", path: "compliance/overview.md" },
         { name: "BIO & NIS2", path: "compliance/bio4_nis2.md" },
         { name: "IAM", path: "compliance/iam.md" }
+    ],
+    "mcp_catalog": [
+        { name: "Overview", path: "mcp/overview.md" },
+        { name: "Microsoft & Azure", path: "mcp/microsoft.md" },
+        { name: "Open Source Tools", path: "mcp/opensource.md" }
     ],
     "general": [
         { name: "Project Readme", path: "README.md" },

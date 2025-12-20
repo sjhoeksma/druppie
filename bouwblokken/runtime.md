@@ -22,6 +22,32 @@ Dit bouwblok definieert de **interface** naar de Runtime omgeving. In de Azure F
 - **Entra Agent ID**: Elke agent draait onder zijn eigen Managed Identity.
 - **Network Isolation**: Alle communicatie verloopt via Private Endpoints binnen het VNet.
 
+## 3. Geselecteerde Kubernetes Stack (RKE2)
+Voor de **Container Runtime** is gekozen voor **RKE2** (Rancher Kubernetes Engine 2), ook wel bekend als RKE Government.
+
+### 💡 Waarom RKE2?
+- **Security-First**: RKE2 is standaard gehard volgens de CIS Kubernetes Benchmark en is FIPS 140-2 compliant. Dit is essentieel voor overheidsinstellingen zoals Waterschappen.
+- **Lichtgewicht & Robuust**: Het bundelt alle componenten in één binary maar gebruikt de zuivere, moderne CRI (Container Runtime Interface) standaarden (containerd).
+- **Eenvoudig Beheer**: Het automatiseert certificaatbeheer en etcd snapshots.
+
+### ⚙️ Configuratie (`config.yaml`)
+Een typische, veilige configuratie voor een RKE2 node binnen Druppie:
+
+```yaml
+# RKE2 Server Config
+write-kubeconfig-mode: "0644"
+tls-san:
+  - "k8s-api.druppie.nl"
+cni: "canal" # Calico + Flannel voor Network Policy enforcement
+profile: "cis-1.23" # Activeer CIS Hardening Profile
+selinux: true
+token: "SECRET_CLUSTER_TOKEN"
+system-default-registry: "registry.druppie.nl" # Gebruik de interne, scanned registry
+kube-apiserver-arg:
+  - "audit-log-path=/var/lib/rancher/rke2/server/audit.log"
+  - "audit-policy-file=/etc/rancher/rke2/audit-policy.yaml" # Audit Logging voor Compliance
+```
+
 ## 🏗️ Relaties
 - **Verwijst naar**: [Runtime Domein](../runtime/overview.md).
 - **Wordt gebruikt door**: [Druppie Core](./druppie_core.md) en [Build Plane](./build_plane.md).
