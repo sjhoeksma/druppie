@@ -41,3 +41,20 @@ Een verzameling van breed inzetbare, open-source MCP servers die direct als cont
 ### 7. Brave Search
 *   **Repo**: `github.com/modelcontextprotocol/servers/tree/main/src/brave-search`
 *   **Beschrijving**: Uitvoeren van web-zoekopdrachten via de Brave Search API (privacy-vriendelijk).
+
+## 🚀 Advanced Capabilities (AI Stack Upgrade)
+
+### 8. Graphiti (Temporal Knowledge Graph)
+*   **Repo**: `getzep/graphiti`
+*   **Beschrijving**: Voegt een dynamisch geheugen toe aan de AI. Slaat entiteiten en relaties op in een grafiek die verandert in de tijd (Temporal).
+*   **Use Case**: Langlopende context onthouden van projectbeslissingen en relaties tussen stakeholders.
+
+### 9. Opik (Observability)
+*   **Repo**: `comet-ml/opik`
+*   **Beschrijving**: Observability laag specifiek voor LLM-applicaties. Traceert latency, kosten en de "gedachtegang" (chains) van de AI.
+*   **Use Case**: Debuggen waarom een Agent een bepaalde keuze heeft gemaakt in de Planner.
+
+### 10. Jupyter MCP (Interactive Notebooks)
+*   **Repo**: `qhdwight/jupyter-mcp-server`
+*   **Beschrijving**: Laat de AI direct code uitvoeren, plotten en analyseren in Jupyter Notebooks.
+*   **Use Case**: Data Science taken en het visualiseren van metrics (bijv. drone vlucht logs) zonder code te hoeven deployen.
