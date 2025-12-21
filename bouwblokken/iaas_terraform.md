@@ -16,7 +16,7 @@ Binnen de architectuur vervult Terraform een specifieke rol in de **Build Plane*
 
 *   **Gegenereerd door AI**: De **Builder Agent** schrijft Terraform configuraties (`.tf` files) op basis van de functionele specificaties.
 *   **Execution in Foundry**: De Tekton pipelines draaien `tofu plan` en `tofu apply` in een gecontroleerde omgeving.
-*   **Integratie met Compliance**: Terraform plannen worden vóór uitvoering gevalideerd door tools zoals **Checkov** of **Trivy** (IaC scanning) om te garanderen dat er geen onveilige infrastructuur wordt uitgerold (bijv. open storage buckets).
+*   **Integratie met Compliance**: Terraform plannen worden vóór uitvoering gevalideerd door tools zoals **Trivy** (IaC scanning) om te garanderen dat er geen onveilige infrastructuur wordt uitgerold (bijv. open storage buckets).
 
 ### 🛠️ Voorbeeld Spec
 Een voorbeeld van hoe een Terraform definitie eruit ziet die door de Agent gegenereerd kan worden:
