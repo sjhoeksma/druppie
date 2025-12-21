@@ -1,10 +1,14 @@
 # Druppie – Spec-Driven AI Architectuur
 
-Druppie is een geavanceerd architectuur-platform voor **Spec-Driven AI** en **Human-in-the-Loop** automatisering. Dit project beschrijft hoe AI-agents, compliance-regels en menselijke interactie samenkomen om software veilig, schaalbaar en consistent te bouwen en te beheren. Waarbij de focus ligt op het ontwikkelen van **compliance** en **security** oplossingen. De tools en technieken die gebruikt worden zijn geselecteerd op basis van hun **security** en **compliance** compliance en **ease of use** tijdens de onderzoeksfase waarin dit project zich bevindt.
+Druppie is een geavanceerd enterprise platform voor **Spec-Driven AI** en **Human-in-the-Loop** automatisering. Dit project beschrijft hoe AI-agents, compliance-regels en menselijke interactie samenkomen om software veilig, schaalbaar en consistent te bouwen en te beheren.
 
-De architectuur is ontworpen om volledig **declaratief** te zijn: in plaats van imperatieve scripts, definiëren we **specificaties** (specs) die door AI-agents worden geïnterpreteerd en uitgevoerd.
+De focus ligt op het automatiseren van de volledige lifecycle binnen een **overheidscontext** (Waterschap/Gemeente), met zware nadruk op **Security**, **Privacy (GDPR)** en **Compliance (BIO/NIS2/AI Act)**.
 
-## 🚀 Aan de slag
+> **One-Stop-Shop**: Deze repository bevat zowel de architectuurdocumentatie als de *Infrastructure-as-Code* (IaC) scripts om het platform volledig op te zetten.
+
+---
+
+## 🚀 Aan de slag met de Architectuur
 
 De volledige architectuur is interactief te verkennen.
 
@@ -12,46 +16,68 @@ De volledige architectuur is interactief te verkennen.
 2. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
 3. Draai simulaties (Scenarios) om de interactie tussen componenten te visualiseren.
 
+## 🚀 Snel Starten met het Platform
+
+De makkelijkste manier om te beginnen is via de **Master CLI**:
+
+```bash
+./druppie.sh
+```
+
+Dit interactieve menu geeft toegang tot:
+1.  **☸️ Installatie**: Kubernetes (RKE2 voor Prod, k3d voor Dev).
+2.  **🏗️ Bootstrap**: Platform base layer (Flux, Kyverno, Tekton, Kong).
+3.  **📦 Services**: One-click setup voor Gitea, Keycloak, Prometheus, GeoServer, etc.
+4.  **📚 Documentatie**: Genereer de "Living Documentation".
+
+---
+
 ## 📂 Projectstructuur
 
-De repository is opgebouwd uit verschillende functionele domeinen:
+De repository is opgebouwd uit verschillende lagen:
 
-### 🧱 [Bouwblokken](./bouwblokken/)
-De fundamentele componenten van het systeem. Hier vind je definities voor onder andere:
-- **Druppie Core (Orchestrator)**: Het brein dat taken plant en verdeelt.
-- **Policy Engine**: Bewaakt regels en compliance.
-- **Mens in de Loop**: Interfaces voor goedkeuring en menselijke controle.
-- **Traceability DB**: Audit logging voor volledige traceerbaarheid.
+### 1. 🧱 [Bouwblokken](./bouwblokken/)
+De lego-stenen van het platform. Definities van tools en componenten:
+*   **Security**: Trivy, SonarQube.
+*   **Data**: MinIO, Gitea, Qdrant (Vector DB).
+*   **GIS**: GeoServer, PostGIS, WebODM, GeoNode.
+*   **Observability**: LGTM Stack (Loki, Grafana, Tempo, Prometheus).
 
-### 🏗️ [Build Plane](./build_plane/)
-De "fabriek" van het platform. De Build Plane is verantwoordelijk voor het omzetten van specificaties naar werkende software artifacts.
-- **Spec-driven**: Bouwen op basis van definities, niet scripts.
-- **Builder Agent**: AI die code en infrastructuur genereert.
-- **Foundry**: De veilige omgeving voor compilatie, tests en security scans.
+### 2. 🏗️ [Build Plane](./build_plane/)
+De "Agent Factory". Hier wordt code omgezet in veilige artifacts:
+*   **Builder Agent**: AI die code, tests en docs genereert.
+*   **Automated Testing**: Unit, Integration, E2E in Tekton pipelines.
+*   **Secure Supply Chain**: SBOMs en signatures bij elke build.
 
-### ⚙️ [Runtime](./runtime/)
-De uitvoeromgeving waar applicaties en agents draaien.
-- **Kubernetes**: De basislaag voor orchestratie.
-- **RBAC & Security**: Toegangsbeheer en netwerkpolicies.
-- **MCP Interface**: Standaard protocol voor tool-gebruik door AI.
+### 3. ⚙️ [Runtime](./runtime/)
+De landingsplaats (Kubernetes):
+*   **Hybride Cluster**: Draait deels in Azure, deels On-Premise.
+*   **Policy Engine (Kyverno)**: Dwingt regels af (bv. "Geen root containers").
+*   **Agentic RAG**: Netwerk van AI agenten die veilig data ontsluiten.
 
-### ⚡ [Skills](./skills/)
-De cognitieve en functionele vaardigheden waarover de agents beschikken.
-- **Research**: Analyseren en plannen.
-- **Build & Test**: Genereren en valideren van code.
-- **Deploy**: Uitrollen naar de runtime omgeving.
+### 4. 📝 [Ontwerpen (Designs)](./design/)
+Gedetailleerde technische ontwerpen en functionele beschrijvingen:
+*   **[Exoten Detectie](./design/exoten_detectie.md)**: Satelliet + Drone flow.
+*   **[Vergunning Vinder](./design/vergunning_vinder.md)**: AI zoekt oude aktes.
+*   **[Automated Rebuild](./design/automated_rebuild.md)**: Self-healing bij security patches.
 
-### 🛡️ [Compliance](./compliance/)
-Governance en beveiliging staan centraal.
-- **IAM**: Identiteit en toegangsbeheer.
-- **Auditing**: Continue monitoring en rapportage.
+### 5. 🛡️ [Compliance](./compliance/)
+De regels en wetten vertaald naar techniek:
+*   **AI Act & Register**: Verplichte registratie van algoritmes.
+*   **BIO & NIS2**: Baseline Informatiebeveiliging.
+*   **Goed Bestuur**: Principes van transparantie en controleerbaarheid.
+
+---
 
 ## 💡 Kernprincipes
 
-1.  **Alles is een Spec**: Van infrastructuur tot agent-gedrag, alles wordt vastgelegd in leesbare specificaties.
-2.  **Human-in-the-Loop**: Kritieke beslissingen vereisen altijd menselijke goedkeuring.
-3.  **Secure by Design**: Compliance en security policies zijn ingebakken in elke stap van het proces.
-4.  **Traceerbaarheid**: Elke actie, van prompt tot deployment, wordt gelogd en is auditeerbaar.
+1.  **Alles is een Spec**: Van infrastructuur tot agent-gedrag, alles wordt vastgelegd in leesbare files.
+2.  **Human-in-the-Loop**: Kritieke beslissingen (vliegroute drone, verwijderen data) vereisen *altijd* menselijke goedkeuring.
+3.  **Secure by Design**: Security tools (Trivy, Kyverno) staan "aan" by default.
+4.  **Traceerbaarheid**: Elke actie, van prompt tot deployment, wordt gelogd in de Traceability DB.
 
 ---
-*Open `index.html` voor de interactieve visualisatie.*
+
+## 🛠️ Scripts & Tools
+
+Bekijk de [Script Overview](./script/overview.md) voor een lijst van alle beschikbare beheerscripts.
