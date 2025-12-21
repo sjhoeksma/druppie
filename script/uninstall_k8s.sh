@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Druppie Uninstaller
+# Removes RKE2 or k3d clusters
+
+set -e
+
+COLOR_RED='\033[0;31m'
+COLOR_NC='\033[0m'
+
+# Log File Location (Project Root)
+LOG_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../.druppie_history"
+
+function log() {
+    echo -e "${COLOR_RED}[UNINSTALL]${COLOR_NC} $1"
+}
+
+function log_history() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | UNINSTALL | Kubernetes | $1" >> "$LOG_FILE"
+}
+
+echo "Which Kubernetes distribution do you want to remove?"
+echo "1) RKE2 (Linux Service)"
+echo "2) k3d (Docker Container)"
+read -p "Choice [1-2]: " OPT
+
+if [ "$OPT" == "1" ]; then
+    # RKE2 Uninstall
+    if [[ $EUID -ne 0 ]]; then
+       echo "RKE2 uninstall requires root."
+       exit 1
+    fi
+    
+    log "Stopping RKE2..."
+    systemctl stop rke2-server
+    systemctl disable rke2-server
+    
+    log "Running RKE2 Uninstall Script..."
+    if [ -f /usr/local/bin/rke2-uninstall.sh ]; then
+        /usr/local/bin/rke2-uninstall.sh
+    else
+        echo "Uninstall script not found. Was RKE2 installed?"
+        exit 1
+    fi
+    
+    log "RKE2 removed."
+    log_history "RKE2"
+
+elif [ "$OPT" == "2" ]; then
+    # k3d Uninstall
+    log "Deleting 'druppie-dev' cluster..."
+    if command -v k3d &> /dev/null; then
+        k3d cluster delete druppie-dev
+        log "Cluster deleted."
+        log_history "k3d (druppie-dev)"
+    else
+        echo "k3d binary not found."
+    fi
+
+else
+    echo "Invalid choice."
+fi
