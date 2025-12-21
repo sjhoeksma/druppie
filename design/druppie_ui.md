@@ -13,7 +13,7 @@
 *   **Styling**: Tailwind CSS (adhering to Company Style Guide).
 *   **State Management**: React Query (Server State) + Zustang (Client State).
 *   **Visualization**:
-    *   Code: `monaco-editor` or `prismjs`.
+    *   Code: `prismjs`.
     *   Diagrams: `mermaid.js`.
     *   Markdown: `react-markdown`.
 *   **Protocol**:
