@@ -12,6 +12,7 @@ const DOC_REGISTRY = {
         { name: "Build Plane", path: "bouwblokken/build_plane.md" },
         { name: "Infrastructure as Code (Terraform)", path: "bouwblokken/iaas_terraform.md" },
         { name: "AI Video (ComfyUI)", path: "bouwblokken/ai_video.md" },
+        { name: "AI Audio (TTS)", path: "bouwblokken/ai_audio.md" },
         { name: "Runtime", path: "bouwblokken/runtime.md" },
         { name: "Knowledge Bot", path: "bouwblokken/knowledge_bot.md" },
         { name: "Traceability DB", path: "bouwblokken/traceability_db.md" },
