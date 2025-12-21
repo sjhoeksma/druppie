@@ -77,14 +77,17 @@ const DOC_REGISTRY = {
     ],
     "ontwerpen": [
         { name: "Overview", path: "design/overview.md" },
-        { name: "Hybride Architectuur (K8s)", path: "design/hybrid_cluster_architecture.md" },
-        { name: "Component Interactie (Build->Run)", path: "design/component_interaction.md" },
-        { name: "Data Lifecycle & Versiebeheer", path: "design/data_lifecycle_drone.md" },
-        { name: "Deployment & Rolling Updates", path: "design/deployment_strategies.md" },
-        { name: "Automated Rebuild (Watchdog)", path: "design/automated_rebuild.md" },
-        { name: "Secure Agentic RAG Network", path: "design/agentic_rag_network.md" },
-        { name: "Continuous Compliance & Lifecycle", path: "design/compliance_lifecycle_monitoring.md" },
-        { name: "Automated Testing & Documentation", path: "design/automated_testing_docs.md" }
+        { name: "TO: Hybride Architectuur (K8s)", path: "design/hybrid_cluster_architecture.md" },
+        { name: "TO: Component Interactie (Build->Run)", path: "design/component_interaction.md" },
+        { name: "TO: Data Lifecycle & Versiebeheer", path: "design/data_lifecycle_drone.md" },
+        { name: "TO: Deployment & Rolling Updates", path: "design/deployment_strategies.md" },
+        { name: "TO: Automated Rebuild (Watchdog)", path: "design/automated_rebuild.md" },
+        { name: "TO: Secure Agentic RAG Network", path: "design/agentic_rag_network.md" },
+        { name: "TO: Continuous Compliance & Lifecycle", path: "design/compliance_lifecycle_monitoring.md" },
+        { name: "TO: Automated Testing & Documentation", path: "design/automated_testing_docs.md" },
+        { name: "FO: Vergunning Vinder", path: "design/vergunning_vinder.md" },
+        { name: "FO: Exoten Detectie", path: "design/exoten_detectie.md" },
+        { name: "FO: Drone Planner", path: "design/drone_planner.md" }
     ],
     "scripts": [
         { name: "Overview", path: "script/overview.md" }
