@@ -36,22 +36,23 @@ OS="$(uname)"
 
 # Selection Menu
 echo -e "${COLOR_GREEN}Select Installation Profile:${COLOR_NC}"
-echo "1) Workstation (RKE2 - Single Node - Linux Only)"
-echo "2) Server (RKE2 - Control Plane - Linux Only)"
-echo "3) Local Dev (k3d - Docker Required - macOS/Linux)"
-read -p "Choice [1-3]: " PROFILE_OPT
+echo "1) Local Dev (k3d - Docker Required - macOS/Linux)"
+echo "2) Install Rancher UI (Requires existing Cluster - Helm)"
+echo "3) Workstation (RKE2 - Single Node - Linux Only)"
+echo "4) Server (RKE2 - Control Plane - Linux Only)"
+read -p "Choice [1-4]: " PROFILE_OPT
 
 # Validation
-if [[ "$PROFILE_OPT" == "1" || "$PROFILE_OPT" == "2" ]]; then
+if [[ "$PROFILE_OPT" == "3" || "$PROFILE_OPT" == "4" ]]; then
     if [[ "$OS" == "Darwin" ]]; then
-        error "RKE2 (Options 1/2) is only supported on Linux. Use Option 3 (k3d) for macOS."
+        error "RKE2 (Options 3/4) is only supported on Linux. Use Option 1 (k3d) for macOS."
     fi
     if [ "$IS_ROOT" = false ]; then
         error "RKE2 installation requires root (sudo)."
     fi
 fi
 
-if [ "$PROFILE_OPT" == "3" ]; then
+if [ "$PROFILE_OPT" == "1" ]; then
     log "Checking Docker..."
     if ! command -v docker &> /dev/null; then
         error "Docker is not installed or not in PATH."
@@ -88,8 +89,21 @@ if [ "$PROFILE_OPT" == "3" ]; then
         log "kubectl is already installed."
     fi
 
+    log "Checking/Installing Helm..."
+    if ! command -v helm &> /dev/null; then
+        if [[ "$OS" == "Darwin" ]]; then
+            log "Installing Helm via Homebrew..."
+            brew install helm
+        else
+            log "Installing Helm..."
+            curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        fi
+    fi
+
     log "Creating/Updating Cluster 'druppie-dev'..."
     # Create cluster with Ingress ports mapped
+    # - 80:80 (HTTP Ingress)
+    # - 443:443 (HTTPS Ingress)
     k3d cluster create druppie-dev \
         --api-port 6443 \
         -p "80:80@loadbalancer" \
@@ -100,6 +114,54 @@ if [ "$PROFILE_OPT" == "3" ]; then
     log "Cluster Ready! 🚀"
     log "Run: kubectl get nodes"
     log_history "k3d (druppie-dev)"
+    read -p "Druk op Enter..."
+    exit 0
+fi
+
+if [ "$PROFILE_OPT" == "2" ]; then
+    log "Checking Helm..."
+    if ! command -v helm &> /dev/null; then
+         error "Helm is likely required but not found. Please install Helm or run Option 1 first."
+    fi
+
+    # Check for Token
+    if [ -z "$DRUPPIE_RANCHER_TOKEN" ]; then
+        read -p "Enter Rancher Bootstrap Password (e.g. admin): " DRUPPIE_RANCHER_TOKEN
+    fi
+
+    log "Installing Cert-Manager (Required for Rancher)..."
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
+    helm upgrade --install cert-manager jetstack/cert-manager \
+      --namespace cert-manager --create-namespace \
+      --set crds.enabled=true \
+      --wait
+
+    log "Installing Rancher UI..."
+    helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+    helm repo update
+
+    # Install Rancher
+    log "Deploying Rancher..."
+ helm upgrade --install rancher rancher-stable/rancher \
+      --namespace cattle-system --create-namespace \
+      --set hostname=localhost \
+      --set bootstrapPassword=${DRUPPIE_RANCHER_TOKEN} \
+      --set ingress.tls.source=rancher \
+      --set replicas=1 \
+      --set ingress.ingressClassName=kong \
+      --wait
+
+    log "Waiting for Rancher to be ready..."
+    kubectl -n cattle-system rollout status deploy/rancher
+
+    log "Rancher UI Installed! 🤠"
+    log "Access URL: https://localhost"
+    log "Login: ${DRUPPIE_RANCHER_TOKEN}"
+    log "(Note: Accept the self-signed certificate warning)"
+    
+    log_history "Rancher UI Installed"
+    read -p "Druk op Enter..."
     exit 0
 fi
 
@@ -109,7 +171,7 @@ CONFIG_FILE="$RKE2_CONFIG_DIR/config.yaml"
 
 mkdir -p $RKE2_CONFIG_DIR
 
-if [ "$PROFILE_OPT" == "1" ]; then
+if [ "$PROFILE_OPT" == "3" ]; then
     log "Configuring for WORKSTATION..."
     # Workstation: Minimal resource usage
     cat <<EOF > $CONFIG_FILE
@@ -122,7 +184,7 @@ disable:
 profile: "cis-1.23"
 EOF
 
-elif [ "$PROFILE_OPT" == "2" ]; then
+elif [ "$PROFILE_OPT" == "4" ]; then
     log "Configuring for SERVER (Production)..."
     if [ -z "$CLUSTER_TOKEN" ]; then
         if [ ! -z "$DRUPPIE_K8S_TOKEN" ]; then
@@ -187,9 +249,9 @@ done
 
 log "Installation Complete! 🚀"
 log "Kubeconfig location: /etc/rancher/rke2/rke2.yaml"
-if [ "$PROFILE_OPT" == "1" ]; then
+if [ "$PROFILE_OPT" == "3" ]; then
     log "You can copy this to ~/.kube/config on your host."
     log_history "RKE2 (Workstation)"
-elif [ "$PROFILE_OPT" == "2" ]; then
+elif [ "$PROFILE_OPT" == "4" ]; then
     log_history "RKE2 (Server)"
 fi
