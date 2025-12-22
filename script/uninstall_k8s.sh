@@ -20,11 +20,12 @@ function log_history() {
 }
 
 echo "Which Kubernetes distribution do you want to remove?"
-echo "1) RKE2 (Linux Service)"
-echo "2) k3d (Docker Container)"
+echo "1) k3d (Docker Container)"
+echo "2) RKE2 (Linux Service)"
+
 read -p "Choice [1-2]: " OPT
 
-if [ "$OPT" == "1" ]; then
+if [ "$OPT" == "2" ]; then
     # RKE2 Uninstall
     if [[ $EUID -ne 0 ]]; then
        echo "RKE2 uninstall requires root."
@@ -46,13 +47,24 @@ if [ "$OPT" == "1" ]; then
     log "RKE2 removed."
     log_history "RKE2"
 
-elif [ "$OPT" == "2" ]; then
+elif [ "$OPT" == "1" ]; then
     # k3d Uninstall
     log "Deleting 'druppie-dev' cluster..."
     if command -v k3d &> /dev/null; then
         k3d cluster delete druppie-dev
         log "Cluster deleted."
         log_history "k3d (druppie-dev)"
+        if [[ "$(uname)" == "Darwin" ]]; then
+            # macOS: Remove k3d binary
+            brew uninstall k3d
+            log "k3d removed."
+            log_history "k3d"
+        else
+            # Linux: Remove k3d binary
+            sudo rm -f /usr/local/bin/k3d
+            log "k3d removed."
+            log_history "k3d"
+        fi
     else
         echo "k3d binary not found."
     fi

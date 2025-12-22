@@ -28,6 +28,17 @@ if ! kubectl cluster-info &> /dev/null; then
 fi
 log "Connected to $(kubectl config current-context)."
 
+# 1.5. Wait for Nodes to be Ready (Crucial for fresh local clusters)
+function wait_for_nodes() {
+    log "Waiting for all cluster nodes to be Ready..."
+    if ! kubectl wait --for=condition=Ready nodes --all --timeout=120s; then
+        echo "⚠️ Nodes are not ready yet. This might be fine if they are starting up, but could cause issues."
+    else
+        log "All nodes are Ready."
+    fi
+}
+wait_for_nodes
+
 # 2. Install Helm (if missing)
 if ! command -v helm &> /dev/null; then
     log "Installing Helm..."
@@ -38,15 +49,19 @@ fi
 log "Adding Helm Repositories..."
 helm repo add fluxcd-community https://fluxcd-community.github.io/helm-charts
 helm repo add kyverno https://kyverno.github.io/kyverno
-helm repo add tekton-triggers https://cdfoundation.github.io/tekton-triggers-charts
+helm repo add tekton-cd https://cdfoundation.github.io/tekton-helm-chart
 helm repo add kong https://charts.konghq.com
 helm repo up
 
 # 4. Install Flux CD (GitOps Engine)
 log "Installing Flux CD..."
-helm upgrade --install flux-operator fluxcd-community/flux2 \
-  --namespace flux-system --create-namespace \
-  --wait
+kubectl apply -f https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
+
+log "Waiting for Flux Controllers..."
+kubectl wait --for=condition=available deployment/source-controller -n flux-system --timeout=300s
+kubectl wait --for=condition=available deployment/kustomize-controller -n flux-system --timeout=300s
+kubectl wait --for=condition=available deployment/helm-controller -n flux-system --timeout=300s
+kubectl wait --for=condition=available deployment/notification-controller -n flux-system --timeout=300s
 log_history "Flux CD Installed"
 
 # 5. Install Kyverno (Policy Engine)
@@ -69,6 +84,9 @@ helm upgrade --install kong kong/kong \
   --namespace kong --create-namespace \
   --set ingressController.installCRDs=false \
   --set proxy.type=LoadBalancer \
+  --set controller.ingressClass.name=kong \
+  --set controller.ingressClass.resource.enabled=true \
+  --set controller.ingressClass.resource.default=true \
   --wait
 log_history "Kong Gateway Installed"
 

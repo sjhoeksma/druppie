@@ -4,7 +4,7 @@ Druppie is een geavanceerd enterprise platform voor **Spec-Driven AI** en **Huma
 
 De focus ligt op het automatiseren van de volledige lifecycle binnen een **overheidscontext** (Waterschap/Gemeente), met zware nadruk op **Security**, **Privacy (GDPR)** en **Compliance (BIO/NIS2/AI Act)**.
 
-> **One-Stop-Shop**: Deze repository bevat zowel de architectuurdocumentatie als de *Infrastructure-as-Code* (IaC) scripts om het platform volledig op te zetten.
+**One-Stop-Shop**: Deze repository bevat zowel de architectuurdocumentatie als de **Infrastructure-as-Code** (IaC) scripts om een platform te implementeren, waarmee de bouwblokken en skills kunnen worden geïmplementeerd. De focus ligt op het experimenteren en gebruiken van AI-agents en compliance-regels in een overheidsomgeving.
 
 ---
 

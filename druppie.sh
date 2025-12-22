@@ -34,6 +34,7 @@ function get_or_create_secret() {
 function ensure_secrets() {
     # Define required secrets for each installer
     get_or_create_secret "DRUPPIE_K8S_TOKEN"       # k8s
+    get_or_create_secret "DRUPPIE_RANCHER_TOKEN"   # Rancher
     get_or_create_secret "DRUPPIE_GITEA_PASS"      # data
     get_or_create_secret "DRUPPIE_MINIO_PASS"      # data
     get_or_create_secret "DRUPPIE_SONAR_PASS"      # security
@@ -67,15 +68,15 @@ function menu() {
     show_banner
     echo "Beschikbare Acties:"
     echo "-------------------"
-    echo "1) ☸️  Install Kubernetes (RKE2/k3d)"
-    echo "2) 🚀 Bootstrap Platform (Base Layer)"
-    echo "3) 💾 Install Data Services (Gitea + MinIO)"
-    echo "4) 🛡️  Install Security Services (Trivy + SonarQube)"
-    echo "5) 🔑 Install IAM (Keycloak)"
-    echo "6) 👁️  Install Observability (LGTM Stack)"
-    echo "7) 🗄️  Install Databases (Postgres + Qdrant)"
-    echo "8) 🌍 Install GIS Services (GeoServer + WebODM)"
-    echo "9) 📝 Genereer Documentatie (Living Docs)"
+    echo " 1) ☸️  Install Kubernetes (RKE2/k3d)"
+    echo " 2) 🚀 Bootstrap Platform (Base Layer)"
+    echo " 3) 💾 Install Data Services (Gitea + MinIO)"
+    echo " 4) 🛡️  Install Security Services (Trivy + SonarQube)"
+    echo " 5) 🔑 Install IAM (Keycloak)"
+    echo " 6) 👁️  Install Observability (LGTM Stack)"
+    echo " 7) 🗄️  Install Databases (Postgres + Qdrant)"
+    echo " 8) 🌍 Install GIS Services (GeoServer + WebODM)"
+    echo " 9) 📝 Genereer Documentatie (Living Docs)"
     echo "10) 🧹 Compliance Audit (Trigger Check)"
     echo "11) 🗑️ Uninstall Kubernetes"
     echo "12) 📜 List Installation History"
@@ -168,28 +169,11 @@ function menu() {
 }
 
 function handle_k8s_install() {
-    echo ""
-    echo "De Kubernetes installer (install_k8s.sh) is bedoeld voor **Linux Hosts**."
-    echo "Draai je dit lokaal op macOS? Dan moet je het script kopiëren naar je server."
-    echo ""
-    echo "Locatie: $SCRIPT_DIR/install_k8s.sh"
-    echo ""
-    echo "Opties:"
-    echo "1) Ik zit op Linux, draai direct."
-    echo "2) Toon SCP commando (Upload naar remote)."
-    echo "3) Terug"
-    read -p "Keuze: " K8S_OPT
-    
-    if [ "$K8S_OPT" == "1" ]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS: Run directly (likely k3d)
+        bash "$SCRIPT_DIR/install_k8s.sh"
+    else
         sudo bash "$SCRIPT_DIR/install_k8s.sh"
-    elif [ "$K8S_OPT" == "2" ]; then
-        
-        read -p "Remote Server (user@ip): " REMOTE
-        echo "Running: scp $SCRIPT_DIR/install_k8s.sh $REMOTE:~/"
-        scp "$SCRIPT_DIR/install_k8s.sh" "$REMOTE:~/"
-        echo ""
-        echo "Klaar! Log nu in op $REMOTE en draai: sudo bash ./install_k8s.sh"
-        read -p "Enter..."
     fi
     menu
 }
