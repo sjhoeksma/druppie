@@ -18,17 +18,17 @@ De volledige architectuur is interactief te verkennen.
 
 ## 🚀 Snel Starten met het Platform
 
-De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./druppie.sh```
+De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./druppie.sh ua k3d```
 
  ![Druppie CLI](./druppie_cli.png)
 
-
 Dit interactieve menu geeft toegang tot:
-1.  **☸️ Installatie**: Kubernetes (RKE2 voor Prod, k3d voor Dev).
+1.  **☸️ Installatie**: Kubernetes (RKE2 voor Prod, k3d voor Dev 'local docker')).
 2.  **🏗️ Bootstrap**: Platform base layer (Flux, Kyverno, Tekton, Kong).
 3.  **📦 Services**: One-click setup voor Gitea, Keycloak, Prometheus, GeoServer, etc.
-4.  **📚 Documentatie**: Genereer de "Living Documentation".
+4.  **🚀 UI**: Toegang scherm tot de verschillende UI's van de verschillende services.
 
+![Druppie k3d](./druppie_k3d.png)
 ---
 
 ## 📂 Projectstructuur

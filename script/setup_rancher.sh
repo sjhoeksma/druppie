@@ -57,15 +57,40 @@ helm upgrade --install rancher rancher-stable/rancher \
     --set ingress.tls.source=rancher \
     --set replicas=1 \
     --set ingress.ingressClassName=kong \
+    --set ingress.enabled=false \
+    --set "extraEnv[0].name=CATTLE_SERVER_URL" \
+    --set "extraEnv[0].value=https://rancher.${DRUPPIE_DOMAIN}" \
     --wait
+
+log "Configuring Rancher Ingress at https://rancher.${DRUPPIE_DOMAIN}..."
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rancher-custom-ingress
+  namespace: cattle-system
+spec:
+  ingressClassName: kong
+  rules:
+  - host: rancher.${DRUPPIE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: rancher
+            port:
+              number: 80
+EOF
 
 log "Waiting for Rancher to be ready..."
 kubectl -n cattle-system rollout status deploy/rancher
 
 log "Rancher UI Installed! 🤠"
-log "Access URL: https://localhost"
+log "Access URL: https://rancher.${DRUPPIE_DOMAIN}"
 log "Login: ${DRUPPIE_RANCHER_TOKEN}"
-log "(Note: Accept the self-signed certificate warning)"
+log "(Note: Accept the self-signed certificate warning. Ensure 'rancher.${DRUPPIE_DOMAIN}' resolves. Localhost assumed if DRUPPIE_DOMAIN=localhost)"
 
 log_history "Rancher UI Installed"
 
@@ -73,6 +98,6 @@ log_history "Rancher UI Installed"
 echo -e "${COLOR_GREEN}"
 echo "✅  Rancher UI Installed Successfully!"
 echo "--------------------------------------"
-echo "URL: https://localhost"
+echo "URL: https://rancher.${DRUPPIE_DOMAIN}"
 echo "Login: admin / ${DRUPPIE_RANCHER_TOKEN}"
 echo -e "${COLOR_NC}"

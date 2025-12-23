@@ -104,13 +104,15 @@ log "Installing Grafana..."
 helm upgrade --install grafana grafana/grafana \
   --namespace observability --create-namespace \
   --set adminPassword=${DRUPPIE_GRAFANA_PASS} \
-  --set service.type=LoadBalancer \
+  --set service.type=ClusterIP \
+  --set "grafana\.ini.server.root_url=http://grafana.${DRUPPIE_DOMAIN}/" \
+  --set "grafana\.ini.server.serve_from_sub_path=false" \
   --set persistence.enabled=true \
   --set persistence.size=2Gi
 
 log "Waiting for Grafana to be ready..."
 kubectl rollout status deployment/grafana -n observability --timeout=300s
-# Wait for 200 OK from health endpoint (via pod proxy or exec if service not ready)
+log "Waiting for Grafana Health Check (internal port 3000)..."
 for i in {1..30}; do
   if kubectl exec -n observability deploy/grafana -- curl -s -f http://localhost:3000/api/health >/dev/null 2>&1; then
     echo "Grafana is Healthy!"

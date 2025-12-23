@@ -85,6 +85,11 @@ log "Installing Tekton Pipelines..."
 kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
 log_history "Tekton Pipelines Installed"
 
+# Ensure Domain
+if [ -z "$DRUPPIE_DOMAIN" ]; then
+    DRUPPIE_DOMAIN="localhost"
+fi
+
 # 7. Install Kong (API Gateway)
 log "Installing Kong Gateway (Ingress)..."
 helm upgrade --install kong kong/kong \
@@ -97,6 +102,7 @@ helm upgrade --install kong kong/kong \
   --set admin.enabled=true \
   --set admin.http.enabled=true \
   --set manager.enabled=true \
+  --set env.admin_gui_api_url="http://api.${DRUPPIE_DOMAIN}" \
   --wait
 log_history "Kong Gateway Installed"
 
