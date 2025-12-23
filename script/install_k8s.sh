@@ -39,7 +39,13 @@ echo -e "${COLOR_GREEN}Select Installation Profile:${COLOR_NC}"
 echo "1) Local Dev (k3d - Docker Required - macOS/Linux)"
 echo "2) Workstation (RKE2 - Single Node - Linux Only)"
 echo "3) Server (RKE2 - Control Plane - Linux Only)"
-read -p "Choice [1-3]: " PROFILE_OPT
+
+if [ ! -z "$1" ]; then
+    PROFILE_OPT=$1
+    echo "Selected Profile (Argument): $PROFILE_OPT"
+else
+    read -p "Choice [1-3]: " PROFILE_OPT
+fi
 
 # Validation
 if [[ "$PROFILE_OPT" == "2" || "$PROFILE_OPT" == "3" ]]; then

@@ -43,7 +43,16 @@ function ensure_secrets() {
     get_or_create_secret "DRUPPIE_POSTGRES_PASS"   # database
     get_or_create_secret "DRUPPIE_QDRANT_KEY"      # database
     get_or_create_secret "DRUPPIE_GEOSERVER_PASS"  # gis
+    get_or_create_secret "DRUPPIE_GEOSERVER_PASS"  # gis
     get_or_create_secret "DRUPPIE_MONITOR_PASS"    # security
+
+    # Ensure Domain
+    if [ -z "${DRUPPIE_DOMAIN}" ]; then
+        echo "DRUPPIE_DOMAIN=localhost" >> "$SECRETS_FILE"
+        export DRUPPIE_DOMAIN="localhost"
+    fi
+    # Re-export to be safe
+    export DRUPPIE_DOMAIN="${DRUPPIE_DOMAIN:-localhost}"
     
     # Reload to be sure
     source "$SECRETS_FILE"
@@ -77,8 +86,9 @@ function menu() {
     echo "6) 👁️  Install Observability (LGTM Stack)"
     echo "7) 🌍 Install GIS Services (GeoServer + GEONode + WebODM)"
     echo "8) 🤠 Install Rancher UI (Cert-Manager + Rancher)"
+    echo "9) 🌐 Configure Ingress (Expose Services)"
     echo ""
-    echo "a) ⏩ Install EVERYTHING (1-8)"
+    echo "a) ⏩ Install EVERYTHING (1-9)"
     echo "u) 🗑️  Uninstall Kubernetes"
     echo "h) 📜 List Installation History"
     echo "q) Quit"
@@ -86,7 +96,6 @@ function menu() {
     read -p "Maak een keuze: " CHOICE
     execute_choice "$CHOICE"
 }
-
 
 # Global flag to track if we are running in interactive mode
 INTERACTIVE_MODE=true
@@ -103,9 +112,9 @@ function handle_wait() {
     fi
 }
 
-
 function execute_choice() {
     local choice=$1
+    local extra_arg=$2
     case $choice in
         1) handle_k8s_install
             handle_wait
@@ -131,19 +140,27 @@ function execute_choice() {
         8) install_rancher
             handle_wait
             ;;
-        a)
-            handle_k8s_install
-            install_platform
-            install_data
-            install_security
-            install_iam
-            install_observability
-            install_gis
-            install_rancher
+        9) install_ingress
             handle_wait
             ;;
-        u) handle_uninstall
+        a)
+            handle_k8s_install || return 1
+            install_platform || return 1
+            install_data || return 1
+            install_security || return 1
+            install_iam || return 1
+            install_observability || return 1
+            install_gis || return 1
+            install_rancher || return 1
+            install_ingress || return 1
             handle_wait
+            ;;
+        u) handle_uninstall "$extra_arg"
+            handle_wait
+            ;;
+        ua)
+            handle_uninstall "$extra_arg" || return 1
+            execute_choice "a"
             ;;
         h) show_history
             handle_wait
@@ -153,60 +170,119 @@ function execute_choice() {
     esac
 }
 
+LOG_DIR="$BASE_DIR/.logs"
+
+# Function to run a script with logging
+function run_script_logged() {
+    local label=$1
+    local script_path=$2
+    # Capture remaining args
+    shift 2
+    local args="$@"
+    
+    local script_name=$(basename "$script_path")
+    local log_file="$LOG_DIR/${script_name%.*}.log"
+
+    # Ensure log directory exists
+    mkdir -p "$LOG_DIR"
+    
+    # Empty the log file
+    > "$log_file"
+    
+    # Execute with logging (both stdout and stderr to screen and file)
+    # Wrap everything in a block to capture header echoes too
+    {
+        set -o pipefail
+        echo "=================================================="
+        echo " RUNNING: $label"
+        echo " DATE:    $(date)"
+        echo " SCRIPT:  $script_path"
+        echo " LOG:     $log_file"
+        echo "=================================================="
+        echo ""
+        
+    # Run script with arguments
+    if [ -n "$args" ]; then
+        bash "$script_path" $args
+    else
+        bash "$script_path"
+    fi
+        
+        EXIT_CODE=$?
+        echo ""
+        echo "=================================================="
+        if [ $EXIT_CODE -eq 0 ]; then
+            echo " STATUS:  SUCCESS ✅"
+        else
+            echo " STATUS:  FAILED ❌ (Exit Code: $EXIT_CODE)"
+        fi
+        echo "=================================================="
+        set +o pipefail
+        return $EXIT_CODE
+    } 2>&1 | tee -a "$log_file"
+    
+    # Return the exit code of the pipeline (which is the exit code of the script due to pipefail)
+    return ${PIPESTATUS[0]} 
+}
+
 function handle_k8s_install() {
     if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS: Run directly (likely k3d)
-        bash "$SCRIPT_DIR/install_k8s.sh"
+        # macOS: Run directly (likely k3d) -> Pass '1' to select k3d automatically
+        run_script_logged "Kubernetes (k3d)" "$SCRIPT_DIR/install_k8s.sh" 1
     else
-        sudo bash "$SCRIPT_DIR/install_k8s.sh"
+        # Linux: Could be 2 or 3. Let's default to 2 (Workstation) for 'druppie' default?
+        # Or leave empty to prompt?
+        # If running via 'druppie.sh i', user might expect interaction.
+        # But logging wrapper might hide input? No, standard input is inherited usually.
+        # However, run_script_logged pipes output to tee. Pipe behavior with input is tricky.
+        # It's safer to pass arguments to avoid interaction inside a piped block.
+        run_script_logged "Kubernetes (RKE2/k3s)" "$SCRIPT_DIR/install_k8s.sh" 2
     fi
 }
 
 function handle_uninstall() {
+    local opt_arg=$1
     echo ""
     echo "Uninstalling Kubernetes Cluster..."
     if [[ "$(uname)" == "Darwin" ]]; then
-        # macOS: Run directly (likely k3d)
-        bash "$SCRIPT_DIR/uninstall_k8s.sh"
+        # macOS: Run directly
+        run_script_logged "Uninstall Kubernetes" "$SCRIPT_DIR/uninstall_k8s.sh" $opt_arg
     else
         # Linux: Needs sudo
-        sudo bash "$SCRIPT_DIR/uninstall_k8s.sh"
+        run_script_logged "Uninstall Kubernetes" "$SCRIPT_DIR/uninstall_k8s.sh" $opt_arg
     fi
 }
 
 function install_platform() {
-    echo "Bootstrapping Platform..."
-    bash "$SCRIPT_DIR/setup_dev_env.sh"
+    run_script_logged "Platform Bootstrap" "$SCRIPT_DIR/setup_dev_env.sh"
 }
 
 function install_data() {
-    echo "Installing Data Services..."
-    bash "$SCRIPT_DIR/setup_data_tools.sh"
+    run_script_logged "Data Services" "$SCRIPT_DIR/setup_data_tools.sh"
 }
 
 function install_security() {
-    echo "Installing Security Services..."
-    bash "$SCRIPT_DIR/setup_security_tools.sh"
+    run_script_logged "Security Services" "$SCRIPT_DIR/setup_security_tools.sh"
 }
 
 function install_iam() {
-    echo "Installing IAM Services..."
-    bash "$SCRIPT_DIR/setup_iam.sh"
+    run_script_logged "IAM Services" "$SCRIPT_DIR/setup_iam.sh"
 }
 
 function install_observability() {
-    echo "Installing Observability Stack..."
-    bash "$SCRIPT_DIR/setup_observability.sh"
+    run_script_logged "Observability Stack" "$SCRIPT_DIR/setup_observability.sh"
 }
 
 function install_gis() {
-    echo "Installing GIS Services..."
-    bash "$SCRIPT_DIR/setup_gis.sh"
+    run_script_logged "GIS Services" "$SCRIPT_DIR/setup_gis.sh"
 }
 
 function install_rancher() {
-    echo "Installing Rancher UI..."
-    bash "$SCRIPT_DIR/setup_rancher.sh"
+    run_script_logged "Rancher UI" "$SCRIPT_DIR/setup_rancher.sh"
+}
+
+function install_ingress() {
+    run_script_logged "Ingress Configuration" "$SCRIPT_DIR/setup_ingress.sh"
 }
 
 function show_history() {
@@ -222,8 +298,27 @@ function show_history() {
 }
 
 function handle_args() {
-    for arg in "$@"; do
-        execute_choice "$arg"
+    while [[ $# -gt 0 ]]; do
+        local choice=$1
+        # Special logic for Uninstall with arguments (e.g. u k3d or ua k3d)
+        if [[ "$choice" == "u" || "$choice" == "ua" ]]; then
+             # Check if next arg exists and matches known uninstall targets or generic args
+             # Assuming next arg is the parameters for uninstall
+             if [[ -n "$2" && ! "$2" =~ ^-|[0-9]$ ]]; then
+                 # If next arg is likely a keyword like k3d or rke2
+                  execute_choice "$choice" "$2"
+                  shift 2
+                  continue
+             elif [[ -n "$2" && "$2" =~ ^(1|2)$ ]]; then
+                  # If next arg is 1 or 2
+                  execute_choice "$choice" "$2"
+                  shift 2
+                  continue
+             fi
+        fi
+        
+        execute_choice "$choice"
+        shift
     done
 }
 

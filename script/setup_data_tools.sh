@@ -58,7 +58,14 @@ helm upgrade --install gitea gitea-charts/gitea \
   --set gitea.config.database.HOST=postgres-postgresql.databases.svc.cluster.local:5432 \
   --set gitea.config.database.NAME=postgres \
   --set gitea.config.database.USER=postgres \
+  --set gitea.config.database.NAME=postgres \
+  --set gitea.config.database.USER=postgres \
   --set gitea.config.database.PASSWD=${DRUPPIE_POSTGRES_PASS} \
+  --set gitea.config.server.ROOT_URL=http://gitea.${DRUPPIE_DOMAIN}/ \
+  --set gitea.config.server.DOMAIN=gitea.${DRUPPIE_DOMAIN} \
+  --set gitea.config.server.SSH_DOMAIN=gitea.${DRUPPIE_DOMAIN} \
+  --set gitea.config.server.HTTP_PORT=3000 \
+  --set gitea.config.server.StartSSHServer=true \
   --wait
 log_history "Gitea Installed"
 
@@ -74,6 +81,7 @@ helm upgrade --install minio minio/minio \
   --set volumePermissions.enabled=true \
   --set persistence.size=5Gi \
   --set resources.requests.memory=256Mi \
+  --set environment.MINIO_BROWSER_REDIRECT_URL="http://minio.${DRUPPIE_DOMAIN}" \
   --wait
 log_history "MinIO Installed"
 

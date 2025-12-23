@@ -23,7 +23,16 @@ echo "Which Kubernetes distribution do you want to remove?"
 echo "1) k3d (Docker Container)"
 echo "2) RKE2 (Linux Service)"
 
-read -p "Choice [1-2]: " OPT
+if [ -n "$1" ]; then
+    case $1 in
+        1|k3d) OPT="1" ;;
+        2|rke2) OPT="2" ;;
+        *) echo "Invalid argument: $1"; exit 1 ;;
+    esac
+    echo "Selected Option: $1 ($OPT)"
+else
+    read -p "Choice [1-2]: " OPT
+fi
 
 if [ "$OPT" == "2" ]; then
     # RKE2 Uninstall
