@@ -39,7 +39,15 @@ helm upgrade --install keycloak bitnami/keycloak \
   --set auth.adminPassword=${DRUPPIE_KEYCLOAK_PASS} \
   --set production=false \
   --set proxy=edge \
-  --set service.type=LoadBalancer \
+  --set service.type=ClusterIP \
+  --set postgresql.enabled=false \
+  --set externalDatabase.host=postgres-postgresql.databases.svc.cluster.local \
+  --set externalDatabase.port=5432 \
+  --set externalDatabase.user=postgres \
+  --set externalDatabase.database=postgres \
+  --set externalDatabase.password=${DRUPPIE_POSTGRES_PASS} \
+  --set image.repository=bitnamilegacy/keycloak \
+  --set image.tag=26.3.3-debian-12-r0 \
   --wait
 log_history "Keycloak Installed"
 

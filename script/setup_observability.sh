@@ -41,33 +41,85 @@ helm upgrade --install prometheus prometheus-community/prometheus \
   --wait
 log_history "Prometheus Installed"
 
-# 4. Install Loki (Logs)
-log "Installing Loki (Monolithic mode for Dev)..."
-helm upgrade --install loki grafana/loki-stack \
+# 4. Install Loki (Logs) - Single Binary
+log "Installing Loki (Single Binary)..."
+helm upgrade --install loki grafana/loki \
   --namespace observability --create-namespace \
-  --set fluent-bit.enabled=true \
-  --set promtail.enabled=true \
+  --set deploymentMode=SingleBinary \
+  --set loki.auth_enabled=false \
+  --set loki.commonConfig.replication_factor=1 \
+  --set loki.storage.type=filesystem \
+  --set singleBinary.replicas=1 \
+  --set read.replicas=0 \
+  --set backend.replicas=0 \
+  --set write.replicas=0 \
+  --set loki.useTestSchema=true \
   --wait
-log_history "Loki & Promtail Installed"
+log_history "Loki Installed"
 
-# 5. Install Grafana (Dashboarding)
-log "Installing Grafana..."
-helm upgrade --install grafana grafana/grafana \
+# 4b. Install Alloy (Log Collector - Replaces Promtail)
+log "Installing Alloy (Log Collector)..."
+helm upgrade --install alloy grafana/alloy \
   --namespace observability --create-namespace \
-  --set adminPassword=${DRUPPIE_GRAFANA_PASS} \
-  --set service.type=LoadBalancer \
-  --set persistence.enabled=true \
-  --set persistence.size=2Gi \
-  --wait
-log_history "Grafana Installed"
+  --set alloy.configMap.content="
+    logging {
+      level = \"info\"
+      format = \"logfmt\"
+    }
 
-# 6. Install Tempo (Tracing - optional/lightweight)
+    loki.write \"default\" {
+      endpoint {
+        url = \"http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push\"
+      }
+    }
+
+    loki.source.kubernetes \"pods\" {
+      targets = discovery.kubernetes.pods.targets
+      forward_to = [loki.write.default.receiver]
+    }
+
+    discovery.kubernetes \"pods\" {
+      role = \"pod\"
+    }
+    
+    loki.source.kubernetes_events \"cluster_events\" {
+      job_name   = \"integrations/kubernetes/eventhandler\"
+      log_format = \"logfmt\"
+      forward_to = [loki.write.default.receiver]
+    }
+  " \
+  --wait
+log_history "Alloy Installed"
+
+# 5. Install Tempo (Tracing - optional/lightweight)
 log "Installing Tempo..."
 helm upgrade --install tempo grafana/tempo \
   --namespace observability --create-namespace \
   --set persistence.enabled=false \
   --wait
 log_history "Tempo Installed"
+
+# 6. Install Grafana (Dashboarding)
+log "Installing Grafana..."
+helm upgrade --install grafana grafana/grafana \
+  --namespace observability --create-namespace \
+  --set adminPassword=${DRUPPIE_GRAFANA_PASS} \
+  --set service.type=LoadBalancer \
+  --set persistence.enabled=true \
+  --set persistence.size=2Gi
+
+log "Waiting for Grafana to be ready..."
+kubectl rollout status deployment/grafana -n observability --timeout=300s
+# Wait for 200 OK from health endpoint (via pod proxy or exec if service not ready)
+for i in {1..30}; do
+  if kubectl exec -n observability deploy/grafana -- curl -s -f http://localhost:3000/api/health >/dev/null 2>&1; then
+    echo "Grafana is Healthy!"
+    break
+  fi
+  echo "Waiting for Grafana API..."
+  sleep 5
+done
+log_history "Grafana Installed"
 
 # 7. Success
 echo -e "${COLOR_GREEN}"
