@@ -28,6 +28,8 @@ Dit interactieve menu geeft toegang tot:
 3.  **📦 Services**: One-click setup voor Gitea, Keycloak, Prometheus, GeoServer, etc.
 4.  **🚀 UI**: Toegang scherm tot de verschillende UI's van de verschillende services.
 
+De password voor de verschillende services is 'druppie' worden opgeslagen in de .secrets file. De installatie logs zijn terug te vinden in de directory .logs. En de applicatie installatie overiew is terug te vinden in de .druppie_history file.
+
 ![Druppie k3d](./druppie_k3d.png)
 ---
 
