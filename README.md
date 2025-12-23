@@ -18,11 +18,10 @@ De volledige architectuur is interactief te verkennen.
 
 ## 🚀 Snel Starten met het Platform
 
-De makkelijkste manier om te beginnen is via de **Master CLI**:
+De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./druppie.sh```
 
-```bash
-./druppie.sh
-```
+ ![Druppie CLI](./druppie_cli.png)
+
 
 Dit interactieve menu geeft toegang tot:
 1.  **☸️ Installatie**: Kubernetes (RKE2 voor Prod, k3d voor Dev).

@@ -36,20 +36,111 @@ helm repo up
 log "Installing Trivy Operator..."
 helm upgrade --install trivy-operator aqua/trivy-operator \
   --namespace security-system --create-namespace \
-  --set compliance.cron="0 */6 * * *" \
+  --set compliance.cron="0 0 * * *" \
+  --set operator.scanJobConcurrencyLimit=1 \
+  --set operator.scanJobTimeout=5m \
+  --set operator.vulnerabilityScannerScanOnlyCurrentRevisions=true \
+  --set operator.replicas=1 \
+  --set targetNamespaces="default" \
+  --set excludeNamespaces="kube-system\,security-system\,cattle-system\,flux-system\,cert-manager\,local-path-storage" \
+  --set operator.backgroundScanning.enabled=false \
+  --set vulnerabilityReport.scanAll=false \
+  --set trivy.ignoreUnfixed=true \
+  --set trivy.resources.requests.cpu=50m \
+  --set trivy.resources.requests.memory=128Mi \
+  --set trivy.resources.limits.memory=256Mi \
   --wait
-log_history "Trivy Operator Installed"
+log_history "Trivy Operator Installed (Restricted Scope)"
 
-# 4. Install SonarQube (Code Quality)
-log "Installing SonarQube..."
-helm upgrade --install sonarqube sonarqube/sonarqube \
-  --namespace security-system --create-namespace \
-  --set edition=community \
-  --set persistence.enabled=true \
-  --set persistence.size=5Gi \
-  --set service.type=ClusterIP \
-  --wait
-log_history "SonarQube Installed"
+
+
+# 4. Install SonarQube (Code Quality) - Manual Manifest
+log "Installing SonarQube (via Manifest)..."
+
+log "Creating SonarQube Database..."
+# Create dedicated database to avoid version conflicts and clean slate
+kubectl exec -n databases svc/postgres-postgresql -- env PGPASSWORD=${DRUPPIE_POSTGRES_PASS} psql -U postgres -c "CREATE DATABASE sonarqube;" || true
+
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data
+  namespace: security-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube
+  namespace: security-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+      - name: init-sysctl
+        image: busybox
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      containers:
+      - name: sonarqube
+        image: sonarqube:community
+        ports:
+        - containerPort: 9000
+        env:
+        - name: SONAR_JDBC_URL
+          value: "jdbc:postgresql://postgres-postgresql.databases.svc.cluster.local:5432/sonarqube"
+        - name: SONAR_JDBC_USERNAME
+          value: "postgres"
+        - name: SONAR_JDBC_PASSWORD
+          value: "${DRUPPIE_POSTGRES_PASS}"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+        volumeMounts:
+        - mountPath: /opt/sonarqube/data
+          name: sonarqube-data
+      volumes:
+      - name: sonarqube-data
+        persistentVolumeClaim:
+          claimName: sonarqube-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube-sonarqube
+  namespace: security-system
+spec:
+  selector:
+    app: sonarqube
+  ports:
+  - port: 9000
+    targetPort: 9000
+    name: http
+  type: ClusterIP
+EOF
+
+log "Waiting for SonarQube to start..."
+kubectl rollout status deployment/sonarqube -n security-system --timeout=300s
+log_history "SonarQube Installed (Manual Manifest)"
 
 # 5. Success
 echo -e "${COLOR_GREEN}"

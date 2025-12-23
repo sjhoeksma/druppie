@@ -100,40 +100,6 @@ helm upgrade --install kong kong/kong \
   --wait
 log_history "Kong Gateway Installed"
 
- # 8. Install Cert-Manager (Required for Rancher)
- log "Installing Cert-Manager (Required for Rancher)..."
- helm repo add jetstack https://charts.jetstack.io
- helm repo update
- helm upgrade --install cert-manager jetstack/cert-manager \
-    --namespace cert-manager --create-namespace \
-    --set crds.enabled=true \
-    --wait
-
- log "Installing Rancher UI..."
- helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
- helm repo update
-
- # 9. Install Rancher
- log "Deploying Rancher..."
- helm upgrade --install rancher rancher-stable/rancher \
-      --namespace cattle-system --create-namespace \
-      --set hostname=localhost \
-      --set bootstrapPassword=${DRUPPIE_RANCHER_TOKEN} \
-      --set ingress.tls.source=rancher \
-      --set replicas=1 \
-      --set ingress.ingressClassName=kong \
-      --wait
-
-    log "Waiting for Rancher to be ready..."
-    kubectl -n cattle-system rollout status deploy/rancher
-
-    log "Rancher UI Installed! 🤠"
-    log "Access URL: https://localhost"
-    log "Login: ${DRUPPIE_RANCHER_TOKEN}"
-    log "(Note: Accept the self-signed certificate warning)"
-    
-    log_history "Rancher UI Installed"
-
 # 10. Install Shared PostgreSQL (Boot Layer DB)
 log "Installing Shared PostgreSQL (Boot Layer)..."
 
@@ -169,8 +135,6 @@ echo " - Flux CD (GitOps)"
 echo " - Kyverno (Policies)"
 echo " - Tekton (CI)"
 echo " - Kong (Ingress)"
-echo " - Cert-Manager (Required for Rancher)"
-echo " - Rancher UI"
 echo " - Postgres (Shared)"
 # echo " - Redis (Cache Layer)"
 

@@ -113,7 +113,6 @@ if [ "$PROFILE_OPT" == "1" ]; then
     log "Cluster Ready! 🚀"
     log "Run: kubectl get nodes"
     log_history "k3d (druppie-dev)"
-    read -p "Druk op Enter..."
     exit 0
 fi
 
