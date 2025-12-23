@@ -103,7 +103,7 @@ log_history "Tempo Installed"
 log "Installing Grafana..."
 
 # Create values file for datasources
-cat <<EOF > /tmp/grafana-values.yaml
+cat <<'EOF' > /tmp/grafana-values.yaml
 datasources:
   datasources.yaml:
     apiVersion: 1
@@ -122,7 +122,7 @@ datasources:
           - datasourceUid: Tempo
             matcherRegex: "traceID=(\\w+)"
             name: TraceID
-            url: "\$${__value.raw}"
+            url: "${__value.raw}"
     - name: Tempo
       type: tempo
       url: http://tempo.observability.svc.cluster.local:3100
