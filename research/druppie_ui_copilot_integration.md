@@ -1,7 +1,6 @@
 # Druppie UI Copilot Integratie Onderzoek
 
 **Uitgebreid Technisch Onderzoeksdocument**  
-*Versie 2.0 — December 2024*
 
 ---
 
