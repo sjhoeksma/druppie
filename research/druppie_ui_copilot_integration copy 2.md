@@ -321,6 +321,42 @@ var exchangedToken = await UserAuthorization.ExchangeTurnTokenAsync(
 );
 ```
 
+### Geavanceerde SDK-patronen
+
+De M365 Agents SDK evolueerde vanuit Bot Framework en ondersteunt deployment naar Teams, M365 Copilot, webchat en 10+ third-party kanalen. Deze sectie behandelt geavanceerde interactiepatronen essentieel voor enterprise-implementaties.
+
+#### Slash Commands
+
+De SDK heeft geen dedicated slash command feature als first-class concept. Commands worden geïmplementeerd via activity-based pattern matching:
+
+```csharp
+agent.OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) => {
+    var text = turnContext.Activity.Text?.Trim().ToLower();
+    switch (text) {
+        case "/help":
+            await turnContext.SendActivityAsync("Beschikbare commando's: /help, /status, /settings");
+            break;
+        case "/status":
+            await turnContext.SendActivityAsync("Systeem operationeel.");
+            break;
+    }
+});
+```
+
+Teams ondersteunt wel native slash commands waarbij gebruikers `/` typen in de compose box, maar dit is platformfunctionaliteit in plaats van SDK-provided.
+
+#### Suggested Actions en Adaptive Cards
+
+Teams ondersteunt suggested actions met **alleen het `imBack` action type** en toont **maximaal 6 suggested actions**. Adaptive Card support omvat `Action.Submit`, `Action.Execute` (universal actions voor Teams/Outlook), `Action.OpenUrl`, `Action.ShowCard`, `Action.ToggleVisibility`, en `Action.ResetInputs`. Schema versie 1.6 wordt ondersteund in Web Chat, versie 1.5 in Dynamics 365 Omnichannel.
+
+#### Bestandsafhandeling en Rate Limits
+
+Bestandsuploads vereisen `"supportsFiles": true` in het manifest. Rate limits zijn significante beperkingen: **50 RPS per app per tenant** globaal, met per-thread limits van 7 berichten per seconde. Berichtgrootte limits zijn **28 KB voor incoming webhooks** en **100 KB voor bot berichten**. Applicaties moeten exponential backoff retry strategieën implementeren.
+
+#### Long-Running Operations en Staatsbeheer
+
+Long-running operations vereisen de **15-seconden initiële respons** regel, met informatieve updates verstuurd binnen **45-seconden windows**. Multi-turn dialogs gebruiken een drie-laags staatsbeheer systeem: storage laag (MemoryStorage voor development, Azure Blob of Cosmos DB voor productie), state buckets (UserState, ConversationState), en AgentApplication met automatische state loading/saving.
+
 ### SDK Beschikbaarheid
 
 De M365 Agents SDK is volledig open source onder de MIT-licentie, beschikbaar voor drie platforms:
@@ -423,52 +459,7 @@ Voor command-line gebruik: `npm install -g @microsoft/m365agentstoolkit-cli`
 
 ---
 
-## Kennisdeelvraag 5: Hoe Vergelijken Deze Benaderingen?
-
-Nu we elke technologie individueel begrijpen, kunnen we een uitgebreide vergelijking maken om besluitvorming te begeleiden.
-
-### Functievergelijkingsmatrix
-
-| Functie | Declaratieve Agents | Custom Engine Agents | Opmerkingen |
-|---------|---------------------|---------------------|-------------|
-| **AI-modelselectie** | Alleen Microsoft | Elk model | Custom engine staat Claude, GPT-4, Llama, fijn-afgestemde modellen toe |
-| **Orchestratiecontrole** | Geen | Volledig | Custom engine kan Semantic Kernel, LangChain of aangepaste logica gebruiken |
-| **Hosting vereist** | Nee | Ja | Declaratief draait op Microsoft-infrastructuur |
-| **Ontwikkelcomplexiteit** | Laag | Hoog | Declaratief is configuratie; custom vereist code |
-| **Proactieve berichten** | Nee | Ja | Cruciaal voor notificatiescenario's |
-| **Multi-channel deployment** | Alleen M365 | 15+ kanalen | Custom engine ondersteunt web, SMS, Slack, etc. |
-| **Adaptive Cards** | Beperkt | Volledig | Custom engine ondersteunt Action.Execute, Task Modules |
-| **Microsoft Store-publicatie** | Nee | Ja | Vereist voor commerciële distributie |
-| **Compliance-overerving** | Automatisch | Handmatig | Declaratief erft M365-compliance automatisch |
-
-### Vergelijking Ontwikkelinspanning
-
-**Declaratieve Agents (uren tot dagen)**:
-Het maken van een declaratieve agent kan zo weinig als minuten duren met Agent Builder's no-code interface, of een paar uur met de Agents Toolkit voor complexere configuraties. Geen hosting-infrastructuur nodig—Microsoft handelt alles af.
-
-**Custom Engine Agents via Copilot Studio (dagen tot weken)**:
-Dit middenpad gebruikt low-code ontwikkeling met beheerde infrastructuur. Het vereist Power Platform-kennis en basis prompt engineering, maar Microsoft handelt hosting af.
-
-**Custom Engine Agents via M365 Agents SDK (weken tot maanden)**:
-Volledige pro-code ontwikkeling die expertise vereist in ASP.NET Core, Node.js of Python. Ontwikkelaars moeten bot-architectuur, AI/ML-concepten, Azure-diensten en gekozen orchestration-frameworks begrijpen. Deployment vereist het provisioneren van Azure-resources, het configureren van Azure Bot Service, het verpakken van app-manifesten en het indienen bij het Microsoft 365 Admin Center.
-
-### Kostenvergelijking
-
-**Declaratieve Agents**: Geen hosting-kosten. Agents die alleen instructies en webzoekopdrachten gebruiken brengen geen extra kosten met zich mee boven de basis Microsoft 365 Copilot-licentie. Agents die SharePoint, Graph-connectors of andere organisatiegegevens raadplegen, verbruiken Copilot Studio metered credits.
-
-**Custom Engine Agents**: De M365 Agents SDK zelf is gratis (MIT-licentie), maar operationele kosten omvatten Azure-hosting (App Service, Container Apps), AI-serviceverbruik (Azure OpenAI-gebruik), Azure Bot Service-registratie en optionele Copilot Studio-licenties voor geïntegreerde functies.
-
-### Beslissingskader
-
-**Kies declaratieve agents wanneer**:
-Je workflows opereren binnen Microsoft 365-applicaties, Microsoft's foundation-modellen voldoen aan je AI-vereisten, snelle deployment prioriteit heeft boven customization, ingebouwde compliance-overerving waardevol is, en use cases kennisophaling, documentsamenvatting, IT-ondersteuning of employee self-service omvatten.
-
-**Kies custom engine agents wanneer**:
-Domeinspecifieke of fijn-afgestemde AI-modellen vereist zijn, complexe bedrijfslogica volledige controle vereist, externe kanaal-deployment nodig is (klantportals, websites), multi-user groepssamenwerking in Teams vereist is, publicatie naar Microsoft Commercial Store gepland is, of je bestaande Bot Framework-bots migreert.
-
----
-
-## Kennisdeelvraag 6: Wat is Azure AI Foundry Agent Service?
+## Kennisdeelvraag 5: Wat is Azure AI Foundry Agent Service?
 
 Azure AI Foundry Agent Service biedt een volledig beheerde runtime voor het bouwen, deployen en opereren van AI-agents op enterprise-schaal—functionerend als "de lijm" die modellen, tools en frameworks verbindt. De architectuur bestaat uit drie kerncomponenten: een **modellaag** (GPT-4o, GPT-4, Llama, etc.), **instructies** die agentgedrag definiëren, en **tools** die kennisophaling en acties mogelijk maken via Bing, SharePoint, Azure AI Search en Azure Logic Apps met meer dan **1.400 connectors**.
 
@@ -514,7 +505,7 @@ Het **Microsoft Agent Framework** zit onder beide als de open-source runtime die
 
 ---
 
-## Kennisdeelvraag 7: Wat zijn de MCP-authenticatie uitdagingen?
+## Kennisdeelvraag 6: Wat zijn de MCP-authenticatie uitdagingen?
 
 MCP-integratie in Copilot Studio volgt een connector-gebaseerde architectuur waarbij MCP-servers worden ontsloten via **Power Platform Custom Connectors** en worden geconsumeerd door agents. De transportlaag ondersteunt momenteel **alleen Streamable HTTP transport**—SSE transport is deprecated met ondersteuning die eindigt in augustus 2025, en STDIO transport (ontworpen voor lokale servers) wordt niet ondersteund.
 
@@ -526,17 +517,27 @@ Voor enterprise-scenario's beveelt Microsoft **On-Behalf-Of (OBO) authenticatie*
 
 OAuth-beveiligde MCP-tools triggeren "additional permissions required" prompts die de gespreksstroom verstoren. Elke gebruiker vereist zijn eigen verbinding naar MCP-servers die auth vereisen, met token refresh en expiration handling geconfigureerd per verbinding.
 
-### Geneste MCP Creëert Onopgeloste Rechten-delegatieproblemen
+### Geneste MCP: Het Druppie-specifieke Probleem
 
-Wanneer een MCP-server andere MCP-servers aanroept (MCP-in-MCP), ontstaan meerdere kritieke problemen die **niet worden behandeld in huidige Microsoft-documentatie**:
+Dit probleem is bijzonder relevant voor Druppie omdat **Core Druppie zelf ook MCP-servers gebruikt** voor tools zoals Gitea en DataLab. Wanneer Druppie wordt ontsloten als MCP-server, ontstaat een geneste structuur:
 
-**Token propagation over trust boundaries** wordt problematisch omdat OAuth-tokens zijn gescoped naar enkele resource servers, niet ketens. Het "confused deputy"-probleem ontstaat wanneer agents handelen namens Gebruiker A terwijl ze interageren met Actor B—als context niet correct is gescoped, gaan permission tracking en accountability verloren.
+```
+Copilot/Foundry
+    → MCP aanroep naar Druppie (`druppie_code`)
+        → Druppie verwerkt verzoek
+        → Druppie roept intern Gitea MCP aan (`gitea_commit`)
+            → Toestemming??? ← PROBLEEM
+```
 
-**Consent scope ambiguity** betekent dat wanneer gebruikers toestemming geven om toegang te krijgen tot MCP Server A, die toestemming niet automatisch doorwerkt naar MCP Server B die Server A mogelijk aanroept, of naar upstream API's die Server A's tools mogelijk benaderen. De MCP-specificatie erkent dit, merkend op dat "multi-hop scenario's" een "verwachte evolutie" zijn die preserved on-behalf-of relaties over hops en consistente audit trails vereisen—mogelijkheden die niet bestaan in huidige implementaties.
+**Het kernprobleem**: Wanneer een gebruiker toestemming geeft voor de MCP-tool `druppie_code`, werkt die toestemming **niet automatisch door** naar de Gitea MCP die Druppie intern aanroept. De MCP-specificatie ondersteunt geen standaard mechanisme voor deze geneste toestemmingsdelegatie.
 
-**Token chaining security** per MCP spec sectie 2.9.4.4 moet propagation delays bij revocation, timing attacks, en het onderhouden van audit trails over de gehele delegatieketen afhandelen. JWTs zijn self-contained, dus het verwijderen van tokens uit databases voorkomt gebruik niet tot expiration.
+**Waarom dit problematisch is voor Druppie**:
+1. Gebruiker geeft toestemming voor `druppie_code` via Copilot Studio
+2. Druppie's orchestrator besluit dat code moet worden gecommit naar Gitea
+3. Druppie moet de Gitea MCP aanroepen, maar heeft geen gedelegeerde toestemming
+4. De Gitea MCP heeft geen context over de oorspronkelijke gebruikerstoestemming
 
-Noch Microsoft's Copilot Studio-documentatie noch de MCP-specificatie adresseert deze geneste scenario's volledig. Beveiligingsonderzoekers waarschuwen voor "Tool Chaining Leaks" waarbij agents die werken met meerdere MCP-servers per ongeluk credentials tussen systemen transfereren.
+Dit is geen bug maar een fundamentele beperking van het MCP-protocol voor systemen die zelf ook MCP-clients zijn. De MCP-specificatie erkent dat "multi-hop scenario's" toekomstige evolutie vereisen.
 
 ### Copilot Studio MCP Connector Beperkingen
 
@@ -549,87 +550,102 @@ Verschillende technische beperkingen beïnvloeden implementatie:
 
 ---
 
-## Kennisdeelvraag 8: Wat zijn de geavanceerde M365 Agents SDK-patronen?
+## Kennisdeelvraag 7: Hoe Vergelijken Deze Benaderingen?
 
-De M365 Agents SDK evolueerde vanuit Bot Framework en ondersteunt C#, JavaScript en Python met deployment naar Teams, M365 Copilot, webchat en 10+ third-party kanalen. Deze sectie behandelt geavanceerde interactiepatronen die essentieel zijn voor enterprise-implementaties.
+Nu we elke technologie individueel begrijpen, kunnen we een uitgebreide vergelijking maken om besluitvorming te begeleiden. Deze vergelijking omvat alle besproken opties inclusief Azure AI Foundry Agent Service en de mogelijkheid om Druppie als MCP-server te nesten.
 
-### Slash Commands Vereisen Handmatige Implementatie
+### Functievergelijkingsmatrix
 
-De SDK heeft geen dedicated slash command feature als first-class concept. Commands worden geïmplementeerd via activity-based pattern matching:
+| Functie | Declaratieve Agents | Custom Engine Agents | AI Foundry Agent Service | Druppie als MCP |
+|---------|---------------------|---------------------|--------------------------|-----------------|
+| **AI-modelselectie** | Alleen Microsoft | Elk model | Azure-modellen + externe | Eigen keuze |
+| **Orchestratiecontrole** | Geen | Volledig | Volledig (beheerd) | Volledig |
+| **Hosting vereist** | Nee | Ja | Azure-beheerd | On-premises |
+| **Ontwikkelcomplexiteit** | Laag | Hoog | Medium | Hoog |
+| **Proactieve berichten** | Nee | Ja | Ja | Via wrapper |
+| **Multi-channel deployment** | Alleen M365 | 15+ kanalen | Azure-centrisch | Protocol-agnostisch |
+| **Adaptive Cards** | Beperkt | Volledig | Volledig | N.v.t. (MCP-protocol) |
+| **Microsoft Store-publicatie** | Nee | Ja | Ja | N.v.t. |
+| **Compliance-overerving** | Automatisch | Handmatig | Azure-beheerd | Eigen verantwoordelijkheid |
+| **Portabiliteit** | Geen | Hoog (SDK is MIT) | Beperkt (Azure lock-in) | Hoog |
+| **Multi-agent orchestratie** | Nee | Handmatig (OpenCode) | Native ondersteuning | Handmatig (OpenCode) |
 
-```csharp
-agent.OnActivity(ActivityTypes.Message, async (turnContext, turnState, cancellationToken) => {
-    var text = turnContext.Activity.Text?.Trim().ToLower();
-    switch (text) {
-        case "/help":
-            await turnContext.SendActivityAsync("Beschikbare commando's: /help, /status, /settings");
-            break;
-        case "/status":
-            await turnContext.SendActivityAsync("Systeem operationeel.");
-            break;
-        case "/settings":
-            await SendSettingsCard(turnContext, cancellationToken);
-            break;
-    }
-});
-```
+### Vijf Integratiepaden voor Druppie
 
-Teams ondersteunt wel native slash commands waarbij gebruikers `/` typen in de compose box, maar dit is platformfunctionaliteit in plaats van SDK-provided.
+| Benadering | Beschrijving | Aangepaste Orchestratie | Portabiliteit | Complexiteit |
+|------------|--------------|-------------------------|---------------|--------------|
+| **1. Declaratieve Agents** | Copilot-extensie via configuratie | ❌ Geen | ❌ Geen | Laag |
+| **2. Copilot Studio** | Low-code custom engine | ⚠️ Beperkt | ❌ SaaS-only | Low-code |
+| **3. M365 Agents SDK + Custom Engine** | Pro-code thin client + Druppie backend | ✅ Volledig | ✅ Hoog | Hoog |
+| **4. Azure AI Foundry Agent Service** | Beheerde agent runtime met Druppie-logica | ✅ Volledig | ⚠️ Azure-gebonden | Medium |
+| **5. Druppie als MCP-server** | Druppie ontsluiten als MCP-tools voor Copilot/Foundry | ✅ Volledig | ✅ Hoog | Hoog |
 
-### Proactieve Berichten Vereisen Opgeslagen Gespreksreferenties
+### Optie 4: Azure AI Foundry Agent Service
 
-Proactieve berichten gebruiken opgeslagen conversation references met `continueConversation`:
+Azure AI Foundry biedt een volledig beheerde runtime voor AI-agents met ingebouwde multi-agent workflows. Voor Druppie zijn er twee subopties:
 
-```csharp
-// Sla referentie op tijdens initiële interactie
-var conversationReference = turnContext.Activity.GetConversationReference();
+**4a. Druppie-logica in Foundry hosten**: Orchestratielogica binnen Foundry's beheerde omgeving. Biedt enterprise governance maar creëert Azure lock-in.
 
-// Later, stuur proactief bericht
-await adapter.ContinueConversationAsync(
-    botAppId,
-    conversationReference,
-    async (context, token) => {
-        await context.SendActivityAsync("Proactieve notificatie!");
-    },
-    cancellationToken);
-```
+**4b. Foundry als orchestrator met Druppie-tools**: Foundry roept Druppie's tools aan via MCP of REST. Behoudt on-premises kernlogica.
 
-Proactieve mogelijkheden omvatten Teams-notificaties (1:1, groep, kanalen), activity feed notificaties, asynchrone berichten (vereist **15-seconden initiële respons**, **45-seconden timeout** tussen streaming updates), en email via Microsoft Graph-integratie. Apps kunnen proactief worden geïnstalleerd met Graph API om conversation ID's te verkrijgen.
+**Voordelen**: Ingebouwde multi-agent orchestratie, enterprise governance, native M365-integratie.
+**Nadelen**: Volledige runtime alleen Azure, lock-in via storage/identiteit, hogere kosten.
 
-### Suggested Actions en Adaptive Cards Hebben Specifieke Beperkingen
+### Optie 5: Druppie als MCP-server
 
-Teams ondersteunt suggested actions met **alleen het `imBack` action type** en toont **maximaal 6 suggested actions**:
+Druppie kan worden ontsloten als MCP-server voor consumptie door Copilot Studio, AI Foundry of andere MCP-clients.
 
-```csharp
-reply.SuggestedActions = new SuggestedActions() {
-    Actions = new List<CardAction>() {
-        new CardAction() { Title = "Optie 1", Type = ActionTypes.ImBack, Value = "optie1" },
-        new CardAction() { Title = "Optie 2", Type = ActionTypes.ImBack, Value = "optie2" }
-    }
-};
-```
+**Voordelen**: Maximale portabiliteit, geen M365-specifieke code, compositie met andere MCP-servers.
 
-Adaptive Card support omvat `Action.Submit`, `Action.Execute` (universal actions voor Teams/Outlook), `Action.OpenUrl`, `Action.ShowCard`, `Action.ToggleVisibility`, en `Action.ResetInputs`. Input controls dekken text, number, date, time, toggle, choice sets, people pickers, en typeahead search. Schema versie 1.6 wordt ondersteund in Web Chat, versie 1.5 in Dynamics 365 Omnichannel.
+**Nadelen**: Geen proactieve berichten (MCP is request/response), beperkte UI-mogelijkheden (geen Adaptive Cards).
 
-### Bestandsafhandeling, Teams Features en Rate Limits
+**Kritiek probleem: Geneste MCP-toestemming**
+Core Druppie gebruikt intern ook MCP-servers (bijv. voor Gitea, DataLab). Dit creëert een **genest MCP-probleem**:
 
-Bestandsuploads vereisen `"supportsFiles": true` in het manifest. Twee methoden bestaan: Microsoft Graph API's werken voor alle scopes maar vereisen OAuth, terwijl Teams Bot API's beperkt zijn tot alleen personal context. Het file consent pattern omvat het versturen van een `FileConsentCard`, het ontvangen van gebruikersacceptatie via `fileConsent/invoke`, dan het uitvoeren van HTTP POST naar de verstrekte upload URL.
+1. Gebruiker geeft toestemming voor MCP-tool `druppie_code`
+2. Druppie verwerkt het verzoek en moet intern een Gitea MCP-server aanroepen
+3. De gebruikerstoestemming voor `druppie_code` werkt **niet door** naar de geneste Gitea MCP-aanroep
+4. Dit is geen standaard MCP-scenario—nested permission delegation is niet ondersteund
 
-Teams-specifieke features omvatten @mentions (het toevoegen van `Mention` entities aan activities), tag mentions voor kanalen, en **Resource-Specific Consent (RSC)** met `ChannelMessage.Read.Group` permission om alle kanaalberichten te ontvangen zonder @mention. Typindicatoren tonen gedurende ongeveer 3 seconden maar **tonen niet in channel threaded conversations**.
+Dit geneste toestemmingsprobleem maakt pure MCP-integratie complex voor systemen zoals Druppie die zelf ook MCP-clients zijn.
 
-Rate limits zijn significante beperkingen: **50 RPS per app per tenant** globaal, met per-thread limits van 7 berichten per seconde (8 per 2 seconden, 60 per 30 seconden, 1800 per uur). Berichtgrootte limits zijn **28 KB voor incoming webhooks** en **100 KB voor bot berichten**. Applicaties moeten exponential backoff retry strategieën implementeren.
+### Vergelijking Ontwikkelinspanning
 
-### Long-Running Operations, Agenda-integratie en Staatsbeheer
+| Benadering | Initiële Ontwikkeling | Operationeel Beheer | Expertise Vereist |
+|------------|----------------------|---------------------|-------------------|
+| **Declaratieve Agents** | Uren tot dagen | Minimaal (Microsoft-beheerd) | No-code/low-code |
+| **Copilot Studio** | Dagen tot weken | Laag (SaaS) | Power Platform |
+| **M365 SDK + Custom Engine** | Weken tot maanden | Hoog (self-hosted) | .NET/Node/Python, Azure, Bot Framework |
+| **AI Foundry Agent Service** | Weken | Medium (Azure-beheerd) | Python/C#, Azure AI, Semantic Kernel |
+| **Druppie als MCP** | Weken | Medium (MCP-server beheer) | MCP-protocol, Auth-flows |
 
-Long-running operations vereisen de 15-seconden initiële respons regel, met informatieve updates verstuurd binnen 45-seconden windows. Streaming responses gebruiken `StreamingActivityHandler` voor real-time updates met Azure AI-integratie.
+### Kostenvergelijking
 
-Agenda-events en Teams meeting invites vereisen **Microsoft Graph API-integratie**—er is geen directe SDK-ondersteuning. De Agent 365 SDK kan Microsoft MCP-servers gebruiken voor email, SharePoint-documenten en agenda-operaties.
+**Declaratieve Agents**: Geen hosting-kosten. Agents die SharePoint of Graph-connectors raadplegen verbruiken Copilot Studio metered credits.
 
-Multi-turn dialogs gebruiken een drie-laags staatsbeheer systeem: storage laag (MemoryStorage voor development, Azure Blob of Cosmos DB voor productie), state buckets (UserState, ConversationState), en AgentApplication met automatische state loading/saving. Voor complexe conversational flows biedt het `@microsoft/agents-hosting-dialogs`-pakket gestructureerd dialog management.
+**Custom Engine Agents**: M365 Agents SDK is gratis (MIT-licentie), operationele kosten omvatten Azure-hosting, AI-serviceverbruik, Azure Bot Service-registratie.
 
-### Belangrijke SDK-beperkingen
+**AI Foundry Agent Service**: Azure-compute kosten + AI-modelverbruik + storage (Cosmos DB, Azure Storage). Enterprise governance features kunnen extra kosten met zich meebrengen.
 
-Verschillende mogelijkheden hebben gaps: native slash commands vereisen handmatige implementatie, typindicatoren werken niet in channel threads, file uploads via Teams API's zijn beperkt tot personal context, read receipts worden niet direct ondersteund, agenda-integratie vereist Graph API, human handoff vereist third-party integratie (Omnichannel, LivePerson) of custom implementatie, en posten naar private channels wordt niet ondersteund.
+**Druppie als MCP**: Alleen hosting-kosten voor de MCP-server. Geen Azure Bot Service of Foundry-kosten, maar wel complexiteit in auth-configuratie.
+
+### Beslissingskader
+
+**Kies Declaratieve Agents wanneer**:
+Eenvoudige kennisophaling voldoende is en geen aangepaste orchestratie nodig is.
+
+**Kies M365 SDK + Custom Engine wanneer**:
+Volledige controle over orchestratie vereist is, multi-channel deployment nodig is, en het team pro-code expertise heeft. **Dit is de aanbevolen optie voor Druppie's primaire integratie.**
+
+**Kies AI Foundry Agent Service wanneer**:
+Enterprise governance en beheerde schaling prioriteit hebben, Azure lock-in acceptabel is, en multi-agent workflows in Azure gewenst zijn.
+
+**Kies Druppie als MCP wanneer**:
+Maximale portabiliteit vereist is, Druppie moet worden geïntegreerd in meerdere AI-platforms (niet alleen Microsoft), of als aanvulling op de M365 SDK-integratie voor compositie met andere agents.
+
+### Aanbevolen Benadering
+
+De optimale architectuur voor Druppie is de **M365 Agents SDK + Custom Engine (Thin Client)** voor rijke Microsoft 365-integratie met Adaptive Cards en proactieve berichten. De MCP-optie blijft beschikbaar als secundair integratiepad, maar het geneste MCP-toestemmingsprobleem (Druppie gebruikt intern ook MCPs) maakt dit complex. AI Foundry kan worden overwogen voor specifieke use cases waar beheerde multi-agent orchestratie gewenst is.
 
 ---
 
@@ -708,12 +724,13 @@ Deze architectuur biedt verschillende voordelen. De Thin Client handelt Microsof
 
 | Benadering | Aangepaste Orchestratie | Inline Toestemming | Hosting Flexibiliteit | Complexiteit |
 |------------|-------------------------|--------------------|-----------------------|--------------|
+| **Declaratieve Agents** | Geen | Gedeeltelijk (alleen SSO) | Geen hosting vereist | No-code |
 | **Copilot Studio** | Beperkt | ✅ Authenticate node | Alleen SaaS | Low-code |
 | **M365 Agents SDK + Custom Engine** | ✅ Volledig | ✅ OAuthPrompt, Adaptive Cards, Task Modules | Self-hosted overal | Pro-code |
 | **Azure AI Foundry Agent Service** | ✅ Volledig | ✅ OAuth 2.0 + MCP auth | Azure-centrisch met hybride | Medium |
-| **Declaratieve Agents** | Geen | Gedeeltelijk (alleen SSO) | Geen hosting vereist | No-code |
+| **Druppie als MCP-server** | ✅ Volledig | ⚠️ MCP auth-flows (geneste MCP problematisch) | On-premises / Overal | Pro-code |
 
-De **M365 Agents SDK + Custom Engine**-benadering biedt de optimale balans voor Druppie: volledige orchestratiecontrole, maximale authenticatieflexibiliteit en de mogelijkheid om overal te hosten terwijl naadloos wordt geïntegreerd met Microsoft 365.
+De **M365 Agents SDK + Custom Engine**-benadering biedt de optimale balans voor Druppie's primaire integratie: volledige orchestratiecontrole, maximale authenticatieflexibiliteit en de mogelijkheid om overal te hosten terwijl naadloos wordt geïntegreerd met Microsoft 365. Als secundaire optie kan **Druppie als MCP-server** worden ontsloten voor integratie met AI Foundry en andere MCP-compatibele platforms, hoewel geneste MCP-toestemming (Druppie gebruikt zelf ook MCPs) een onopgelost probleem vormt. Zie Kennisdeelvraag 7 voor een gedetailleerde vergelijking van alle vijf opties.
 
 ---
 
