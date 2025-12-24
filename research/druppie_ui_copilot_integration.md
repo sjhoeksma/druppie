@@ -938,21 +938,17 @@ Het agent-ecosysteem evolueert snel. Belangrijke ontwikkelingen van 2024-2025:
 
 ## Conclusie
 
-### Aanbeveling voor Druppie
+Dit document beschrijft de technische mogelijkheden voor het integreren van Druppie met Microsoft 365 Copilot, Teams en Outlook. De kernbevinding is dat de **M365 Agents SDK + Custom Engine Agent-benadering** de optimale architectuur biedt: volledige orchestratiecontrole, MIT-gelicenseerde SDK zonder vendor lock-in, en ondersteuning voor Adaptive Cards en slash commands als cross-platform UI voor onder andere approval flows.
 
-De M365 Agents SDK + Custom Engine Agent-benadering biedt de optimale balans voor het integreren van Druppie met Microsoft 365 Copilot. Deze aanbeveling is gebaseerd op vijf belangrijke factoren:
+### Vervolgstappen
 
-**Volledige orchestratiecontrole**: Het OpenCode multi-agent systeem met gespecialiseerde sub-agents blijft draagbaar en kan onafhankelijk van Microsoft's platformwijzigingen evolueren.
+De volgende stap is het ontwerpen en bouwen van twee componenten:
 
-**MIT-gelicenseerde SDK**: Geen vendor lock-in voor de integratielaag. De SDK is open source, en het Thin Client-patroon betekent minimale Microsoft-specifieke code.
+1. **Multi-User OpenCode Server**: OpenCode is momenteel een single-user CLI tool. Voor enterprise-gebruik moet een server-architectuur worden ontwikkeld met session isolation per gebruiker, credential delegation (Entra ID → Keycloak), en state persistence tussen sessies. Dit bestaat nog niet en moet nieuw worden gebouwd.
 
-**Meerdere toegangspunten**: Dezelfde backend bedient Copilot, Teams en het Druppie Portal, waardoor gebruikers keuze hebben gebaseerd op hun workflowvoorkeuren.
+2. **Thin Client + Protocol**: Een communicatieprotocol tussen de M365 Agents SDK Thin Client en de OpenCode server. Dit protocol vertaalt M365 Activities naar OpenCode prompts, en OpenCode tool-requests naar Adaptive Cards voor gebruikerstoestemming.
 
-**Secure by design**: Entra ID handelt authenticatie af terwijl Keycloak-federatie Druppie-specifieke RBAC mogelijk maakt. Per-aanroep toestemming zorgt ervoor dat gebruikers controle behouden over schrijfoperaties.
-
-**Productieklaar**: Duidelijk implementatiepad met beheersbare kosten en goed gedocumenteerde API's.
-
-De thin client-architectuur zorgt ervoor dat Core Druppie draagbaar en on-premises blijft terwijl naadloze toegang wordt geboden via de M365 Copilot-interface die gebruikers al kennen. Deze aanpak positioneert Druppie voor langetermijnflexibiliteit terwijl Microsoft's agent-ecosysteem blijft evolueren. 
+Dit onderzoeksdocument vormt de technische basis voor het ontwerpen van deze twee componenten.
 
 ---
 
