@@ -1,7 +1,7 @@
 ---
 id: gis-geoserver
 name: GIS Data Server (GeoServer)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "GIS Data Server (GeoServer)"

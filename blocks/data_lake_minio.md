@@ -1,7 +1,7 @@
 ---
 id: data-lake-minio
 name: Data Lake (MinIO)
-type: block
+type: service
 description: "S3-compatible object storage for unstructured data."
 capabilities: ["object-storage", "s3-compatible", "data-lake"]
 version: 1.0.0

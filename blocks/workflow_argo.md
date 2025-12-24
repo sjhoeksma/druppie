@@ -1,7 +1,7 @@
 ---
 id: workflow-argo
 name: Workflow Engine (Argo Workflows)
-type: block
+type: service
 description: "Container-native workflow engine for orchestrating parallel jobs on Kubernetes."
 capabilities: ["workflow-orchestration", "dag-execution", "batch-jobs"]
 version: 1.0.0

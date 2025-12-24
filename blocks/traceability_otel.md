@@ -1,6 +1,6 @@
 ---
 id: traceability-otel
-type: block
+type: service
 name: Traceability & Audit (Tempo & OpenTelemetry)
 version: 1.0.0
 auth_group: ["developers"]

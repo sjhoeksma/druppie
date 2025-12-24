@@ -1,7 +1,7 @@
 ---
 id: kyverno
 name: Policy Enforcement (Kyverno)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Het technisch afdwingen en rapporteren van Security by Design en Compliance by Design regels binnen de Kubernetes"

@@ -1,7 +1,7 @@
 ---
 id: gis-geonode
 name: patial Data Infrastructure (GeoNode)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Portaal voor het vinden en delen van geografische data"

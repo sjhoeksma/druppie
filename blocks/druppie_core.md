@@ -1,7 +1,7 @@
 ---
 id: druppie-code
 name: Druppie Core (Orchestrator)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "De achterkant van het druppie platform"

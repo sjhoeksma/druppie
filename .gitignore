@@ -2,3 +2,5 @@
 .druppie_history
 .secrets
 .logs
+core/druppie-core
+core/druppie-server

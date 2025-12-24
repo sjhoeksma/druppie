@@ -1,7 +1,7 @@
 ---
 id: git-gitea
 name: Git & Versiebeheer (Gitea)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "beheren van de broncode (Source Code Management) en de infrastructuur-configuraties (GitOps) binnen het eigen cluster"

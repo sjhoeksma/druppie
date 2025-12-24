@@ -1,7 +1,7 @@
 ---
 id: gitops-flux
 name: GitOps & State Management (Flux)
-type: block
+type: service
 version: 1.0.0
 auth_group: ["provisioning","developer"]
 description: "GitOps & State Management (Flux)"

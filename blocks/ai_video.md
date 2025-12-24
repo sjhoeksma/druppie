@@ -1,7 +1,7 @@
 ---
 id: video
 name: AI Video Service (ComfyUI)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "ComfyUI de industriestandaard voor schaalbare, geautomatiseerde AI-productie zonder overhead"

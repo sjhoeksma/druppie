@@ -1,7 +1,7 @@
 ---
 id: trivy
 name: Security & Compliance Scanning (Trivy)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Scannen van onze containers, bestandssystemen en Infrastructuur-als-Code"

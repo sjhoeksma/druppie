@@ -1,7 +1,7 @@
 ---
 id: iam-keycloak
 name: Identity & Access Management (Keycloak)
-type: block
+type: service
 description: "Centralized identity management and SSO using Keycloak."
 capabilities: ["authentication", "authorization", "sso", "identity-brokering"]
 version: 1.0.0

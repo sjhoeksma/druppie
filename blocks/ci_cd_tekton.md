@@ -1,7 +1,7 @@
 ---
 id: ci-cd-tekton
 name: CI/CD Tekton
-type: block
+type: service
 capabilities: ["build", "test", "scan"]
 description: "Use Tekton Pipelines for CI/CD"
 version: 1.0.0
