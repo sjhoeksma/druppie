@@ -511,11 +511,7 @@ MCP-integratie in Copilot Studio volgt een connector-gebaseerde architectuur waa
 
 ### Rechten- en Authenticatie-uitdagingen Vermenigvuldigen Over Grenzen
 
-Copilot Studio ondersteunt drie authenticatietypen: none, API key, en OAuth 2.0 (met dynamic discovery via OAuth 2.0 Dynamic Client Registration of handmatige configuratie). De uitdagingen ontstaan omdat MCP-systemen meerdere authenticatie-oppervlakken omvatten—gebruikers authenticeren naar agents, agents naar MCP-servers, en MCP-servers naar upstream services.
-
-Voor enterprise-scenario's beveelt Microsoft **On-Behalf-Of (OBO) authenticatie** aan met Microsoft Entra ID, wat vereist: service app registraties voor de MCP-server, connector app registraties met gedelegeerde rechten, en configuratie van de Azure API Connections service principal (Client ID: `fe053c5f-3692-4f14-aef2-ee34fc081cae`).
-
-OAuth-beveiligde MCP-tools triggeren "additional permissions required" prompts die de gespreksstroom verstoren. Elke gebruiker vereist zijn eigen verbinding naar MCP-servers die auth vereisen, met token refresh en expiration handling geconfigureerd per verbinding.
+Copilot Studio ondersteunt drie authenticatietypen: none, API key, en OAuth 2.0 (met dynamic discovery via OAuth 2.0 Dynamic Client Registration of handmatige configuratie). De uitdagingen ontstaan omdat MCP-systemen meerdere authenticatie-oppervlakken omvatten—gebruikers authenticeren naar agents, agents naar MCP-servers, en MCP-servers naar upstream services. Het doorpassen van Entra-ID tokens lijkt geen probleem maar voor permissies geven ontstaat wel een probleem.
 
 ### Geneste MCP: Het Druppie-specifieke Probleem
 
@@ -538,16 +534,6 @@ Copilot/Foundry
 4. De Gitea MCP heeft geen context over de oorspronkelijke gebruikerstoestemming
 
 Dit is geen bug maar een fundamentele beperking van het MCP-protocol voor systemen die zelf ook MCP-clients zijn. De MCP-specificatie erkent dat "multi-hop scenario's" toekomstige evolutie vereisen.
-
-### Copilot Studio MCP Connector Beperkingen
-
-Verschillende technische beperkingen beïnvloeden implementatie:
-
-- **Schema-beperkingen**: `System.FormatException` wordt gegooid wanneer `exclusiveMinimum` integer is in plaats van Boolean; array-type tool definities worden afgekapt; **reference type inputs/outputs worden niet ondersteund** (tools die deze gebruiken worden uitgefilterd)
-- **Custom header beperkingen**: Headers die het `X-` prefix patroon gebruiken werken niet met MCP connectors; geen UI om custom headers toe te voegen—vereist directe OpenAPI specificatie bewerking
-- **Feature support**: Alleen MCP tools en resources worden ondersteund; **prompts** (voorgedefinieerde templates) worden nog niet volledig ondersteund; generative orchestration moet zijn ingeschakeld als voorwaarde
-- **Governance gaps**: IP-restricties in Azure Firewall staan alle Power Platform-omgevingen toe ongeacht tenant—MCP deployments moeten nog steeds worden behandeld als publiek toegankelijk
-
 ---
 
 ## Kennisdeelvraag 7: Hoe Vergelijken Deze Benaderingen?
@@ -951,14 +937,6 @@ Het agent-ecosysteem evolueert snel. Belangrijke ontwikkelingen van 2024-2025:
 ---
 
 ## Conclusie
-
-### Drie Kritieke Architecturale Inzichten
-
-Drie architecturale inzichten komen naar voren uit de technische deep-dive analyse:
-
-**Portabiliteitsclaims vereisen grondige beoordeling**: Hoewel het Microsoft Agent Framework daadwerkelijk draagbaar is, blijft de volledige Azure AI Foundry beheerde runtime met enterprise governance alleen Azure, wat betekenisvolle lock-in creëert ondanks ondersteuning voor open protocollen zoals MCP en A2A.
-
-**M365 Agents SDK is een distributiemechanisme, geen orchestratielaag**: Ontwikkelaars moeten het combineren met Foundry of een andere hostingoplossing om complete agentsystemen te bouwen. De SDK handelt publicatie naar Microsoft 365-kanalen af, maar biedt geen agent-orchestratie of workflow management.
 
 ### Aanbeveling voor Druppie
 
