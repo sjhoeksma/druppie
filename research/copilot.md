@@ -949,4 +949,3 @@ De volgende stap is het ontwerpen en bouwen van twee componenten:
 
 Dit onderzoeksdocument vormt de technische basis voor het ontwerpen van deze twee componenten.
 
----
