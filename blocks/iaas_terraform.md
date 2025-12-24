@@ -1,7 +1,7 @@
 ---
 id: iaas-terraform
 name: Infrastructure as Code (Terraform/OpenTofu)
-type: block
+type: service
 version: 1.0.0
 auth_group: ["provisioning"]
 description: "provisioneren van infrastructuur"

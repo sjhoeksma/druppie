@@ -1,7 +1,7 @@
 ---
 id: qdrant
 name: Vector Database (Qdrant)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Opslaan en doorzoekbaar maken van onze AI-kennis "

@@ -1,7 +1,7 @@
 ---
 id: dvc
 name: AI Dataset Versioning (DVC)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Semantisch beheren van versies van datasets"

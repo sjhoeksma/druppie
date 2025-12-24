@@ -1,7 +1,7 @@
 ---
 id: observability-plg
 name: Observability Stack (PLG)
-type: block
+type: service
 description: "Promtail, Loki, and Grafana stack for log aggregation and visualization."
 capabilities: ["logging", "visualization", "monitoring"]
 version: 1.0.0

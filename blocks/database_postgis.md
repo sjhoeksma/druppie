@@ -1,7 +1,7 @@
 ---
 id: postgis
 name: Geo-Database (PostGIS)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Opslag en verwerking van geografische data"

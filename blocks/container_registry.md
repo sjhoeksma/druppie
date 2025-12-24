@@ -1,7 +1,7 @@
 ---
 id: container-registry
 name: "Container Registry (Harbor)"
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Container Registry (Harbor)"

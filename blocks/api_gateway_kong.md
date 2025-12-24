@@ -1,7 +1,7 @@
 ---
 id: api-gateway-kong
 name: API Gateway (Kong)
-type: block
+type: service
 description: "Centrale API Gateway voor het beheren, beveiligen en monitoren van API-verkeer across services."
 capabilities: ["api-management", "rate-limiting", "auth-proxy"]
 version: 1.0.0

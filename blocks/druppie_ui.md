@@ -1,7 +1,7 @@
 ---
 id: druppie-ui
 name: Druppie UI
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Het gezicht van het druppie platform"

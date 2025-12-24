@@ -1,7 +1,7 @@
 ---
 id: webodm
 name: Drone Mapping & 3D Processing (OpenDroneMap)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Totale proces van fotogrammetrie — het omzetten van losse 2D dronefoto's naar georeferenced orthofoto's"

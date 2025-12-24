@@ -1,7 +1,7 @@
 ---
 id: database-postgres
 name: Database Cluster (PostgreSQL)
-type: block
+type: service
 description: "High-availability PostgreSQL cluster using CloudNativePG operator."
 capabilities: ["relational-database", "backups", "ha"]
 version: 1.0.0

@@ -1,7 +1,7 @@
 ---
 id: archimate
 name: Architectuur Modellering (Archi)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Beheren van de Enterprise Architectuur conform de ArchiMate standaard"

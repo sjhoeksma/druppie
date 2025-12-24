@@ -1,7 +1,7 @@
 ---
 id: sonarqube
 name: Code Quality & Static Analysis (SonarQube)
-type: block
+type: service
 version: 1.0.0
 auth_group: ["developers"]
 description: "Bewaken van de technische kwaliteit, onderhoudbaarheid en code coverage."

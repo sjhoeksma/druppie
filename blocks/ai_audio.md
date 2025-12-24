@@ -1,7 +1,7 @@
 ---
 id: audio
 name: AI Audio Service (TTS & Voice)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Een dedicated, zelfstandige service voor het genereren van hoge kwaliteit spraak (Text-to-Speech) en audio-effecten."

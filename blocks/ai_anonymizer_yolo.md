@@ -1,7 +1,7 @@
 ---
 id: anonymizer
 name: AI Anonymizer (YOLOv8)
-type: block
+type: service
 version: 1.0.0
 auth_group: []
 description: "Atomatisch detecteren en anonimiseren van privacy-gevoelige objecten (gezichten, personen, kentekenplaten) in beeldmateriaal"

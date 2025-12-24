@@ -1,7 +1,7 @@
 ---
 id: brand-management
 name: Brand Management
-type: block
+type: service
 version: 1.0.0
 auth_group: ["developers"]
 description: "Headless Digital Asset Management (DAM) systeem"
