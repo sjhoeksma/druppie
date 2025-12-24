@@ -533,6 +533,7 @@ Copilot/Foundry
 4. De Gitea MCP heeft geen context over de oorspronkelijke gebruikerstoestemming
 
 Dit is geen bug maar een fundamentele beperking van het MCP-protocol voor systemen die zelf ook MCP-clients zijn. De MCP-specificatie erkent dat "multi-hop scenario's" toekomstige evolutie vereisen.
+
 ---
 
 ## Kennisdeelvraag 7: Hoe Vergelijken Deze Benaderingen?
@@ -951,7 +952,7 @@ De M365 Agents SDK + Custom Engine Agent-benadering biedt de optimale balans voo
 
 **Productieklaar**: Duidelijk implementatiepad met beheersbare kosten en goed gedocumenteerde API's.
 
-De thin client-architectuur zorgt ervoor dat Core Druppie draagbaar en on-premises blijft terwijl naadloze toegang wordt geboden via de M365 Copilot-interface die gebruikers al kennen. Deze aanpak positioneert Druppie voor langetermijnflexibiliteit terwijl Microsoft's agent-ecosysteem blijft evolueren.
+De thin client-architectuur zorgt ervoor dat Core Druppie draagbaar en on-premises blijft terwijl naadloze toegang wordt geboden via de M365 Copilot-interface die gebruikers al kennen. Deze aanpak positioneert Druppie voor langetermijnflexibiliteit terwijl Microsoft's agent-ecosysteem blijft evolueren. 
 
 ---
 
