@@ -1,0 +1,31 @@
+llm:
+    default_provider: ollama
+    providers:
+      gemini:
+        type: gemini
+        model: gemini-1.5-flash
+        api_key: ""
+        project_id: "" # (string, NOT number)
+        client_id: ""
+        client_secret: ""
+      ollama:
+        type: ollama
+        model: qwen3:8b
+        url: http://localhost:11434
+    
+server:
+    port: "8080"
+build:
+    default_provider: local
+    providers:
+      tekton:
+        type: tekton
+        namespace: default
+      local:
+        type: local
+        working_dir: .
+git:
+    provider: ""
+    url: ""
+    user: ""
+    token: ""
