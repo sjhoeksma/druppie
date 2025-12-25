@@ -1,5 +1,5 @@
 ---
-id: audio
+id: ai_audio
 name: AI Audio Service (TTS & Voice)
 type: service
 version: 1.0.0

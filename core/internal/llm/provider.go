@@ -175,36 +175,137 @@ func (p *GeminiProvider) Generate(ctx context.Context, prompt string, systemProm
 
 	// Case 2: Custom Cloud Code API (OAuth) usage
 	if p.httpClient != nil {
+		// Ensure Handshake is performed once to get the correct Managed Project ID
+		// Since we can't easily add fields to the struct without a separate edit,
+		// we will perform the handshake if the projectID provided by user doesn't look like a managed one (starts with 'gemini-')?
+		// Or just perform it.
+		// Actually, let's just do the handshake logic inline here.
+		// OPTIMIZATION: We really should cache this. But for now, let's just make it work.
+
+		effectiveProjectID := p.projectID // Start with user provided
+
+		// Handshake Step 1: loadCodeAssist
+		// We try to "load" the project context to see if there is a linked managed project
+		handshakeURL := "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+
+		metaData := map[string]string{
+			"ideType":    "IDE_UNSPECIFIED",
+			"platform":   "PLATFORM_UNSPECIFIED",
+			"pluginType": "GEMINI",
+		}
+
+		loadBody := map[string]interface{}{
+			"metadata":                metaData,
+			"cloudaicompanionProject": p.projectID, // Tell it what we WANT to use
+		}
+
+		jsonLoad, _ := json.Marshal(loadBody)
+		reqLoad, _ := http.NewRequestWithContext(ctx, "POST", handshakeURL, bytes.NewBuffer(jsonLoad))
+		reqLoad.Header.Set("Content-Type", "application/json")
+		reqLoad.Header.Set("User-Agent", "google-api-nodejs-client/9.15.1")
+		reqLoad.Header.Set("X-Goog-Api-Client", "gl-node/22.17.0")
+		reqLoad.Header.Set("Client-Metadata", "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI")
+
+		fmt.Printf("[Gemini] Handshake: Loading context for project '%s'...\n", p.projectID)
+		respLoad, err := p.httpClient.Do(reqLoad)
+
+		loadSuccess := false
+		if err == nil {
+			bodyBytes, _ := io.ReadAll(respLoad.Body)
+			respLoad.Body.Close()
+			fmt.Printf("[Gemini] LoadCodeAssist Status: %s, Body: %s\n", respLoad.Status, string(bodyBytes))
+
+			if respLoad.StatusCode == http.StatusOK {
+				loadSuccess = true
+				var resMap map[string]interface{}
+				json.Unmarshal(bodyBytes, &resMap)
+
+				if val, ok := resMap["cloudaicompanionProject"]; ok {
+					if str, ok := val.(string); ok && str != "" {
+						effectiveProjectID = str
+					} else if obj, ok := val.(map[string]interface{}); ok {
+						if id, ok := obj["id"].(string); ok && id != "" {
+							effectiveProjectID = id
+						}
+					}
+				}
+			}
+		} else {
+			fmt.Printf("[Gemini] LoadCodeAssist Failed: %v\n", err)
+		}
+
+		// If we didn't get a managed ID (and maybe we need one?), we could try OnboardUser.
+		// But for now, let's assume loadCodeAssist returns the correct ID if the project is valid.
+		// If loadCodeAssist failed (e.g. 404), maybe we NEED to onboard.
+
+		if !loadSuccess {
+			// Try OnboardUser if load failed to give us a distinct ID or if we are just starting.
+			// Opencode defaults to tierId='FREE'
+			fmt.Println("[Gemini] Handshake: Attempting OnboardUser...")
+			onboardURL := "https://cloudcode-pa.googleapis.com/v1internal:onboardUser"
+			onboardBody := map[string]interface{}{
+				"tierId":   "FREE",
+				"metadata": metaData,
+			}
+			// Note: For FREE tier, we do NOT send cloudaicompanionProject in request
+
+			jsonOnboard, _ := json.Marshal(onboardBody)
+			reqOnboard, _ := http.NewRequestWithContext(ctx, "POST", onboardURL, bytes.NewBuffer(jsonOnboard))
+			reqOnboard.Header = reqLoad.Header // Same headers
+
+			respOnboard, err := p.httpClient.Do(reqOnboard)
+			if err == nil {
+				bodyBytes, _ := io.ReadAll(respOnboard.Body)
+				respOnboard.Body.Close()
+				fmt.Printf("[Gemini] OnboardUser Status: %s, Body: %s\n", respOnboard.Status, string(bodyBytes))
+
+				if respOnboard.StatusCode == http.StatusOK {
+					var resMap map[string]interface{}
+					json.Unmarshal(bodyBytes, &resMap)
+
+					// Payload: { response: { cloudaicompanionProject: { id: "..." } } }
+					if respObj, ok := resMap["response"].(map[string]interface{}); ok {
+						if projObj, ok := respObj["cloudaicompanionProject"].(map[string]interface{}); ok {
+							if id, ok := projObj["id"].(string); ok {
+								effectiveProjectID = id
+							}
+						}
+					}
+				}
+			} else {
+				fmt.Printf("[Gemini] OnboardUser Failed: %v\n", err)
+			}
+		}
+
+		fmt.Printf("[Gemini] Effective Project ID: %s\n", effectiveProjectID)
 		url := "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
 
 		// Construct inner request payload
+		// Fallback: Prepend system prompt to inputs because v1internal often fails with systemInstruction field
+		finalPrompt := prompt
+		if systemPrompt != "" {
+			finalPrompt = fmt.Sprintf("System Instruction: %s\n\nUser Input: %s", systemPrompt, prompt)
+		}
+
 		reqPayload := map[string]interface{}{
 			"contents": []map[string]interface{}{
 				{
 					"role": "user",
 					"parts": []map[string]interface{}{
-						{"text": prompt},
+						{"text": finalPrompt},
 					},
 				},
 			},
-			// Removing generationConfig to rely on defaults and reduce error surface
-			// "generationConfig": map[string]interface{}{
-			// 	"candidateCount": 1,
-			// },
+			"generationConfig": map[string]interface{}{
+				"candidateCount": 1,
+			},
 		}
-
-		if systemPrompt != "" {
-			reqPayload["systemInstruction"] = map[string]interface{}{
-				"parts": []map[string]interface{}{
-					{"text": systemPrompt},
-				},
-			}
-		}
+		// Removed systemInstruction field to avoid 404/Unknown Field errors on internal API
 
 		// Wrap in outer envelope as expected by Cloud Code API
 		reqBody := map[string]interface{}{
-			"project": p.projectID,
-			"model":   fmt.Sprintf("models/%s", p.model),
+			"project": effectiveProjectID,
+			"model":   p.model,
 			"request": reqPayload,
 		}
 
@@ -223,6 +324,7 @@ func (p *GeminiProvider) Generate(ctx context.Context, prompt string, systemProm
 		req.Header.Set("User-Agent", "google-api-nodejs-client/9.15.1")
 		req.Header.Set("X-Goog-Api-Client", "gl-node/22.17.0")
 		req.Header.Set("Client-Metadata", "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI")
+		req.Header.Set("X-Goog-User-Project", effectiveProjectID)
 
 		resp, err := p.httpClient.Do(req)
 		if err != nil {

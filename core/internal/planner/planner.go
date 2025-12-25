@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/drug-nl/druppie/core/internal/llm"
@@ -14,12 +15,14 @@ import (
 type Planner struct {
 	llm      llm.Provider
 	registry *registry.Registry
+	Debug    bool
 }
 
-func NewPlanner(llm llm.Provider, reg *registry.Registry) *Planner {
+func NewPlanner(llm llm.Provider, reg *registry.Registry, debug bool) *Planner {
 	return &Planner{
 		llm:      llm,
 		registry: reg,
+		Debug:    debug,
 	}
 }
 
@@ -29,10 +32,15 @@ Action: %s
 Available Tools (Building Blocks): %v
 Available Agents: %v
 
-Break this down into execution steps.
-Assign each step to the most appropriate Agent from the "Available Agents" list.
-If a step requires a specific building block, mention it in params.
+Strategies:
+1. **Reuse over Rebuild**: Check 'Available Tools'. If a block matches the need (e.g. 'ai-video-comfyui' for video), USE IT. Do NOT design generic architecture or provision generic clusters if a specific Block exists.
+2. **Ensure Availability**: Before using a Service Block, create a step for 'Infrastructure Engineer' to 'ensure_availability' of that block. This step must check status. IMPORTANT: Include a param 'if_missing' describing the deployment action (e.g. "Deploy ai-video-comfyui from Building Block Library") to execute if the block is not found.
+3. **Elicitation First**: If the Goal is vague (missing audience, style, etc.), your first step MUST be 'Business Analyst' -> 'ask_questions'.
+   - **Format**: In the step 'description', start with a **Summary** of what you understood (e.g. "I understand you want a video about wind."), then state what is missing.
+   - **Params**: Include 'summary' (string) and 'questions' (list).
+   - Example: { "step_id": 1, "agent_id": "business-analyst", "action": "ask_questions", "params": { "summary": "Project: Video about Wind.", "questions": ["Target Audience?", "Style?"] }, "description": "I understand you want a video about wind. To proceed, I need to know the target audience and style." }
 
+Break this down into execution steps.
 Output JSON array of objects:
 [
   { "step_id": 1, "agent_id": "REPLACE_WITH_AGENT_ID", "action": "...", "params": {...}, "description": "..." }
@@ -50,21 +58,69 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	agents := p.registry.ListAgents()
 	agentList := make([]string, 0, len(agents))
 	for _, a := range agents {
-		// Format: ID (Name) - Description
-		agentList = append(agentList, fmt.Sprintf("%s (%s): %s", a.ID, a.Name, a.Description))
+		// Format: ID (Name) - Skills - Description
+		agentList = append(agentList, fmt.Sprintf("%s (%s)\n  Skills: %v\n  Description: %s", a.ID, a.Name, a.Skills, a.Description))
 	}
 
 	// 2. Prompt LLM
 	sysPrompt := fmt.Sprintf(systemPromptTmpl, intent.Summary, intent.Action, blockNames, agentList)
+
+	// Persistent Logging
+	logFile := ".logs/ai_interaction.log"
+	f, fileErr := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if fileErr == nil {
+		defer f.Close()
+		timestamp := time.Now().Format(time.RFC3339)
+		f.WriteString(fmt.Sprintf("--- [Planner] %s ---\nINPUT:\n%s\n", timestamp, sysPrompt))
+	}
+
 	resp, err := p.llm.Generate(ctx, "Generate plan data", sysPrompt)
 	if err != nil {
 		return model.ExecutionPlan{}, err
 	}
 
+	if fileErr == nil {
+		f.WriteString(fmt.Sprintf("OUTPUT:\n%s\n\n", resp))
+	}
+
 	// 3. Parse Response
 	var steps []model.Step
+
+	// Attempt 1: Direct Array
 	if err := json.Unmarshal([]byte(resp), &steps); err != nil {
-		return model.ExecutionPlan{}, fmt.Errorf("failed to parse planner response: %w. Raw: %s", err, resp)
+		// Attempt 2: Wrapped Object {"steps": [...]}
+		var wrapped struct {
+			Steps []model.Step `json:"steps"`
+		}
+		if err2 := json.Unmarshal([]byte(resp), &wrapped); err2 == nil && len(wrapped.Steps) > 0 {
+			steps = wrapped.Steps
+		} else {
+			// Attempt 3: Single Object (common with smaller models/simple plans)
+			var singleStep model.Step
+			if err3 := json.Unmarshal([]byte(resp), &singleStep); err3 == nil && singleStep.Action != "" {
+				steps = []model.Step{singleStep}
+			} else {
+				// Attempt 4: Error Object (LLM refused to generate plan due to missing info)
+				var errorResp struct {
+					Error string `json:"error"`
+				}
+				if err4 := json.Unmarshal([]byte(resp), &errorResp); err4 == nil && errorResp.Error != "" {
+					steps = []model.Step{
+						{
+							ID:          1,
+							AgentID:     "business-analyst",
+							Action:      "ask_questions",
+							Params:      map[string]interface{}{"details_needed": errorResp.Error},
+							Description: errorResp.Error,
+							Status:      "pending",
+						},
+					}
+				} else {
+					// All attempts failed
+					return model.ExecutionPlan{}, fmt.Errorf("failed to parse planner response: %w. Raw: %s", err, resp)
+				}
+			}
+		}
 	}
 
 	// 4. Construct Plan

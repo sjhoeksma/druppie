@@ -34,10 +34,11 @@ type Skill struct {
 
 // Intent represents the analyzed user request
 type Intent struct {
-	Summary  string `json:"summary"`
-	Action   string `json:"action"` // create, update, query, approval
-	Category string `json:"category"`
-	Language string `json:"language"` // User's language
+	Summary     string `json:"summary"`
+	Action      string `json:"action"` // create, update, query, approval
+	Category    string `json:"category"`
+	ContentType string `json:"content_type,omitempty"` // If category is 'create content', specify what (video, blog, code, etc.)
+	Language    string `json:"language"`               // User's language
 }
 
 // Step represents a single unit of work in a plan

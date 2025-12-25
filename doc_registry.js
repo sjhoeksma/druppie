@@ -38,6 +38,8 @@ const DOC_REGISTRY = {
         { name: "Architect", path: "agents/architect.md" },
         { name: "Business Analyst", path: "agents/business_analyst.md" },
         { name: "Data Scientist", path: "agents/data_scientist.md" },
+        { name: "Content Creator", path: "agents/content-creator.md" },
+        { name: "Infrastructure Engineer", path: "agents/infrastructure-engineer.md" },
         { name: "Tester", path: "agents/tester.md" },
     ],
     "skills": [
@@ -47,6 +49,7 @@ const DOC_REGISTRY = {
         { name: "Mermaid", path: "skills/mermaid.md" },
         { name: "Node.js", path: "skills/nodejs.md" },
         { name: "Python", path: "skills/python.md" },
+        { name: "Check Block Status", path: "skills/check-block-status.md" },
         { name: "WCAG 2.1 AA", path: "skills/WCAG-2-1-AA.md" },
     ],
     "research": [

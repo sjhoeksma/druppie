@@ -28,6 +28,7 @@ func main() {
 	// CLI Flags
 	var llmProviderOverride string
 	var buildProviderOverride string
+	var debug bool
 
 	// Helper to bootstrap dependencies
 	setup := func(cmd *cobra.Command) (*config.Config, *registry.Registry, *router.Router, *planner.Planner, error) {
@@ -74,8 +75,8 @@ func main() {
 			return nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
 		}
 
-		r := router.NewRouter(llmManager)
-		p := planner.NewPlanner(llmManager, reg)
+		r := router.NewRouter(llmManager, debug)
+		p := planner.NewPlanner(llmManager, reg, debug)
 
 		return &cfg, reg, r, p, nil
 	}
@@ -212,6 +213,7 @@ func main() {
 
 	rootCmd.PersistentFlags().StringVar(&llmProviderOverride, "llm-provider", "", "Override default LLM provider")
 	rootCmd.PersistentFlags().StringVar(&buildProviderOverride, "build-provider", "", "Override default Build provider")
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", true, "Enable debug mode (print raw LLM responses)")
 
 	rootCmd.AddCommand(registryCmd)
 	rootCmd.AddCommand(chatCmd)

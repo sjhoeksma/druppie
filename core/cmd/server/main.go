@@ -58,8 +58,8 @@ func main() {
 		log.Fatalf("Failed to initialize LLM manager: %v", err)
 	}
 	defer llmManager.Close()
-	routerService := router.NewRouter(llmManager)
-	plannerService := planner.NewPlanner(llmManager, reg)
+	routerService := router.NewRouter(llmManager, true) // Enable debug logging by default
+	plannerService := planner.NewPlanner(llmManager, reg, true)
 
 	// API Routes
 	r.Route("/v1", func(r chi.Router) {
