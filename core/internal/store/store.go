@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
@@ -16,6 +17,9 @@ type Store interface {
 	SavePlan(plan model.ExecutionPlan) error
 	GetPlan(id string) (model.ExecutionPlan, error)
 	ListPlans() ([]model.ExecutionPlan, error)
+
+	// Interaction Logging
+	LogInteraction(planID string, tag string, input string, output string) error
 
 	// Config (raw bytes to avoid cycle, manager handles marshaling)
 	SaveConfig(data []byte) error
@@ -38,6 +42,11 @@ func NewFileStore(baseDir string) (*FileStore, error) {
 	plansDir := filepath.Join(baseDir, "plans")
 	if err := os.MkdirAll(plansDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create plans directory: %w", err)
+	}
+	// Create logs subdir
+	logsDir := filepath.Join(baseDir, "logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 	return &FileStore{baseDir: baseDir}, nil
 }
@@ -103,6 +112,31 @@ func (s *FileStore) ListPlans() ([]model.ExecutionPlan, error) {
 		}
 	}
 	return plans, nil
+}
+
+func (s *FileStore) LogInteraction(planID string, tag string, input string, output string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filename := "interaction.log"
+	if planID != "" {
+		filename = planID + ".log"
+	}
+
+	path := filepath.Join(s.baseDir, "logs", filename)
+	// Create dir if missing (just in case)
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	timestamp := time.Now().Format(time.RFC3339)
+	entry := fmt.Sprintf("--- [%s] %s ---\nINPUT:\n%s\nOUTPUT:\n%s\n\n", tag, timestamp, input, output)
+	_, err = f.WriteString(entry)
+	return err
 }
 
 func (s *FileStore) SaveConfig(data []byte) error {

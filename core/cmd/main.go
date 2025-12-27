@@ -26,17 +26,18 @@ import (
 func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "druppie-core",
-		Short: "Druppie Core Helper CLI",
-		Long:  `CLI for local testing and interacting with Druppie Core logic (Registry, Planner, Chat)`,
+		Short: "Druppie Core Helper CLI & API Server",
+		Long: `Druppie Core manages the Registry, Planner, and Orchestration API. 
+By default, it starts the API Server on port 8080. 
+Use global flags like --plan-id to resume existing planning tasks or --llm-provider to switch backends.`,
 	}
 
 	// CLI Flags
 	var llmProviderOverride string
 	var buildProviderOverride string
 	var debug bool
+	var planID string
 
-	// Helper to bootstrap dependencies
-	// Returns ConfigManager to allow updates, and Builder Engine
 	// Helper to find project root
 	findProjectRoot := func() (string, error) {
 		cwd, err := os.Getwd()
@@ -65,13 +66,14 @@ func main() {
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine
 	setup := func(cmd *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, error) {
-		rootDir, err := findProjectRoot()
-		if err != nil {
-			// Fallback to CWD just in case, or bubble error?
-			// Let's print warning and use CWD, but likely it will fail later
-			fmt.Printf("Warning: %v. Using CWD.\n", err)
-			rootDir, _ = os.Getwd()
+		// Check if we are in 'core' and need to move up to project root
+		cwd, _ := os.Getwd()
+		if filepath.Base(cwd) == "core" {
+			fmt.Println("Running in 'core', moving working directory up to project root.")
+			_ = os.Chdir("..")
 		}
+
+		rootDir, err := findProjectRoot()
 
 		fmt.Printf("Loading registry from: %s\n", rootDir)
 		reg, err := registry.LoadRegistry(rootDir)
@@ -115,7 +117,7 @@ func main() {
 			return nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
 		}
 
-		r := router.NewRouter(llmManager, debug)
+		r := router.NewRouter(llmManager, druppieStore, debug)
 		p := planner.NewPlanner(llmManager, reg, druppieStore, debug)
 
 		return cfgMgr, reg, r, p, buildEngine, nil
@@ -125,13 +127,6 @@ func main() {
 		Use:   "serve",
 		Short: "Start the Druppie Core API Server",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Check if we are in 'core' and need to move up to project root
-			cwd, _ := os.Getwd()
-			if filepath.Base(cwd) == "core" {
-				fmt.Println("Running in 'core', moving working directory up to project root.")
-				os.Chdir("..")
-			}
-
 			cfgMgr, reg, routerService, plannerService, buildEngine, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Startup Error: %v\n", err)
@@ -167,7 +162,7 @@ func main() {
 					}
 
 					// 1. Analyze Intent
-					intent, err := routerService.Analyze(r.Context(), req.Prompt)
+					intent, rawRouterResp, err := routerService.Analyze(r.Context(), req.Prompt)
 					if err != nil {
 						http.Error(w, fmt.Sprintf("Router failed: %v", err), http.StatusInternalServerError)
 						return
@@ -182,6 +177,11 @@ func main() {
 							return
 						}
 						plan = &p
+						// Log router step to plan log
+						_ = plannerService.Store.LogInteraction(plan.ID, "Router", req.Prompt, rawRouterResp)
+					} else {
+						// Log to generic interaction log
+						_ = plannerService.Store.LogInteraction("", "Router", req.Prompt, rawRouterResp)
 					}
 
 					// 3. Response
@@ -315,25 +315,46 @@ func main() {
 		},
 	}
 
+	printStepParams := func(params map[string]interface{}, indent string) {
+		for k, v := range params {
+			if list, ok := v.([]interface{}); ok {
+				fmt.Printf("%s%s:\n", indent, k)
+				for _, item := range list {
+					fmt.Printf("%s  - %v\n", indent, item)
+				}
+			} else {
+				fmt.Printf("%s%s: %v\n", indent, k, v)
+			}
+		}
+	}
+
 	runInteractiveLoop := func(ctx context.Context, p *planner.Planner, plan *model.ExecutionPlan) {
 		scanner := bufio.NewScanner(os.Stdin)
 		for {
-			// Check if we need to ask questions
-			if len(plan.Steps) > 0 {
-				lastStep := plan.Steps[len(plan.Steps)-1]
-				if lastStep.Action == "ask_questions" {
-					fmt.Printf("\n[Planner Needs Info]: %s\n", lastStep.Description)
-					// Display questions if params exist
+			// Find the first pending step to process
+			var activeStep *model.Step
+			var activeStepIdx int = -1
+			for i := range plan.Steps {
+				if plan.Steps[i].Status == "pending" {
+					activeStep = &plan.Steps[i]
+					activeStepIdx = i
+					break
+				}
+			}
+
+			if activeStep != nil {
+				if activeStep.Action == "ask_questions" {
+					fmt.Printf("\n[Planner - Request] %s\n", activeStep.Description)
 					// Display questions if params exist
 					var assumptions []interface{}
-					if as, ok := lastStep.Params["assumptions"]; ok {
+					if as, ok := activeStep.Params["assumptions"]; ok {
 						if listAs, isListAs := as.([]interface{}); isListAs {
 							assumptions = listAs
 						}
 					}
 
 					var questions []interface{}
-					if qs, ok := lastStep.Params["questions"]; ok {
+					if qs, ok := activeStep.Params["questions"]; ok {
 						if list, isList := qs.([]interface{}); isList {
 							questions = list
 						} else {
@@ -352,17 +373,17 @@ func main() {
 						}
 					}
 
-					fmt.Println("\nOptions: [Type your answer] | 'accept' (use defaults) | 'exit' (quit)")
+					fmt.Println("\nOptions: [Type your answer] | '/accept' (use defaults) | '/exit' (quit)")
 					fmt.Print("> ")
 					if !scanner.Scan() {
 						return
 					}
 					answer := scanner.Text()
 
-					if answer == "exit" || answer == "quit" {
+					if answer == "/exit" || answer == "/quit" || answer == "exit" || answer == "quit" {
 						return
 					}
-					if answer == "accept" || answer == "skip" {
+					if answer == "/accept" || answer == "accept" || answer == "/skip" || answer == "skip" {
 						// Build detailed answer from assumptions
 						var details strings.Builder
 						for i, q := range questions {
@@ -373,9 +394,25 @@ func main() {
 							details.WriteString(fmt.Sprintf("%v - %v\n", q, val))
 						}
 						answer = details.String()
+					} else if strings.HasPrefix(answer, "/") {
+						if answer == "/plan" {
+							planJSON, _ := json.MarshalIndent(plan, "", "  ")
+							fmt.Printf("\n[Current Plan ID: %s]\n%s\n", plan.ID, string(planJSON))
+							continue
+						}
+						if answer == "/help" {
+							fmt.Println("\nAvailable Commands:")
+							fmt.Println("  /accept - Use default answers for all questions")
+							fmt.Println("  /plan   - Show the current JSON execution plan")
+							fmt.Println("  /exit   - Quit the session")
+							fmt.Println("  /help   - Show this help message")
+							continue
+						}
+						fmt.Printf("Unknown command: %s. Use natural language or commands like /accept, /plan, /help, /exit\n", answer)
+						continue
 					}
 
-					fmt.Println("[Planner] Updating plan...")
+					fmt.Println("[Planner - Progress] Updating plan...")
 					updatedPlan, err := p.UpdatePlan(ctx, plan, answer)
 					if err != nil {
 						fmt.Printf("[Error] Update failed: %v\n", err)
@@ -383,29 +420,97 @@ func main() {
 					}
 					plan = updatedPlan
 					continue // Loop to check next state
+				} else if activeStep.Action != "content-creator" {
+					// Auto-transition ONLY for technical/logic steps, not content generation
+					fmt.Printf("\n[Planner - Progress] Automated Transition: Completing Step %d (%v)\n", activeStep.ID, activeStep.AgentID)
+					plan.Steps[activeStepIdx].Status = "completed"
+					_ = p.Store.SavePlan(*plan)
+
+					// If this was the last step, trigger another update to see what's next
+					if activeStepIdx == len(plan.Steps)-1 {
+						fmt.Println("[Planner - Progress] Determining next steps...")
+						updatedPlan, err := p.UpdatePlan(ctx, plan, "Autoconfirmed: Logic/Context step completed.")
+						if err == nil {
+							plan = updatedPlan
+							continue
+						}
+					}
+					continue // Just loop to process next pending step if it exists
+				} else if activeStep.Action == "content-creator" {
+					fmt.Printf("\n[Planner - Request] Review the generated content from %s:\n", activeStep.AgentID)
+					printStepParams(activeStep.Params, "  ")
+
+					fmt.Println("\nOptions: [Type feedback to refine] | '/accept' (continue) | '/exit' (quit)")
+					fmt.Print("> ")
+					if !scanner.Scan() {
+						return
+					}
+					answer := scanner.Text()
+
+					if answer == "/exit" || answer == "/quit" || answer == "exit" || answer == "quit" {
+						return
+					}
+					if answer == "/accept" || answer == "/ok" || answer == "accept" || answer == "ok" {
+						fmt.Printf("[Planner - Progress] Accepting content for Step %d...\n", activeStep.ID)
+						plan.Steps[activeStepIdx].Status = "completed"
+						_ = p.Store.SavePlan(*plan)
+
+						// Auto-trigger update if this was the last step
+						if activeStepIdx == len(plan.Steps)-1 {
+							fmt.Println("[Planner - Progress] Determining next steps...")
+							updatedPlan, err := p.UpdatePlan(ctx, plan, "User accepted the content.")
+							if err == nil {
+								plan = updatedPlan
+							}
+						}
+						continue
+					}
+
+					fmt.Println("[Planner - Progress] Refining based on feedback...")
+					updatedPlan, err := p.UpdatePlan(ctx, plan, answer)
+					if err != nil {
+						fmt.Printf("[Error] Refine failed: %v\n", err)
+						return
+					}
+					plan = updatedPlan
+					continue
 				}
 			}
 
-			// Show current state
-			planJSON, _ := json.MarshalIndent(plan, "", "  ")
-			fmt.Printf("\n[Current Plan ID: %s]\n%s\n", plan.ID, string(planJSON))
-
-			fmt.Println("\nPlan is autosaved. Options: [type feedback to refine] | 'exit' (quit)")
+			// No longer printing plan JSON to console automatically as requested.
+			fmt.Println("\nOptions: [type feedback to refine] | '/plan' (show) | '/exit' (quit)")
 			fmt.Print("> ")
 			if !scanner.Scan() {
 				return
 			}
 			input := scanner.Text()
 
-			if input == "exit" || input == "quit" {
+			if input == "/exit" || input == "/quit" || input == "exit" || input == "quit" {
 				return
 			}
-			if input == "ok" {
+			if input == "/plan" {
+				planJSON, _ := json.MarshalIndent(plan, "", "  ")
+				fmt.Printf("\n[Current Plan ID: %s]\n%s\n", plan.ID, string(planJSON))
+				continue
+			}
+			if input == "/help" {
+				fmt.Println("\nAvailable Commands:")
+				fmt.Println("  /plan   - Show the current JSON execution plan")
+				fmt.Println("  /exit   - Quit the session")
+				fmt.Println("  /help   - Show this help message")
+				continue
+			}
+			if input == "/ok" || input == "ok" {
 				// Treat ok as "I'm done, thanks"
 				return
 			}
+			if strings.HasPrefix(input, "/") {
+				fmt.Printf("Unknown command: %s. Use natural language or /plan, /help, /exit\n", input)
+				continue
+			}
 
 			// Refine
+			fmt.Println("[Planner - Progress] Updating plan...")
 			updatedPlan, err := p.UpdatePlan(ctx, plan, input)
 			if err != nil {
 				fmt.Printf("[Error] Refine failed: %v\n", err)
@@ -437,7 +542,24 @@ func main() {
 			}
 			fmt.Printf("LLM Model: %s\n", activeModel)
 			fmt.Printf("Build Provider: %s\n", cfg.Build.DefaultProvider)
-			fmt.Println("Type 'exit' to quit.")
+
+			// Resume plan if ID provided
+			if planID != "" {
+				fullID := planID
+				if !strings.HasPrefix(fullID, "plan-") {
+					fullID = "plan-" + fullID
+				}
+				router.PlanID = fullID
+				fmt.Printf("[Chat] Resuming plan: %s\n", fullID)
+				plan, err := planner.Store.GetPlan(fullID)
+				if err != nil {
+					fmt.Printf("[Error] Failed to load plan: %v\n", err)
+				} else {
+					runInteractiveLoop(context.Background(), planner, &plan)
+				}
+			}
+
+			fmt.Println("\nType a request to start, or use commands: /help, /exit")
 			scanner := bufio.NewScanner(os.Stdin)
 
 			for {
@@ -446,31 +568,54 @@ func main() {
 					break
 				}
 				input := scanner.Text()
-				if input == "exit" {
+				if input == "/exit" || input == "/quit" || input == "exit" {
 					break
+				}
+				if strings.HasPrefix(input, "/") {
+					if input == "/help" {
+						fmt.Println("\nAvailable Commands:")
+						fmt.Println("  /help   - Show this help message")
+						fmt.Println("  /exit   - Quit the session")
+						fmt.Println("\nSimply type your request (e.g. 'maak een video over...') to start planning.")
+						continue
+					}
+					fmt.Printf("Unknown command: %s. Type natural language to start planning or /help, /exit.\n", input)
+					continue
 				}
 
 				// 1. Route
-				fmt.Println("[Router] Analyzing intent...")
-				intent, err := router.Analyze(context.Background(), input)
+				fmt.Println("[Router - Analyzing]")
+				intent, rawRouterResp, err := router.Analyze(context.Background(), input)
 				if err != nil {
 					fmt.Printf("[Error] Router failed: %v\n", err)
 					continue
 				}
-				fmt.Printf("[Router] Detected Intent: %+v\n", intent)
+				displayAction := strings.ReplaceAll(intent.Action, "_", " ")
+				if len(displayAction) > 0 {
+					displayAction = strings.ToUpper(displayAction[:1]) + displayAction[1:]
+				}
+				fmt.Printf("[Router - %s] %s\n", displayAction, intent.InitialPrompt)
 
 				// 2. Plan (if action is create_project)
 				if intent.Action == "create_project" {
-					fmt.Println("[Planner] Creating execution plan...")
 					plan, err := planner.CreatePlan(context.Background(), intent)
 					if err != nil {
 						fmt.Printf("[Error] Planner failed: %v\n", err)
 						continue
 					}
-					fmt.Printf("[Planner] Plan Created (ID: %s)\n", plan.ID)
+					fmt.Printf("[Planner - Progress] Plan Created (ID: %s)\n", plan.ID)
+					router.PlanID = plan.ID
+
+					// Log router step to plan log
+					_ = planner.Store.LogInteraction(plan.ID, "Router", input, rawRouterResp)
 
 					// Enter interactive loop
 					runInteractiveLoop(context.Background(), planner, &plan)
+				} else {
+					// Log to generic interaction log if no plan exists
+					if router.PlanID == "" {
+						_ = planner.Store.LogInteraction("", "Router", input, rawRouterResp)
+					}
 				}
 			}
 		},
@@ -488,13 +633,14 @@ func main() {
 			}
 
 			prompt := strings.Join(args, " ")
-			intent, err := router.Analyze(context.Background(), prompt)
+			intent, rawRouterResp, err := router.Analyze(context.Background(), prompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)
 			}
 
 			if intent.Action != "create_project" {
+				_ = planner.Store.LogInteraction("", "Router", prompt, rawRouterResp)
 				fmt.Printf("Intent was '%s', which doesn't trigger a planner in this CLI.\n", intent.Action)
 				return
 			}
@@ -504,6 +650,8 @@ func main() {
 				fmt.Printf("Planner failed: %v\n", err)
 				os.Exit(1)
 			}
+			// Log router step to plan log
+			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
 
 			// Auto-resolve questions loop (Max 5 rounds)
 			for i := 0; i < 5; i++ {
@@ -561,6 +709,7 @@ func main() {
 		},
 	}
 
+	rootCmd.PersistentFlags().StringVar(&planID, "plan-id", "", "ID of an existing plan to resume or manage")
 	rootCmd.PersistentFlags().StringVar(&llmProviderOverride, "llm-provider", "", "Override default LLM provider")
 	rootCmd.PersistentFlags().StringVar(&buildProviderOverride, "build-provider", "", "Override default Build provider")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", true, "Enable debug mode (print raw LLM responses)")

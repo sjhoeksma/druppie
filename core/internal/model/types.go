@@ -34,11 +34,12 @@ type Skill struct {
 
 // Intent represents the analyzed user request
 type Intent struct {
-	Summary     string `json:"summary"`
-	Action      string `json:"action"` // create, update, query, approval
-	Category    string `json:"category"`
-	ContentType string `json:"content_type,omitempty"` // If category is 'create content', specify what (video, blog, code, etc.)
-	Language    string `json:"language"`               // User's language
+	InitialPrompt string `json:"initial_prompt"`
+	Prompt        string `json:"prompt"`
+	Action        string `json:"action"` // create, update, query, approval
+	Category      string `json:"category"`
+	ContentType   string `json:"content_type,omitempty"` // If category is 'create content', specify what (video, blog, code, etc.)
+	Language      string `json:"language"`               // User's language
 }
 
 // Step represents a single unit of work in a plan
@@ -54,10 +55,11 @@ type Step struct {
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent
 type ExecutionPlan struct {
-	ID     string `json:"plan_id"`
-	Intent Intent `json:"intent"`
-	Status string `json:"status"`
-	Steps  []Step `json:"steps"`
+	ID             string   `json:"plan_id"`
+	Intent         Intent   `json:"intent"`
+	Status         string   `json:"status"`
+	Steps          []Step   `json:"steps"`
+	SelectedAgents []string `json:"selected_agents"`
 }
 
 // MCPServer represents an external tool server
@@ -78,6 +80,7 @@ type AgentDefinition struct {
 	Model        string   `json:"model" yaml:"model"`               //When empty use default model
 	Skills       []string `json:"skills" yaml:"skills"`
 	Tools        []string `json:"tools" yaml:"tools"` // References to BuildingBlocks or MCPs
+	Priority     float64  `json:"priority" yaml:"priority"`
 }
 
 // ComplianceRule represents a policy
