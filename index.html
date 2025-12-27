@@ -1779,13 +1779,6 @@
         const isFileSystem = window.location.protocol === 'file:';
         const docBaseBase = window.location.href.substring(0, window.location.href.lastIndexOf('/')); // base dir of index.html
 
-        // Settings (Global)
-        const appSettings = {
-            defaultProvider: 'Google',
-            defaultModel: 'Gemini 1.5 Pro'
-        };
-
-        // Update FS Status
         // Update FS Status
         const fsInd = document.getElementById('fs-indicator');
         const localAccessUI = document.getElementById('local-access-ui');
@@ -1795,9 +1788,11 @@
             fsInd.innerHTML = '<span class="text-orange-400 font-bold">⚠️ Lokaal Bestand Systeem</span><br>Beperkte functionaliteit.';
             fsInd.classList.add('pb-0');
             localAccessUI.classList.remove('hidden');
+            fsInd.classList.remove('hidden');
         } else {
             fsInd.classList.remove('pb-0');
             fsInd.innerHTML = '<span class="text-green-400 font-bold">● Web Server Mode</span><br>Volledige functionaliteit.';
+            fsInd.classList.add('hidden');
         }
 
         // --- FILE SYSTEM ACCESS API ---
@@ -2025,13 +2020,10 @@
 
             let modelBadge = '';
             if (!isSkill && !isMCP && !isBlock) {
-                const explicitProvider = data.provider;
-                const explicitModel = data.model;
+                const providerName = data.provider;
+                const modelName = data.model
 
-                const providerName = explicitProvider ? data.provider : appSettings.defaultProvider;
-                const modelName = explicitModel ? data.model : appSettings.defaultModel;
-
-                const isDefault = !explicitProvider && !explicitModel;
+                const isDefault = !providerName && !modelName;
                 const badgeBorder = isDefault ? 'border-green-300 border-dashed' : 'border-green-200';
                 const suffix = isDefault ? '(default)' : '';
 

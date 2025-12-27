@@ -4,7 +4,7 @@ name: "Architect"
 description: "Primary architecture agent"
 type: agent
 version: 1.0.0
-skills: ["mermaid"]
+skills: ["mermaid", "main-agent"]
 subagents: ["business-analyst", "data-scientist", "tester"] 
 tools: []
 ---

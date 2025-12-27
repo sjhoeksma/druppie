@@ -47,7 +47,8 @@ type Step struct {
 	AgentID     string                 `json:"agent_id"`
 	Action      string                 `json:"action"`
 	Params      map[string]interface{} `json:"params"`
-	Status      string                 `json:"status"` // pending, running, completed, requires_approval
+	Result      string                 `json:"result,omitempty"` // User feedback/answer for this step
+	Status      string                 `json:"status"`           // pending, running, completed, requires_approval
 	Description string                 `json:"description"`
 }
 

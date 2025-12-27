@@ -1,4 +1,4 @@
-module github.com/drug-nl/druppie/core
+module github.com/sjhoeksma/druppie/core
 
 go 1.24.4
 

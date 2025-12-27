@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/drug-nl/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
 // Registry acts as the in-memory database for all system capabilities

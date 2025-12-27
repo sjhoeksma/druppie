@@ -4,7 +4,7 @@ name: "QA / Test Expert"
 description: "QA and testing strategies. Ensures validation and verification."
 type: agent
 version: 1.0.0
-skills: []
+skills: ["sub-agent"]
 tools: []
 ---
 

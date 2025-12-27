@@ -4,7 +4,7 @@ name: "Business Analyst"
 description: "Specialized in eliciting and structuring requirements."
 type: agent
 version: 1.0.0
-skills: []
+skills: ["main-agent"]
 tools: []
 ---
 

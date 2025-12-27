@@ -3,7 +3,7 @@ package builder
 import (
 	"fmt"
 
-	"github.com/drug-nl/druppie/core/internal/config"
+	"github.com/sjhoeksma/druppie/core/internal/config"
 )
 
 // NewEngine creates a new BuildEngine based on configuration

@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/drug-nl/druppie/core/internal/llm"
-	"github.com/drug-nl/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/llm"
+	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
 type Router struct {
@@ -24,14 +24,15 @@ const systemPrompt = `You are the Router Agent of the Druppie Platform.
 Your job is to analyze the User's input and determine their Intent.
 You must output a JSON object adhering to this schema:
 {
-  "summary": "Brief summary of what the user wants",
+  "summary": "Brief summary of what the user wants in the user's original language",
   "action": "create_project | update_project | query_registry | orchestrate_complex | general_chat",
   "category": "infrastructure | service | search | create content | unknown",
   "content_type": "video | blog | code | image | audio | ... (optional)",
   "language": "en | nl | fr | de"
 }
 Ensure the "action" is one of the allowed values.
-Use "language" to detect the user's input language.
+Use "language" code to detect the user's input language.
+IMPORTANT: The "summary" field MUST be in the correct language as detected in "language" code. Do NOT translate it to English.
 Output ONLY valid JSON.`
 
 func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, error) {

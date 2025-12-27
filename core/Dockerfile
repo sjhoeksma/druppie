@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/druppie-core ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/druppie-core ./cmd
 
 # Run Stage
 FROM gcr.io/distroless/static:nonroot

@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/drug-nl/druppie/core/internal/config"
 	"github.com/google/generative-ai-go/genai"
+	"github.com/sjhoeksma/druppie/core/internal/config"
 	"google.golang.org/api/option"
 )
 
@@ -50,6 +50,9 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				}
 				return &GeminiProvider{genaiClient: client, model: model}, nil
 			} else {
+				if pCfg.ProjectID == "" && pCfg.ClientID == "" {
+					return nil, fmt.Errorf("gemini config incomplete (missing api_key or project_id/client_id)")
+				}
 				// Use OAuth2 Flow
 				fmt.Println("No API key found. Attempting OAuth2 login...")
 				client, finalProjectID, err := getGeminiClientWithAuth(ctx, model, pCfg.ProjectID, pCfg.ClientID, pCfg.ClientSecret)
@@ -76,7 +79,8 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 	for name, pCfg := range cfg.Providers {
 		p, err := createFn(pCfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to init provider '%s': %w", name, err)
+			fmt.Printf("Warning: Failed to initialize provider '%s': %v. Skipping.\n", name, err)
+			continue
 		}
 		mgr.providers[name] = p
 	}

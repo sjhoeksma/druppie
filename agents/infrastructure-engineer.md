@@ -4,7 +4,7 @@ name: "Infrastructure Engineer"
 description: "Agent responsible for provisioning, deploying, and maintaining infrastructure and applications on Kubernetes."
 type: agent
 version: 1.0.0
-skills: ["kubernetes", "gitops", "iac", "scripting", "check-block-status"]
+skills: ["kubernetes", "gitops", "iac", "scripting", "check-block-status", "sub-agent"]
 subagents: [] 
 tools: ["helm", "kubectl", "flux", "terraform", "hashicorp-vault"]
 ---

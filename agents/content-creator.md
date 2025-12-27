@@ -4,7 +4,7 @@ name: "Content Creator"
 description: "Agent specialized in generating and refining creative content (text, video, image)."
 type: agent
 version: 1.0.0
-skills: ["copywriting", "video-design", "visual-arts"]
+skills: ["copywriting", "video-design", "visual-arts", "sub-agent"]
 subagents: [] 
 tools: []
 ---

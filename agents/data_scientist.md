@@ -5,7 +5,7 @@ description: "Expert in Python data science solution design and implementation."
 type: agent
 version: 1.0.0
 auth_group: ["datalab"]
-skills: ["python", "mermaid"]
+skills: ["python", "mermaid", "sub-agent"]
 tools: []
 ---
 

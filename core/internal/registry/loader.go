@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drug-nl/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/model"
 	"gopkg.in/yaml.v3"
 )
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync" // For thread-safe updates
 
+	"github.com/sjhoeksma/druppie/core/internal/store"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,17 +61,16 @@ type ServerConfig struct {
 type Manager struct {
 	mu     sync.RWMutex
 	config *Config
-	path   string
+	store  store.Store
 }
 
-// NewManager creates a new config manager and loads the config from path
-func NewManager(path string) (*Manager, error) {
-	// Helper to create a provider based on type and details
+// NewManager creates a new config manager and loads the config from store
+func NewManager(s store.Store) (*Manager, error) {
 	mgr := &Manager{
-		path: path,
+		store: s,
 		config: &Config{
 			LLM: LLMConfig{
-				DefaultProvider: "ollama", // Default
+				DefaultProvider: "ollama",
 				Providers: map[string]ProviderConfig{
 					"ollama": {Type: "ollama", Model: "qwen3:8b", URL: "http://localhost:11434"},
 				},
@@ -98,33 +98,22 @@ func NewManager(path string) (*Manager, error) {
 		},
 	}
 
-	// Check if config file exists
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Try to copy from config_default.yaml
-		defaultPath := "config_default.yaml"
-		// If path has a directory, try to find default there too (ignoring complex logic for now, assuming cwd)
-		if _, err := os.Stat(defaultPath); err == nil {
-			if err := copyFile(defaultPath, path); err != nil {
-				return nil, fmt.Errorf("failed to copy default config: %w", err)
-			}
-			fmt.Printf("Initialized config from %s\n", defaultPath)
-		}
-	}
-
-	// Try to load if file exists (either existed or was just copied)
-	if _, err := os.Stat(path); err == nil {
-		if err := mgr.Load(); err != nil {
-			return nil, err
-		}
-	} else {
-		// If still no file (e.g. no default found), try Env Vars
+	// Try to load
+	if err := mgr.Load(); err != nil {
+		// If load fails (e.g. empty), assume default specific logic?
+		// For now, if load fails, we rely on the struct above being the default.
+		// Check environment variables as fallback
 		mgr.loadEnv()
+
+		// Optional: Save default to store if it was empty?
+		// _ = mgr.Save()
 	}
 
 	return mgr, nil
 }
 
 func copyFile(src, dst string) error {
+	// Deprecated with store usage, but kept if needed by cleanup
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -132,14 +121,16 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0644)
 }
 
-// Load reads the config from disk
+// Load reads the config from store
 func (m *Manager) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	data, err := os.ReadFile(m.path)
+	data, err := m.store.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		// If config not found, return error or nil?
+		// NewManager ignores error essentially, but logging it might be good.
+		return fmt.Errorf("failed to read config from store: %w", err)
 	}
 
 	if err := yaml.Unmarshal(data, m.config); err != nil {
@@ -148,7 +139,7 @@ func (m *Manager) Load() error {
 	return nil
 }
 
-// Save writes the current config to disk
+// Save writes the current config to disk via store
 func (m *Manager) Save() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -158,8 +149,8 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(m.path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	if err := m.store.SaveConfig(data); err != nil {
+		return fmt.Errorf("failed to write config to store: %w", err)
 	}
 	return nil
 }

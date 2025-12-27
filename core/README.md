@@ -13,12 +13,12 @@ docker build -t druppie-core .
 ### Local CLI
 To build the CLI tool for local testing:
 ```bash
-go build -o druppie-core ./cmd/cli
+go build -o druppie-core ./cmd
 ```
 
 or just run :
 ```bash
-go run ./cmd/cli
+go run ./cmd
 ```
 
 ### Gemini Setup
@@ -65,12 +65,12 @@ To use Google Gemini, you need to configure OAuth credentials:
 ### Local CLI
 To build the WebServer tool for local testing:
 ```bash
-go build -o druppie-server ./cmd/server
+go build -o druppie-server ./cmd
 ```
 
 Start the REST API server:
 ```bash
-go run ./cmd/server
+go run ./cmd
 ```
 
 **Testing Config API:**
