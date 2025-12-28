@@ -30,24 +30,24 @@ workflow: |
       direction LR
       state "Agent: content-creator\nAction: content-review" as ReviewSences
       [*] --> RefinedContext
-      RefinedContext --> ReviewSences: Generate cc_sences
+      RefinedContext --> ReviewSences: Generate av_script[]
       ReviewSences --> [*]: Approved Sences
       ReviewSences --> RefineSences
       RefineSences --> ReviewSences: Refined Sences
     }
     
-    Sences --> Production: cc_sences
+    Sences --> Production: av_script
     
     state Production {
       direction TB
       
-      state "Process Scene (Iterate for all Scenes inside cc_sences)" as SceneLoop {
+      state "Process Scene (Iterate for all Scenes inside av_script)" as SceneLoop {
         direction LR
         
         state AudioTrack {
             state "Agent: audio-creator\nAction: text-to-speech" as GenerateAudio
             [*] --> GenerateAudio
-            GenerateAudio --> ReviewAudio: Generate cc_audio[sence_id]
+            GenerateAudio --> ReviewAudio: Generate Audio av_script[sence_id]
             ReviewAudio --> [*]: Approved Audio
             ReviewAudio --> RefineAudio
             RefineAudio --> GenerateAudio: Refined Audio
@@ -56,7 +56,7 @@ workflow: |
         state VideoTrack {
             state "Agent: video-creator\nAction: video-generation" as GenerateVideo
             [*] --> GenerateVideo: After Audio
-            GenerateVideo --> ReviewVideo: Generate cc_video[sence_id]
+            GenerateVideo --> ReviewVideo: Generate Video av_script[sence_id]
             ReviewVideo --> [*]: Approved Video
         }
       }
@@ -66,10 +66,7 @@ workflow: |
     }
     
     Production --> Finalize: Scenes Ready
-    state "Process Scene (Iterate for all Scenes inside cc_scenes)" as Finalize {
-          state "Agent: content-creator\n Action: content-merge - audio and video for each scene (cc_audio + cc_video)" as MergeResult
-          [*] --> MergeResult
-    }
+    state "Agent: content-creator\n Action: content-merge - av_script[])" as Finalize
     Finalize --> Context: Restart
     Finalize --> [*]: Finalized
 

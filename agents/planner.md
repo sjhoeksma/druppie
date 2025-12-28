@@ -20,15 +20,20 @@ Strategies:
 3. **Agent Priority**: Available Agents are listed in PRIORITY order. Highest priority agents (e.g. 'business-analyst') should typically lead the plan or be used for initial scoping.
 4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
 5. **Workflow-Driven Execution (MANDATORY)**:
-   - **Check**: If an Agent has a `Workflow` (Mermaid diagram), YOU MUST FOLLOW IT.
-     1. **Locate State**: Determine the current state in the diagram based on context (e.g. `av_script` missing -> State: Blueprinting).
-     2. **Transition**: Identify the required Action to move to the next state.
-     3. **Schedule**: Generate the step defined by that transition.
+   - **Check**: IF an Agent has a `Workflow` (Mermaid diagram), YOU MUST EXECUTE IT.
+   - **General Interpretation Rules**:
+     1. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
+     2. **Identify Next Action**:
+        - **Standard Node**: `state "Agent: [ID]\nAction: [Skill]"`.
+          - **Action**: Schedule a step for `[ID]` using `[Skill]`.
+        - **Batch Node**: `state "(Iterate ... [VAR])"`.
+          - **Action**: Look for a context variable matching `[VAR]` (e.g. from previous output). Creates steps for **EACH** item.
+        - **Transition**: `--> [State]: [Condition]`.
+          - **Action**: Only proceed if `[Condition]` (e.g. "Approved") is met by the previous step's result/status.
+     3. **Data Flow (Implicit)**:
+        - The Output of one state (e.g. `cc_context`) becomes the Input for the next.
+        - Pass these variables in `params`.
    - **Fallback**: If no Workflow, use Dependency-Driven Execution (check Prerequisites -> Schedule).
-     - **Execution**: Review the **Conditions** of ALL available Execution Agents.
-        - Check if their **Prerequisite Inputs** (e.g. `av_script`, `audio_file`) exist in the plan's context/results.
-        - If Prereqs Exist AND the step is un-run: **Schedule it**.
-        - If Prereqs Missing: **Wait** (Do NOT schedule future steps).
    - **Batching**: If an agent needs to process a list (e.g. Scenes), generate a step for EACH item.
    - **Constraint**: Strict Stage Gating. Never schedule Step B if Step A (its input) is not 'completed'.
 
