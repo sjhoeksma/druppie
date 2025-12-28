@@ -381,25 +381,30 @@ func (tm *TaskManager) executeSceneCreation(ctx context.Context, step *model.Ste
 	action := strings.ToLower(step.Action)
 
 	if strings.Contains(action, "video") || strings.Contains(action, "scene") {
+		sceneID := fmt.Sprintf("%d", step.ID) // Default
+		if sid, ok := step.Params["scene_id"]; ok {
+			sceneID = fmt.Sprintf("%v", sid)
+		}
+
 		// 1. Simulate Audio Generation (TTS)
-		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] Generating Audio for Scene %d...", step.ID)
+		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] Generating Audio for Scene %s...", sceneID)
 		time.Sleep(1 * time.Second)
-		tm.OutputChan <- fmt.Sprintf("✅ [TTS] Audio generated: %d_audio.mp3", step.ID)
+		tm.OutputChan <- fmt.Sprintf("✅ [TTS] Audio generated: %s_audio.mp3", sceneID)
 
 		// 2. Simulate ComfyUI Video Generation
-		tm.OutputChan <- fmt.Sprintf("🎥 [ComfyUI] Generating Video for Scene %d...", step.ID)
+		tm.OutputChan <- fmt.Sprintf("🎥 [ComfyUI] Generating Video for Scene %s...", sceneID)
 		// Simulating API latency
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(3 * time.Second):
 		}
-		tm.OutputChan <- fmt.Sprintf("✅ [ComfyUI] Video generated: %d_video.mp4", step.ID)
+		tm.OutputChan <- fmt.Sprintf("✅ [ComfyUI] Video generated: %s_video.mp4", sceneID)
 
 		// 3. Assemble
-		tm.OutputChan <- fmt.Sprintf("🎬 [FFmpeg] Assembling Scene %d...", step.ID)
+		tm.OutputChan <- fmt.Sprintf("🎬 [FFmpeg] Assembling Scene %s...", sceneID)
 		time.Sleep(500 * time.Millisecond)
-		tm.OutputChan <- fmt.Sprintf("✅ [Scene Creator] Scene %d Complete: %d_scene_final.mp4", step.ID, step.ID)
+		tm.OutputChan <- fmt.Sprintf("✅ [Scene Creator] Scene %s Complete: %s_scene_final.mp4", sceneID, sceneID)
 		return nil
 	}
 
@@ -450,6 +455,11 @@ func formatStepParams(params map[string]interface{}) string {
 					if d, ok := scene["duration"]; ok {
 						duration = fmt.Sprintf("%v", d)
 					}
+					description := ""
+					if d, ok := scene["description"]; ok {
+						description = fmt.Sprintf("%v", d)
+					}
+
 					prompt := ""
 					if p, ok := scene["prompt"]; ok {
 						prompt = fmt.Sprintf("%v", p)
@@ -463,7 +473,7 @@ func formatStepParams(params map[string]interface{}) string {
 						videoPrompt = fmt.Sprintf("%v", vp)
 					}
 
-					sb.WriteString(fmt.Sprintf("   %d. **%s** (%s)\n", i+1, title, duration))
+					sb.WriteString(fmt.Sprintf("   %d. **%s** (%s): %s\n", i+1, title, duration, description))
 					if imagePrompt != "" || videoPrompt != "" {
 						if imagePrompt != "" {
 							sb.WriteString(fmt.Sprintf("      🖼️  Image: \"%s\"\n", imagePrompt))

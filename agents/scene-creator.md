@@ -2,7 +2,8 @@
 id: scene-creator
 name: "Scene Creator"
 description: "Agent responsible for generating individual scene assets (video, audio, image) based on script outlines."
-type: agent
+type: execution-agent
+condition: "Run to produce assets for specific scenes defined by the 'content-creator'."
 version: 1.0.0
 skills: ["scene-creator", "scene-generation", "prompt-engineering", "sub-agent"]
 tools: ["ai-video-comfyui", "ai-text-to-speech", "ai-image-sdxl"]

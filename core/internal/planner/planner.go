@@ -204,8 +204,10 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	agentList := make([]string, 0, len(activeAgents))
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
-		// Format: ID (Name) - Skills - Tools - Description
-		agentList = append(agentList, fmt.Sprintf("%s (%s)\n  Skills: %v\n  Tools: %v\n  Description: %s", a.ID, a.Name, a.Skills, a.Tools, a.Description))
+		agentList = append(agentList, fmt.Sprintf(
+			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s",
+			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description,
+		))
 	}
 	fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
 
@@ -367,8 +369,37 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 	updatedAgentList := make([]string, 0, len(allAgents))
 	for _, a := range allAgents {
-		updatedAgentList = append(updatedAgentList, fmt.Sprintf("%s (%s)\n  Skills: %v\n  Tools: %v\n  Description: %s", a.ID, a.Name, a.Skills, a.Tools, a.Description))
+		updatedAgentList = append(updatedAgentList, fmt.Sprintf(
+			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s",
+			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description,
+		))
 	}
+
+	// --- AUTO-STOP LOGIC ---
+	// Check if we have fulfilled the script outline
+	var scriptLength int
+	var sceneCount int
+	for _, s := range plan.Steps {
+		// Detect script in params
+		if outline, ok := s.Params["script_outline"]; ok {
+			if list, ok := outline.([]interface{}); ok {
+				scriptLength = len(list)
+			}
+		}
+		// Count executed scenes
+		if s.Action == "scene-creator" || s.AgentID == "scene-creator" {
+			sceneCount++
+		}
+	}
+
+	if scriptLength > 0 && sceneCount >= scriptLength {
+		// All scenes are accounted for. Stop planning.
+		if p.Debug {
+			fmt.Printf("[Planner] Script length %d, Scenes completed %d. Stopping plan generation.\n", scriptLength, sceneCount)
+		}
+		return plan, nil
+	}
+	// -----------------------
 
 	// Load System Prompt from Agent Definition
 	sysTemplate := systemPromptTmpl

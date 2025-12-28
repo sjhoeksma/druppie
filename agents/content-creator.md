@@ -2,7 +2,9 @@
 id: content-creator
 name: "Content Creator"
 description: "Agent specialized in generating and refining creative content (text, video, image)."
-type: agent
+type: execution-agent
+sub_agents: ["scene-creator"]
+condition: "Run to generate the creative plan (script) once requirements are clear."
 version: 1.0.0
 skills: ["content-review", "copywriting", "video-design", "visual-arts", "asset-generation", "scripting", "sub-agent"]
 tools: ["ai-video-comfyui", "ai-text-to-speech", "ai-image-sdxl"]
@@ -179,3 +181,11 @@ flowchart TD
   I -- No --> C
   I -- Yes --> J([Completion])
 ```
+
+## Scripting Guidelines
+When generating a 'script_outline':
+1. **Language**: 
+   - 'title' and 'description': MUST be in the User's Language.
+   - 'image_prompt' and 'video_prompt': MUST be in English (optimized for AI generation).
+2. **Format**: JSON array of objects.
+   - { "duration": "...", "title": "...", "description": "...", "image_prompt": "...", "video_prompt": "..." }

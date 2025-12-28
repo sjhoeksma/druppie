@@ -29,22 +29,29 @@ Strategies:
    - Use 'content-creator' -> 'content-review' (Priority 5) to generate the 'script_outline'.
    - Use 'scene-creator' -> 'scene-creator' (Priority 4) for the actual production of media assets.
 7. **Structure Rules**:
-   - **script_outline**: MUST be a JSON array of OBJECTS. Each object MUST have fields: 'duration', 'title', 'image_prompt' (for starting frame), and 'video_prompt' (for motion/action).
-   - **Scene Format**: e.g. [{"duration": "10s", "title": "Intro", "image_prompt": "...", "video_prompt": "..."}]
-   - **Completeness**: Generate as much of the plan as possible in one go. If you have enough information to generate content (like a script outline), do it immediately in the same response.
-   - **Parallelism**: Use 'depends_on' (list of integers) to define dependencies. Steps with the EXACT same dependency requirements can run in parallel.
-   - Use 'id' from the 'Available Agents' list for 'agent_id'.
+   - **script_outline**: JSON array of OBJECTS. 
+     - Fields: `duration`, `title`, `description`, `image_prompt`, `video_prompt`.
+     - **Languages**: `title`/`description` in User Language. `image_prompt`/`video_prompt` in English.
+   - **Scene Format**: e.g. [{"duration": "10s", "title": "...", "description": "...", "image_prompt": "...", "video_prompt": "..."}]
+   - **Completeness**: Generate as much of the plan as possible in one go. If you have enough information to generate content (like a script outline), do it immediately.
+   - **Parallelism**: Use 'depends_on' (list of integers) to define dependencies. Steps with the same dependency requirements run in parallel.
 
 8. **Production Workflow (Phase 2 & 3)**:
-   - **Phase 2 (Content Review)**: If 'ask_questions' is COMPLETED (check 'Current Steps'), you **MUST** immediately generate 'content-review' (Phase 2) with 'script_outline' params. **DO NOT** generate 'ask_questions' again.
-   - **Phase 3 (Production - BATCH GENERATION)**: If 'content-review' is COMPLETED (script exists), you MUST generate ALL remaining steps in a SINGLE response.
-     1. **Availability Step**: Create ONE 'ensure_availability' step (Agent: 'infrastructure-engineer').
-     2. **Scene Steps**: Create a 'scene-creator' step (Agent: 'scene-creator') for EVERY scene in the script outline.
-     3. **Execution Order**:
-        - 'ensure_availability' step must have the lowest ID in this batch.
-        - ALL 'scene-creator' steps must have 'depends_on' pointing to the 'ensure_availability' step ID.
-     4. **CRITICAL**: Do NOT generate these steps one by one. You MUST output the full array containing the availability check AND all scene steps.
-   - **Duplicate Guard**: Do NOT regenerate steps that are already completed.
+   - **Phase 2 (Content Review)**: If 'ask_questions' (Phase 1) is COMPLETED (check 'Current Steps'), you **MUST** immediately generate 'content-review' (Phase 2) with 'script_outline' params.
+   - **Phase 3 (Production - BATCH EXECUTION)**: If 'content-review' is COMPLETED (script exists), you **MUST** generate the ENTIRE production plan in a SINGLE JSON response.
+     1. **Context**: Read the 'script_outline' from the 'content-review' step params. THIS IS THE IMMUTABLE SOURCE OF TRUTH.
+     2. **Generate Steps**:
+        - **Step A**: 'ensure_availability' (Agent: 'infrastructure-engineer').
+        - **Step B, C...**: 'scene-creator' (Agent: 'scene-creator') for EACH scene.
+     3. **Params & Mapping**:
+        - For Script Item 1 -> `scene_id`: "1", `title`: "...", `image_prompt`: "...", `video_prompt`: "..."
+        - For Script Item N -> `scene_id`: "N", ...
+        - **SCOPE LOCK**: You MUST create EXACTLY one step per script item. If script has 3 items, generate 3 scene steps. DO NOT add extra scenes to fill time.
+     4. **Dependencies (CRITICAL)**:
+        - **Step A** (Availability) depends on nothing (or empty list `[]`).
+        - **ALL Scene Steps** MUST depend ONLY on Step A's ID.
+     5. **Output**: Return a JSON array containing ALL these steps (Step A + ALL Scene Steps). Do NOT stop after one step.
+   - **Plan Completion**: If all scenes defined in the `script_outline` have corresponding COMPLETED steps, the plan is DONE. Do not generate any more steps.
 
 CRITICAL INSTRUCTION ON LANGUAGE:
 The 'User Language' is defined above.
