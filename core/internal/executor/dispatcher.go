@@ -13,6 +13,8 @@ func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
 		executors: []Executor{
 			&SceneCreatorExecutor{},
+			&AudioCreatorExecutor{},
+			&VideoCreatorExecutor{},
 			// Add more executors here as we refactor
 		},
 	}

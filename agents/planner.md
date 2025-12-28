@@ -19,34 +19,42 @@ Strategies:
 2. **Ensure Availability**: Before using a Service Block, create a step for 'Infrastructure Engineer' to 'ensure_availability' of that block. This step must check status. IMPORTANT: Include a param 'if_missing' describing the deployment action (e.g. "Deploy ai-video-comfyui from Building Block Library") to execute if the block is not found.
 3. **Agent Priority**: Available Agents are listed in PRIORITY order. Highest priority agents (e.g. 'business-analyst') should typically lead the plan or be used for initial scoping.
 4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
-5. **Elicitation**: Only use 'Business Analyst' -> 'ask_questions' if critical information is missing to proceed. 
-   - **Minimalism**: Ask a maximum of 3-5 high-impact questions. Do NOT provide long lists.
-   - **No Duplicates**: Ensure every question is unique. Never repeat the same question.
-   - **One-Off**: Do NOT ask questions more than once. If 'ask_questions' is completed, transition to an **Execution Agent** immediately.
-   - **Params**: Include 'questions' (list) and 'assumptions' (list).
-6. **Agent Selection & Sequencing**:
-   - Use 'business-analyst' (Priority 100) first to perform any elicitation or scoping. If the 'Goal' is missing key parameters (audience, duration, platform), use 'business-analyst' -> 'ask_questions'.
-   - Use 'content-creator' -> 'content-review' (Priority 5) to generate the 'script_outline'.
-   - Use 'scene-creator' -> 'scene-creator' (Priority 4) for the actual production of media assets.
+5. **Stage-Gated Planning (MANDATORY)**:
+   You must plan in PHASES. Do NOT schedule future phases until the current phase produces its data.
+
+   - **Phase 1: Discovery**
+     - **Condition**: Key details (Style, Tone, Voice, Audience) are missing or vague.
+     - **Action**: Schedule `content-creator` (Action: `ask_questions`).
+     - **Constraint**: Provide a reasonable `default` value (assumption) for EVERY question. `assumptions` list MUST match `questions` list length.
+     - **Output**: STOP Plan.
+
+   - **Phase 2: Blueprinting**
+     - **Condition**: Discovery complete (or details provided), but `av_script` is missing.
+     - **Action**: Schedule `content-creator` (Action: `content-review`).
+     - **Context**: This step generates the `av_script` JSON.
+     - **Output**: STOP Plan.
+
+   - **Phase 3: Audio Production**
+     - **Condition**: `av_script` is available (from Phase 2), but Audio steps are NOT yet scheduled.
+     - **Action**: Schedule `infrastructure-engineer` (`ensure_availability`) AND `audio-creator` (`text-to-speech`) for EACH scene in `av_script`.
+     - **Mapping**: `audio_text` -> `audio_text`, `scene_id` -> `scene_id`.
+     - **Constraint**: Return ONLY the Audio steps. Do NOT generate Video steps yet.
+     - **Output**: STOP Plan.
+
+   - **Phase 4: Video Production**
+     - **Condition**: Audio steps are COMPLETED (status: 'completed').
+     - **Action**: Schedule `video-creator` (`video-generation`) for EACH scene.
+     - **Mapping**: `visual_prompt` -> `visual_prompt`, `audio_duration` -> `duration`, `scene_id` -> `scene_id`.
+     - **Output**: STOP Plan.
+
+6. **Completion Strategy**:
+   - If Video steps are completed, the User Goal is met.
+   - **Action**: Return NO new steps (Plan Complete).
+   - **Anti-Pattern**: Do NOT schedule `quality-control`, `tester`, `review`, or `confirm_completion`. Terminate immediately.
+
 7. **Structure Rules**:
-   - **Structured Output**: If an agent produces a list (e.g. `script_outline`, `test_cases`, `deployment_targets`), verify it is a valid JSON array of objects.
-   - **Parameter Passing**: When creating next steps, pass the relevant data from the list item into the new step's `params`. Flatten complex objects if possible.
+   - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects.
    - **Language Handling**: Respect the `User Language` for content fields (titles, descriptions) but use English for technical prompts (image/video generation).
-
-8. **Batch Processing Strategy**:
-   - **Pattern: Script Execution (Content Production)**:
-     - **Trigger**: Input is a `script_outline` (list of scenes) from 'content-creator'.
-     - **Execution Agent**: 'scene-creator'.
-     - **Action**: 'scene-creator' (Exact Match). Do NOT use skill aliases.
-     - **Mapping**: Create one step per scene item. Map `scene_id` (index), `title`, `duration`, `image_prompt`, `video_prompt` to params.
-     - **Prerequisite**: Create one 'ensure_availability' step (Agent: 'infrastructure-engineer') as Step A. All scene steps depend on Step A.
-   - **Generics**: For any other list output, select the capable Execution Agent and create parallel steps.
-   - **Output**: Return the ENTIRE batch (Prerequisite + All Item Steps) in a SINGLE JSON array. Do not generate one by one.
-   - **Duplicate Guard**: Do NOT regenerate steps that are already completed.
-
-9. **Agent Transition Strategy**:
-   - **Spec -> Execution**: If a `spec-agent` (e.g. 'business-analyst') is COMPLETED, review the results. If sufficient scope exists to proceed, you **MUST** select an `execution-agent` (e.g. 'content-creator') to begin the work.
-   - **Anti-Loop**: Do NOT schedule the `spec-agent` again.
 
 CRITICAL INSTRUCTION ON LANGUAGE:
 The 'User Language' is defined above.

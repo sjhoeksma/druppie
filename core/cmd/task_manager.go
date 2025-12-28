@@ -213,12 +213,33 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					tm.OutputChan <- fmt.Sprintf("[%s] Executing Step %d: %s (%s)", task.ID, step.ID, step.Action, step.AgentID)
 
 					// Execute Step Logic
-					err := tm.executeStep(task.Ctx, step)
+					// Try Executor Dispatcher first
+					// We need to capture output, so we need a helper or channel bridge
+					outputBridge := make(chan string)
+					go func() {
+						for msg := range outputBridge {
+							tm.OutputChan <- msg
+						}
+					}()
+
+					// Try matching by AgentID first (e.g. "audio-creator")
+					exec, err := tm.dispatcher.GetExecutor(step.AgentID)
 					if err != nil {
-						tm.OutputChan <- fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, err)
-						// For now, we don't abort the whole plan, just mark error?
-						// Or maybe we treat it as completed with error?
-						// step.Status = "error" // Model doesn't support error status yet?
+						// Try matching by Action (e.g. "text-to-speech")
+						exec, err = tm.dispatcher.GetExecutor(step.Action)
+					}
+
+					var execErr error
+					if err == nil {
+						execErr = exec.Execute(task.Ctx, *step, outputBridge)
+					} else {
+						// Fallback to legacy
+						execErr = tm.executeStep(task.Ctx, step)
+					}
+					close(outputBridge)
+
+					if execErr != nil {
+						tm.OutputChan <- fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, execErr)
 					}
 					step.Status = "completed"
 				}(idx)
@@ -276,19 +297,23 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 			var sb strings.Builder
 			for i, q := range questions {
-				assumption := "Unknown"
+				assumption := ""
 				if i < len(assumptions) {
 					assumption = fmt.Sprintf("%v", assumptions[i])
 				}
-				sb.WriteString(fmt.Sprintf("  %d. %v (Default: %s)\n", i+1, q, assumption))
+				if assumption == "" || strings.EqualFold(assumption, "unknown") {
+					sb.WriteString(fmt.Sprintf("  %d. %v\n", i+1, q))
+				} else {
+					sb.WriteString(fmt.Sprintf("  %d. %v (Default: %s)\n", i+1, q, assumption))
+				}
 			}
 			tm.OutputChan <- sb.String()
-			tm.OutputChan <- fmt.Sprintf("Options: [Type answer] | '/accept' (defaults) | '/stop'")
+			tm.OutputChan <- "Options: [Type answer] | '/accept' (defaults) | '/stop'"
 
 		} else if activeStep.Action == "content-review" {
 			tm.OutputChan <- fmt.Sprintf("\n[%s] Review content (%s):", task.ID, activeStep.AgentID)
 			tm.OutputChan <- formatStepParams(activeStep.Params)
-			tm.OutputChan <- fmt.Sprintf("Options: [Type feedback] | '/accept' | '/stop'")
+			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
 		}
 
 		// WAIT FOR INPUT
@@ -424,7 +449,37 @@ func (tm *TaskManager) executeSceneCreation(ctx context.Context, step *model.Ste
 func formatStepParams(params map[string]interface{}) string {
 	var sb strings.Builder
 
-	// Special handling for script_outline
+	// Specific handler for AV Script (V2)
+	if val, ok := params["av_script"]; ok {
+		sb.WriteString("🎬 **AV Script Blueprint**\n\n")
+		if scenes, ok := val.([]interface{}); ok {
+			for i, s := range scenes {
+				if scene, ok := s.(map[string]interface{}); ok {
+					// Extract fields safely
+					audio := fmt.Sprintf("%v", scene["audio_text"])
+					visual := fmt.Sprintf("%v", scene["visual_description"])
+					if visual == "<nil>" || visual == "" {
+						visual = fmt.Sprintf("%v", scene["visual_prompt"])
+					}
+					duration := fmt.Sprintf("%v", scene["estimated_duration"])
+					if duration == "<nil>" || duration == "" {
+						duration = "Unknown"
+					}
+					profile := ""
+					if p, ok := scene["voice_profile"]; ok {
+						profile = fmt.Sprintf(" [%v]", p)
+					}
+
+					sb.WriteString(fmt.Sprintf("   %d. ⏱️ %s%s\n", i+1, duration, profile))
+					sb.WriteString(fmt.Sprintf("      🗣️ Audio: \"%s\"\n", audio))
+					sb.WriteString(fmt.Sprintf("      👀 Visual: \"%s\"\n\n", visual))
+				}
+			}
+			return sb.String()
+		}
+	}
+
+	// Legacy / Fallback for script_outline
 	if val, ok := params["script_outline"]; ok {
 		sb.WriteString("🎬 **Script Outline**\n\n")
 		// script_outline is usually a list of objects

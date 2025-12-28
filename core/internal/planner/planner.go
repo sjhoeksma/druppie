@@ -176,23 +176,33 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 
 	// Filter Agents
 	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents)
+
+	// Expand Selection with Sub-Agents
+	selectedSet := make(map[string]bool)
+	for _, id := range selectedIDs {
+		selectedSet[id] = true
+	}
+
+	// Expand to include declared sub-agents
+	// We iterate allAgents to find the definitions of the selected ones so we can read their SubAgents
+	for _, a := range allAgents {
+		if selectedSet[a.ID] {
+			for _, sub := range a.SubAgents {
+				selectedSet[sub] = true
+			}
+		}
+	}
+
 	var activeAgents []model.AgentDefinition
-	if len(selectedIDs) > 0 {
+	if len(selectedSet) > 0 {
 		for _, a := range allAgents {
-			for _, sel := range selectedIDs {
-				if a.ID == sel { // Case sensitive? specific ID matching
-					activeAgents = append(activeAgents, a)
-					break
-				}
+			if selectedSet[a.ID] {
+				activeAgents = append(activeAgents, a)
 			}
 		}
 	} else {
-		// Fallback to all if selection failed or nothing selected
+		// Fallback to all if nothing selected
 		activeAgents = allAgents
-		selectedIDs = make([]string, 0, len(allAgents))
-		for _, a := range allAgents {
-			selectedIDs = append(selectedIDs, a.ID)
-		}
 	}
 
 	// Sort agents by priority (descending)
@@ -337,8 +347,30 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	plan.Steps = completedSteps
 
 	// 2. Re-Prompt LLM for Next Steps
-	// We use all agents so the planner can dynamically select new ones (e.g. content-creator, scene-creator)
-	activeAgents := p.registry.ListAgents()
+	// Filter Active Agents based on Plan Selection
+	// Only show agents that were originally selected + their sub-agents
+	allRegistryAgents := p.registry.ListAgents()
+	allowedMap := make(map[string]bool)
+	for _, id := range plan.SelectedAgents {
+		allowedMap[id] = true
+		// Find sub-agents
+		if agent, err := p.registry.GetAgent(id); err == nil {
+			for _, sub := range agent.SubAgents {
+				allowedMap[sub] = true
+			}
+		}
+	}
+
+	var activeAgents []model.AgentDefinition
+	for _, a := range allRegistryAgents {
+		if allowedMap[a.ID] {
+			activeAgents = append(activeAgents, a)
+		}
+	}
+	// Fallback: If map is empty (legacy plan?), use all
+	if len(activeAgents) == 0 {
+		activeAgents = allRegistryAgents
+	}
 
 	// Sort agents by priority (descending)
 	sort.Slice(activeAgents, func(i, j int) bool {
@@ -346,34 +378,20 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	})
 
 	sortedIDs := make([]string, 0, len(activeAgents))
-	agentList := make([]string, 0, len(activeAgents))
+	//agentList := make([]string, 0, len(activeAgents))
+	updatedAgentList := make([]string, 0, len(activeAgents))
+
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
-		// Format: ID (Name) - Skills - Tools - Description
-		agentList = append(agentList, fmt.Sprintf("%s (%s)\n  Skills: %v\n  Tools: %v\n  Description: %s", a.ID, a.Name, a.Skills, a.Tools, a.Description))
-	}
-	//fmt.Printf("[Planner - Agents] All Registered: %v\n", sortedIDs)
-	fmt.Printf("[Planner - Plan Context] Selected Agents: %v\n", plan.SelectedAgents)
 
-	blocks := p.registry.ListBuildingBlocks()
-	blockNames := make([]string, 0, len(blocks))
-	for _, b := range blocks {
-		blockNames = append(blockNames, b.Name)
-	}
-
-	allAgents := p.registry.ListAgents()
-	// Sort by priority
-	sort.Slice(allAgents, func(i, j int) bool {
-		return allAgents[i].Priority > allAgents[j].Priority
-	})
-
-	updatedAgentList := make([]string, 0, len(allAgents))
-	for _, a := range allAgents {
+		// Create the detailed description string for the prompt
 		updatedAgentList = append(updatedAgentList, fmt.Sprintf(
 			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s",
 			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description,
 		))
 	}
+	// Backward compatibility link if needed, or just use updatedAgentList in prompt
+	// agentList := updatedAgentList
 
 	// --- AUTO-STOP LOGIC ---
 	// Check if we have fulfilled the script outline
@@ -385,9 +403,14 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			if list, ok := outline.([]interface{}); ok {
 				scriptLength = len(list)
 			}
+		} else if outline, ok := s.Params["av_script"]; ok {
+			if list, ok := outline.([]interface{}); ok {
+				scriptLength = len(list)
+			}
 		}
 		// Count executed scenes
-		if s.Action == "scene-creator" || s.AgentID == "scene-creator" {
+		if s.Action == "scene-creator" || s.AgentID == "scene-creator" ||
+			s.Action == "video-generation" || s.AgentID == "video-creator" {
 			sceneCount++
 		}
 	}
@@ -405,6 +428,12 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	sysTemplate := systemPromptTmpl
 	if plannerAgent, err := p.registry.GetAgent("planner"); err == nil && plannerAgent.Instructions != "" {
 		sysTemplate = plannerAgent.Instructions
+	}
+
+	blocks := p.registry.ListBuildingBlocks()
+	blockNames := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		blockNames = append(blockNames, b.Name)
 	}
 
 	replacer := strings.NewReplacer(
@@ -515,7 +544,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	if len(newSteps) == 0 && p.Debug {
-		fmt.Printf("[Planner] No new steps generated. Raw response:\n%s\n", resp)
+		// fmt.Printf("[Planner] No new steps generated. Raw response:\n%s\n", resp)
 	}
 
 	// Adjust IDs using existing startID
@@ -528,7 +557,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		// Self-Correction: Fix missing AgentID by looking up Skill
 		if newSteps[i].AgentID == "" {
 			action := strings.ToLower(newSteps[i].Action)
-			for _, agent := range allAgents {
+			for _, agent := range activeAgents {
 				for _, skill := range agent.Skills {
 					if strings.EqualFold(skill, action) {
 						newSteps[i].AgentID = agent.ID
