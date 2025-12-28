@@ -19,40 +19,27 @@ Strategies:
 2. **Ensure Availability**: Before using a Service Block, create a step for 'Infrastructure Engineer' to 'ensure_availability' of that block. This step must check status. IMPORTANT: Include a param 'if_missing' describing the deployment action (e.g. "Deploy ai-video-comfyui from Building Block Library") to execute if the block is not found.
 3. **Agent Priority**: Available Agents are listed in PRIORITY order. Highest priority agents (e.g. 'business-analyst') should typically lead the plan or be used for initial scoping.
 4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
-5. **Stage-Gated Planning (MANDATORY)**:
-   You must plan in PHASES. Do NOT schedule future phases until the current phase produces its data.
-
-   - **Phase 1: Discovery**
-     - **Condition**: Key details (Style, Tone, Voice, Audience) are missing or vague.
-     - **Action**: Schedule `content-creator` (Action: `ask_questions`).
-     - **Constraint**: Provide a reasonable `default` value (assumption) for EVERY question. `assumptions` list MUST match `questions` list length.
-     - **Output**: STOP Plan.
-
-   - **Phase 2: Blueprinting**
-     - **Condition**: Discovery complete (or details provided), but `av_script` is missing.
-     - **Action**: Schedule `content-creator` (Action: `content-review`).
-     - **Context**: This step generates the `av_script` JSON.
-     - **Output**: STOP Plan.
-
-   - **Phase 3: Audio Production**
-     - **Condition**: `av_script` is available (from Phase 2), but Audio steps are NOT yet scheduled.
-     - **Action**: Schedule `infrastructure-engineer` (`ensure_availability`) AND `audio-creator` (`text-to-speech`) for EACH scene in `av_script`.
-     - **Mapping**: `audio_text` -> `audio_text`, `scene_id` -> `scene_id`.
-     - **Constraint**: Return ONLY the Audio steps. Do NOT generate Video steps yet.
-     - **Output**: STOP Plan.
-
-   - **Phase 4: Video Production**
-     - **Condition**: Audio steps are COMPLETED (status: 'completed').
-     - **Action**: Schedule `video-creator` (`video-generation`) for EACH scene.
-     - **Mapping**: `visual_prompt` -> `visual_prompt`, `audio_duration` -> `duration`, `scene_id` -> `scene_id`.
-     - **Output**: STOP Plan.
+5. **Workflow-Driven Execution (MANDATORY)**:
+   - **Check**: If an Agent has a `Workflow` (Mermaid diagram), YOU MUST FOLLOW IT.
+     1. **Locate State**: Determine the current state in the diagram based on context (e.g. `av_script` missing -> State: Blueprinting).
+     2. **Transition**: Identify the required Action to move to the next state.
+     3. **Schedule**: Generate the step defined by that transition.
+   - **Fallback**: If no Workflow, use Dependency-Driven Execution (check Prerequisites -> Schedule).
+     - **Execution**: Review the **Conditions** of ALL available Execution Agents.
+        - Check if their **Prerequisite Inputs** (e.g. `av_script`, `audio_file`) exist in the plan's context/results.
+        - If Prereqs Exist AND the step is un-run: **Schedule it**.
+        - If Prereqs Missing: **Wait** (Do NOT schedule future steps).
+   - **Batching**: If an agent needs to process a list (e.g. Scenes), generate a step for EACH item.
+   - **Constraint**: Strict Stage Gating. Never schedule Step B if Step A (its input) is not 'completed'.
 
 6. **Completion Strategy**:
-   - If Video steps are completed, the User Goal is met.
-   - **Action**: Return NO new steps (Plan Complete).
-   - **Anti-Pattern**: Do NOT schedule `quality-control`, `tester`, `review`, or `confirm_completion`. Terminate immediately.
+   - The plan is complete when NO further agents can be triggered (all conditions met or dependencies exhausted).
+   - **Anti-Pattern**: Do NOT schedule 'confirmation' or 'wrap-up' steps unless explicitly required by an Agent's condition.
 
 7. **Structure Rules**:
+   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments (`//`), no trailing commas.
+   - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S'.
+   - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
    - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects.
    - **Language Handling**: Respect the `User Language` for content fields (titles, descriptions) but use English for technical prompts (image/video generation).
 
@@ -75,7 +62,11 @@ Example if User Language code is 'nl' (Dutch):
 }
 
 Break this down into execution steps.
-Output JSON array of objects:
+Output STRICT JSON array of objects (No comments allowed).
+Start `step_id` at 1. The first step usually has empty `depends_on`.
+
+Example:
 [
-  { "step_id": 1, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [IDs] }
+  { "step_id": 1, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [] },
+  { "step_id": 2, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [1] }
 ]

@@ -215,8 +215,8 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
 		agentList = append(agentList, fmt.Sprintf(
-			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s",
-			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description,
+			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s",
+			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow,
 		))
 	}
 	fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
@@ -386,8 +386,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 		// Create the detailed description string for the prompt
 		updatedAgentList = append(updatedAgentList, fmt.Sprintf(
-			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s",
-			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description,
+			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s",
+			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow,
 		))
 	}
 	// Backward compatibility link if needed, or just use updatedAgentList in prompt
@@ -606,26 +606,9 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	// Filter out duplicate steps (LLMGuard)
-	var filteredSteps []model.Step
-	for _, newStep := range newSteps {
-		isDuplicate := false
-		// Check against existing history
-		for _, existing := range plan.Steps {
-			if existing.Action == newStep.Action && existing.Status == "completed" {
-				// We generally don't want to repeat 'ask_questions' or 'content-review'
-				if newStep.Action == "ask_questions" || newStep.Action == "content-review" {
-					isDuplicate = true
-					if p.Debug {
-						fmt.Printf("[Planner] Dropping duplicate step: %s (already completed)\n", newStep.Action)
-					}
-					break
-				}
-			}
-		}
-		if !isDuplicate {
-			filteredSteps = append(filteredSteps, newStep)
-		}
-	}
+	// Filter out duplicate steps (LLMGuard)
+	// DISABLED: We trust the Planner/Agent logic to avoid loops, or we WANT loops (e.g. rejection -> retry).
+	filteredSteps := newSteps
 
 	// Append
 	plan.Steps = append(plan.Steps, filteredSteps...)

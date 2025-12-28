@@ -83,6 +83,7 @@ type AgentDefinition struct {
 	Tools        []string `json:"tools" yaml:"tools"`           // References to BuildingBlocks or MCPs
 	SubAgents    []string `json:"sub_agents" yaml:"sub_agents"` // List of agent IDs that this agent orchestrates
 	Condition    string   `json:"condition" yaml:"condition"`   // Logic for when this agent should be triggered
+	Workflow     string   `json:"workflow" yaml:"workflow"`     // Mermaid diagram or text workflow
 	Priority     float64  `json:"priority" yaml:"priority"`
 }
 

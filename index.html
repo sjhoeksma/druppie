@@ -1803,6 +1803,7 @@
                 // Update UI
                 fsInd.innerHTML = '<span class="text-green-400 font-bold">● Local Access Active</span><br>Read/Write enabled.';
                 localAccessUI.classList.add('hidden');
+                fsInd.classList.add('hidden');
 
                 // Refresh current view if needed
                 if (currentCategory) renderDocList(currentCategory);
@@ -2085,8 +2086,10 @@
                 if (typeof v === 'object' && Object.keys(v).length === 0) continue;
 
                 let valueHtml = v;
-                if (Array.isArray(v)) {
-                    if (k === 'skills' || k === 'subagents' || k === 'capabilities') {
+                if (k === 'workflow') {
+                    valueHtml = `<div class="mermaid">${v.replace(/\\n/g, '<br/>')}</div>`;
+                } else if (Array.isArray(v)) {
+                    if (k === 'skills' || k === 'subagents' || k === 'sub_agents' || k === 'capabilities') {
                         valueHtml = `<div class="flex flex-wrap gap-1 mt-1">` +
                             v.map(item => `<span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-300">${item}</span>`).join('') +
                             `</div>`;

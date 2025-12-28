@@ -88,6 +88,7 @@ You produce **structured requirement artifacts**, such as:
 - Well‑formed user stories
 - Acceptance criteria (Gherkin or equivalent)
 - Assumptions and open questions
+- Open questions have always defaults
 - Non‑functional requirements (where relevant)
 - Dependencies and risks
 - Traceability to business goals
