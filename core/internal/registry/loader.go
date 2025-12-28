@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io/fs"
@@ -18,7 +17,7 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 	reg := NewRegistry()
 
 	// 1. Load Building Blocks (blocks -> mapped to BuildingBlocks)
-	err := walkAndLoad(filepath.Join(rootDir, "blocks"), []string{".md"}, func(path string, fm []byte) error {
+	err := walkAndLoad(filepath.Join(rootDir, "blocks"), []string{".md"}, func(path string, fm []byte, body []byte) error {
 		var block model.BuildingBlock
 		if err := yaml.Unmarshal(fm, &block); err != nil {
 			return fmt.Errorf("failed to parse building block %s: %w", path, err)
@@ -41,7 +40,7 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 	}
 
 	// 2. Load Skills
-	err = walkAndLoad(filepath.Join(rootDir, "skills"), []string{".md"}, func(path string, fm []byte) error {
+	err = walkAndLoad(filepath.Join(rootDir, "skills"), []string{".md"}, func(path string, fm []byte, body []byte) error {
 		var skill model.Skill
 		if err := yaml.Unmarshal(fm, &skill); err != nil {
 			return fmt.Errorf("failed to parse skill %s: %w", path, err)
@@ -49,6 +48,19 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 		if skill.ID == "" {
 			skill.ID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
+
+		// Use body as SystemPrompt if available and not set in FM
+		if len(body) > 0 {
+			cleanBody := strings.TrimSpace(string(body))
+			if cleanBody != "" {
+				if skill.SystemPrompt == "" {
+					skill.SystemPrompt = cleanBody
+				} else {
+					skill.SystemPrompt = skill.SystemPrompt + "\n\n" + cleanBody
+				}
+			}
+		}
+
 		reg.mu.Lock()
 		reg.Skills[skill.ID] = skill
 		reg.mu.Unlock()
@@ -59,7 +71,7 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 	}
 
 	// 3. Load Agents
-	err = walkAndLoad(filepath.Join(rootDir, "agents"), []string{".yaml", ".yml", ".md"}, func(path string, fm []byte) error {
+	err = walkAndLoad(filepath.Join(rootDir, "agents"), []string{".yaml", ".yml", ".md"}, func(path string, fm []byte, body []byte) error {
 		var agent model.AgentDefinition
 		if err := yaml.Unmarshal(fm, &agent); err != nil {
 			return fmt.Errorf("failed to parse agent %s: %w", path, err)
@@ -67,6 +79,21 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 		if agent.ID == "" {
 			agent.ID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
+
+		// Use body as Instructions if available
+		if len(body) > 0 {
+			cleanBody := strings.TrimSpace(string(body))
+			if cleanBody != "" {
+				if agent.Instructions == "" {
+					agent.Instructions = cleanBody
+				} else {
+					// Check if body already contains what FM had?
+					// Assume appending.
+					agent.Instructions = agent.Instructions + "\n\n" + cleanBody
+				}
+			}
+		}
+
 		reg.mu.Lock()
 		reg.Agents[agent.ID] = agent
 		reg.mu.Unlock()
@@ -77,7 +104,7 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 	}
 
 	// 4. Load MCP
-	err = walkAndLoad(filepath.Join(rootDir, "mcp"), []string{".yaml", ".yml", ".md"}, func(path string, fm []byte) error {
+	err = walkAndLoad(filepath.Join(rootDir, "mcp"), []string{".yaml", ".yml", ".md"}, func(path string, fm []byte, body []byte) error {
 		var mcp model.MCPServer
 		if err := yaml.Unmarshal(fm, &mcp); err != nil {
 			return fmt.Errorf("failed to parse mcp %s: %w", path, err)
@@ -99,7 +126,7 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 
 // walkAndLoad walks a directory, finding files with allowed extensions, extracting data, and calling the handler.
 // allowedExtensions: e.g. []string{".md", ".yaml"}
-func walkAndLoad(dir string, allowedExtensions []string, handler func(path string, data []byte) error) error {
+func walkAndLoad(dir string, allowedExtensions []string, handler func(path string, fm []byte, body []byte) error) error {
 	// Check if dir exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return err
@@ -131,53 +158,77 @@ func walkAndLoad(dir string, allowedExtensions []string, handler func(path strin
 			return err
 		}
 
-		var data []byte
+		var fm []byte
+		var body []byte
+
 		if ext == ".md" {
-			// Parse Frontmatter
-			fm, err := extractFrontmatter(content)
-			if err != nil {
-				// Error reading frontmatter
+			// Parse Frontmatter + Body
+			var extractErr error
+			fm, body, extractErr = extractFrontmatter(content)
+			if extractErr != nil {
+				// Error reading frontmatter, maybe log? For now skip or assume whole file is body?
+				// If FM missing, we might assume it's just a text file but we need FM to define ID etc.
+				// Based on current logic, if FM extraction fails, we skip.
 				return nil
 			}
 			if fm == nil {
-				// No frontmatter found, skip
+				// No frontmatter found
 				return nil
 			}
-			data = fm
 		} else if ext == ".yaml" || ext == ".yml" {
-			// YAML file IS the data
-			data = content
+			// YAML file IS the FM, no body
+			fm = content
 		}
 
-		return handler(path, data)
+		return handler(path, fm, body)
 	})
 }
 
 // extractFrontmatter peeks at the file content and extracts the YAML block between --- and ---
-func extractFrontmatter(content []byte) ([]byte, error) {
-	reader := bufio.NewReader(bytes.NewReader(content))
-
-	// Check first line
-	line, _, err := reader.ReadLine()
-	if err != nil {
-		return nil, err
-	}
-	if !bytes.Equal(line, []byte("---")) {
-		return nil, nil // No frontmatter
+// Returns: frontmatter, body, error
+func extractFrontmatter(content []byte) ([]byte, []byte, error) {
+	if !bytes.HasPrefix(content, []byte("---")) {
+		return nil, content, nil // No valid FM start
 	}
 
-	var fm bytes.Buffer
-	for {
-		line, _, err := reader.ReadLine()
-		if err != nil {
-			return nil, err
+	// Find closing delimiter \n---
+	const delim = "\n---"
+	// We search starting after first ---
+	startSearch := 3
+	end := bytes.Index(content[startSearch:], []byte(delim))
+	if end == -1 {
+		// Possibly \r\n---
+		delim2 := "\r\n---"
+		end = bytes.Index(content[startSearch:], []byte(delim2))
+		if end == -1 {
+			return nil, content, nil // No valid FM end
 		}
-		if bytes.Equal(line, []byte("---")) {
-			break
+		// Found \r\n---
+		actualEnd := startSearch + end
+		fm := content[startSearch:actualEnd]
+
+		bodyStart := actualEnd + len(delim2)
+		// consume next newline if present
+		if bodyStart < len(content) && content[bodyStart] == '\n' {
+			bodyStart++
 		}
-		fm.Write(line)
-		fm.WriteByte('\n')
+		return fm, content[bodyStart:], nil
 	}
 
-	return fm.Bytes(), nil
+	// Found \n---
+	actualEnd := startSearch + end
+	fm := content[startSearch:actualEnd]
+
+	bodyStart := actualEnd + len(delim)
+	// consume next newline if present
+	if bodyStart < len(content) && content[bodyStart] == '\n' {
+		bodyStart++
+	} else if bodyStart < len(content) && content[bodyStart] == '\r' {
+		bodyStart++
+		if bodyStart < len(content) && content[bodyStart] == '\n' {
+			bodyStart++
+		}
+	}
+
+	return fm, content[bodyStart:], nil
 }

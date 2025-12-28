@@ -80,6 +80,9 @@ func (r *Registry) ListAgents() []model.AgentDefinition {
 
 	list := make([]model.AgentDefinition, 0, len(r.Agents))
 	for _, v := range r.Agents {
+		if v.Type == "system-agent" {
+			continue
+		}
 		list = append(list, v)
 	}
 	return list

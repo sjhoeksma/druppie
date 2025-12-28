@@ -44,13 +44,13 @@ type Intent struct {
 
 // Step represents a single unit of work in a plan
 type Step struct {
-	ID          int                    `json:"step_id"`
-	AgentID     string                 `json:"agent_id"`
-	Action      string                 `json:"action"`
-	Params      map[string]interface{} `json:"params"`
-	Result      string                 `json:"result,omitempty"` // User feedback/answer for this step
-	Status      string                 `json:"status"`           // pending, running, completed, requires_approval
-	Description string                 `json:"description"`
+	ID        int                    `json:"step_id"`
+	AgentID   string                 `json:"agent_id"`
+	Action    string                 `json:"action"`
+	Params    map[string]interface{} `json:"params"`
+	Result    string                 `json:"result,omitempty"`     // User feedback/answer for this step
+	Status    string                 `json:"status"`               // pending, running, completed, requires_approval
+	DependsOn []int                  `json:"depends_on,omitempty"` // List of step IDs that must complete before this step starts
 }
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent
@@ -74,6 +74,7 @@ type MCPServer struct {
 type AgentDefinition struct {
 	ID           string   `json:"id" yaml:"id"`
 	Name         string   `json:"name" yaml:"name"`
+	Type         string   `json:"type" yaml:"type"` // e.g. "agent", "system-agent"
 	Description  string   `json:"description" yaml:"description"`
 	Instructions string   `json:"instructions" yaml:"instructions"` // Inline system prompt
 	Provider     string   `json:"provider" yaml:"provider"`         //When empty use default provider

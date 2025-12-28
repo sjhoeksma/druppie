@@ -35,10 +35,12 @@ const DOC_REGISTRY = {
     ],
     "agents": [
         { name: "Overview", path: "agents/overview.md" },
+        { name: "Planner", path: "agents/planner.md" },
         { name: "Architect", path: "agents/architect.md" },
         { name: "Business Analyst", path: "agents/business_analyst.md" },
         { name: "Data Scientist", path: "agents/data_scientist.md" },
         { name: "Content Creator", path: "agents/content-creator.md" },
+        { name: "Scene Creator", path: "agents/scene-creator.md" },
         { name: "Infrastructure Engineer", path: "agents/infrastructure-engineer.md" },
         { name: "Tester", path: "agents/tester.md" },
     ],

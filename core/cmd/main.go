@@ -315,210 +315,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		},
 	}
 
-	printStepParams := func(params map[string]interface{}, indent string) {
-		for k, v := range params {
-			if list, ok := v.([]interface{}); ok {
-				fmt.Printf("%s%s:\n", indent, k)
-				for _, item := range list {
-					fmt.Printf("%s  - %v\n", indent, item)
-				}
-			} else {
-				fmt.Printf("%s%s: %v\n", indent, k, v)
-			}
-		}
-	}
+	// runInteractiveLoop Removed
 
-	runInteractiveLoop := func(ctx context.Context, p *planner.Planner, plan *model.ExecutionPlan) {
-		scanner := bufio.NewScanner(os.Stdin)
-		for {
-			// Find the first pending step to process
-			var activeStep *model.Step
-			var activeStepIdx int = -1
-			for i := range plan.Steps {
-				if plan.Steps[i].Status == "pending" {
-					activeStep = &plan.Steps[i]
-					activeStepIdx = i
-					break
-				}
-			}
-
-			if activeStep != nil {
-				if activeStep.Action == "ask_questions" {
-					fmt.Printf("\n[Planner - Request] %s\n", activeStep.Description)
-					// Display questions if params exist
-					var assumptions []interface{}
-					if as, ok := activeStep.Params["assumptions"]; ok {
-						if listAs, isListAs := as.([]interface{}); isListAs {
-							assumptions = listAs
-						}
-					}
-
-					var questions []interface{}
-					if qs, ok := activeStep.Params["questions"]; ok {
-						if list, isList := qs.([]interface{}); isList {
-							questions = list
-						} else {
-							questions = []interface{}{qs}
-						}
-					}
-
-					if len(questions) > 0 {
-						fmt.Println("")
-						for i, q := range questions {
-							assumption := "Unknown"
-							if i < len(assumptions) {
-								assumption = fmt.Sprintf("%v", assumptions[i])
-							}
-							fmt.Printf("  %d. %v (Default: %s)\n", i+1, q, assumption)
-						}
-					}
-
-					fmt.Println("\nOptions: [Type your answer] | '/accept' (use defaults) | '/exit' (quit)")
-					fmt.Print("> ")
-					if !scanner.Scan() {
-						return
-					}
-					answer := scanner.Text()
-
-					if answer == "/exit" || answer == "/quit" || answer == "exit" || answer == "quit" {
-						return
-					}
-					if answer == "/accept" || answer == "accept" || answer == "/skip" || answer == "skip" {
-						// Build detailed answer from assumptions
-						var details strings.Builder
-						for i, q := range questions {
-							val := "Unknown"
-							if i < len(assumptions) {
-								val = fmt.Sprintf("%v", assumptions[i])
-							}
-							details.WriteString(fmt.Sprintf("%v - %v\n", q, val))
-						}
-						answer = details.String()
-					} else if strings.HasPrefix(answer, "/") {
-						if answer == "/plan" {
-							planJSON, _ := json.MarshalIndent(plan, "", "  ")
-							fmt.Printf("\n[Current Plan ID: %s]\n%s\n", plan.ID, string(planJSON))
-							continue
-						}
-						if answer == "/help" {
-							fmt.Println("\nAvailable Commands:")
-							fmt.Println("  /accept - Use default answers for all questions")
-							fmt.Println("  /plan   - Show the current JSON execution plan")
-							fmt.Println("  /exit   - Quit the session")
-							fmt.Println("  /help   - Show this help message")
-							continue
-						}
-						fmt.Printf("Unknown command: %s. Use natural language or commands like /accept, /plan, /help, /exit\n", answer)
-						continue
-					}
-
-					fmt.Println("[Planner - Progress] Updating plan...")
-					updatedPlan, err := p.UpdatePlan(ctx, plan, answer)
-					if err != nil {
-						fmt.Printf("[Error] Update failed: %v\n", err)
-						return
-					}
-					plan = updatedPlan
-					continue // Loop to check next state
-				} else if activeStep.Action != "content-creator" {
-					// Auto-transition ONLY for technical/logic steps, not content generation
-					fmt.Printf("\n[Planner - Progress] Automated Transition: Completing Step %d (%v)\n", activeStep.ID, activeStep.AgentID)
-					plan.Steps[activeStepIdx].Status = "completed"
-					_ = p.Store.SavePlan(*plan)
-
-					// If this was the last step, trigger another update to see what's next
-					if activeStepIdx == len(plan.Steps)-1 {
-						fmt.Println("[Planner - Progress] Determining next steps...")
-						updatedPlan, err := p.UpdatePlan(ctx, plan, "Autoconfirmed: Logic/Context step completed.")
-						if err == nil {
-							plan = updatedPlan
-							continue
-						}
-					}
-					continue // Just loop to process next pending step if it exists
-				} else if activeStep.Action == "content-creator" {
-					fmt.Printf("\n[Planner - Request] Review the generated content from %s:\n", activeStep.AgentID)
-					printStepParams(activeStep.Params, "  ")
-
-					fmt.Println("\nOptions: [Type feedback to refine] | '/accept' (continue) | '/exit' (quit)")
-					fmt.Print("> ")
-					if !scanner.Scan() {
-						return
-					}
-					answer := scanner.Text()
-
-					if answer == "/exit" || answer == "/quit" || answer == "exit" || answer == "quit" {
-						return
-					}
-					if answer == "/accept" || answer == "/ok" || answer == "accept" || answer == "ok" {
-						fmt.Printf("[Planner - Progress] Accepting content for Step %d...\n", activeStep.ID)
-						plan.Steps[activeStepIdx].Status = "completed"
-						_ = p.Store.SavePlan(*plan)
-
-						// Auto-trigger update if this was the last step
-						if activeStepIdx == len(plan.Steps)-1 {
-							fmt.Println("[Planner - Progress] Determining next steps...")
-							updatedPlan, err := p.UpdatePlan(ctx, plan, "User accepted the content.")
-							if err == nil {
-								plan = updatedPlan
-							}
-						}
-						continue
-					}
-
-					fmt.Println("[Planner - Progress] Refining based on feedback...")
-					updatedPlan, err := p.UpdatePlan(ctx, plan, answer)
-					if err != nil {
-						fmt.Printf("[Error] Refine failed: %v\n", err)
-						return
-					}
-					plan = updatedPlan
-					continue
-				}
-			}
-
-			// No longer printing plan JSON to console automatically as requested.
-			fmt.Println("\nOptions: [type feedback to refine] | '/plan' (show) | '/exit' (quit)")
-			fmt.Print("> ")
-			if !scanner.Scan() {
-				return
-			}
-			input := scanner.Text()
-
-			if input == "/exit" || input == "/quit" || input == "exit" || input == "quit" {
-				return
-			}
-			if input == "/plan" {
-				planJSON, _ := json.MarshalIndent(plan, "", "  ")
-				fmt.Printf("\n[Current Plan ID: %s]\n%s\n", plan.ID, string(planJSON))
-				continue
-			}
-			if input == "/help" {
-				fmt.Println("\nAvailable Commands:")
-				fmt.Println("  /plan   - Show the current JSON execution plan")
-				fmt.Println("  /exit   - Quit the session")
-				fmt.Println("  /help   - Show this help message")
-				continue
-			}
-			if input == "/ok" || input == "ok" {
-				// Treat ok as "I'm done, thanks"
-				return
-			}
-			if strings.HasPrefix(input, "/") {
-				fmt.Printf("Unknown command: %s. Use natural language or /plan, /help, /exit\n", input)
-				continue
-			}
-
-			// Refine
-			fmt.Println("[Planner - Progress] Updating plan...")
-			updatedPlan, err := p.UpdatePlan(ctx, plan, input)
-			if err != nil {
-				fmt.Printf("[Error] Refine failed: %v\n", err)
-				continue
-			}
-			plan = updatedPlan
-		}
-	}
+	// TaskManager instance
+	var tm *TaskManager
 
 	var chatCmd = &cobra.Command{
 		Use:   "chat",
@@ -531,17 +331,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 			cfg := cfgMgr.Get()
 
-			fmt.Println("--- Druppie Core Chat (Interactive) ---")
+			// Initialize TaskManager
+			tm = NewTaskManager(planner)
+
+			fmt.Println("--- Druppie Core Chat (Async) ---")
 			fmt.Printf("LLM Provider: %s\n", cfg.LLM.DefaultProvider)
-			// Helper to get active model
-			activeModel := "unknown"
-			if cfg.LLM.Providers != nil {
-				if p, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
-					activeModel = p.Model
-				}
-			}
-			fmt.Printf("LLM Model: %s\n", activeModel)
-			fmt.Printf("Build Provider: %s\n", cfg.Build.DefaultProvider)
+			fmt.Println("Commands: /exit, /list, /stop <id>, /switch <id>")
 
 			// Resume plan if ID provided
 			if planID != "" {
@@ -555,67 +350,111 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				if err != nil {
 					fmt.Printf("[Error] Failed to load plan: %v\n", err)
 				} else {
-					runInteractiveLoop(context.Background(), planner, &plan)
+					tm.StartTask(context.Background(), plan)
 				}
 			}
 
-			fmt.Println("\nType a request to start, or use commands: /help, /exit")
+			// Main Loop
 			scanner := bufio.NewScanner(os.Stdin)
+			fmt.Print("> ")
+
+			// Input channel to decouple blocking read
+			inputChan := make(chan string)
+			go func() {
+				for scanner.Scan() {
+					inputChan <- scanner.Text()
+				}
+				close(inputChan)
+			}()
+
+			var activeTaskID string = ""
 
 			for {
-				fmt.Print("> ")
-				if !scanner.Scan() {
-					break
-				}
-				input := scanner.Text()
-				if input == "/exit" || input == "/quit" || input == "exit" {
-					break
-				}
-				if strings.HasPrefix(input, "/") {
-					if input == "/help" {
-						fmt.Println("\nAvailable Commands:")
-						fmt.Println("  /help   - Show this help message")
-						fmt.Println("  /exit   - Quit the session")
-						fmt.Println("\nSimply type your request (e.g. 'maak een video over...') to start planning.")
+				select {
+				case input, ok := <-inputChan:
+					if !ok {
+						return
+					}
+
+					// Handle Global Commands
+					if input == "/exit" {
+						return
+					}
+					if input == "/list" {
+						tasks := tm.ListTasks()
+						fmt.Println("Active Tasks:")
+						for _, t := range tasks {
+							fmt.Println(" - " + t)
+						}
+						fmt.Print("> ")
 						continue
 					}
-					fmt.Printf("Unknown command: %s. Type natural language to start planning or /help, /exit.\n", input)
-					continue
-				}
-
-				// 1. Route
-				fmt.Println("[Router - Analyzing]")
-				intent, rawRouterResp, err := router.Analyze(context.Background(), input)
-				if err != nil {
-					fmt.Printf("[Error] Router failed: %v\n", err)
-					continue
-				}
-				displayAction := strings.ReplaceAll(intent.Action, "_", " ")
-				if len(displayAction) > 0 {
-					displayAction = strings.ToUpper(displayAction[:1]) + displayAction[1:]
-				}
-				fmt.Printf("[Router - %s] %s\n", displayAction, intent.InitialPrompt)
-
-				// 2. Plan (if action is create_project)
-				if intent.Action == "create_project" {
-					plan, err := planner.CreatePlan(context.Background(), intent)
-					if err != nil {
-						fmt.Printf("[Error] Planner failed: %v\n", err)
+					if strings.HasPrefix(input, "/stop ") {
+						id := strings.TrimSpace(strings.TrimPrefix(input, "/stop "))
+						tm.StopTask(id)
+						fmt.Print("> ")
 						continue
 					}
-					fmt.Printf("[Planner - Progress] Plan Created (ID: %s)\n", plan.ID)
-					router.PlanID = plan.ID
-
-					// Log router step to plan log
-					_ = planner.Store.LogInteraction(plan.ID, "Router", input, rawRouterResp)
-
-					// Enter interactive loop
-					runInteractiveLoop(context.Background(), planner, &plan)
-				} else {
-					// Log to generic interaction log if no plan exists
-					if router.PlanID == "" {
-						_ = planner.Store.LogInteraction("", "Router", input, rawRouterResp)
+					if strings.HasPrefix(input, "/switch ") {
+						id := strings.TrimSpace(strings.TrimPrefix(input, "/switch "))
+						activeTaskID = id
+						fmt.Printf("Switched active task context to %s\n> ", id)
+						continue
 					}
+
+					// Route Input
+					// If activeTaskID is set and that task is waiting, send it there
+					// Else if no active task, try to find one waiting
+
+					targetTask := tm.GetSingleActiveTask()
+					if activeTaskID != "" {
+						if t, ok := tm.tasks[activeTaskID]; ok {
+							targetTask = t
+						}
+					}
+
+					if targetTask != nil && targetTask.Status == TaskStatusWaitingInput {
+						// Send to Task
+						targetTask.InputChan <- input
+						// Reset prompt
+						continue
+					}
+
+					// If not handled by task, treat as new Router Request
+					if !strings.HasPrefix(input, "/") {
+						fmt.Println("[Router - Analyzing]")
+						intent, rawRouterResp, err := router.Analyze(context.Background(), input)
+						if err != nil {
+							fmt.Printf("[Error] Router failed: %v\n> ", err)
+							continue
+						}
+
+						if intent.Action == "create_project" {
+							plan, err := planner.CreatePlan(context.Background(), intent)
+							if err != nil {
+								fmt.Printf("[Error] Planner failed: %v\n> ", err)
+								continue
+							}
+							_ = planner.Store.LogInteraction(plan.ID, "Router", input, rawRouterResp)
+
+							task := tm.StartTask(context.Background(), plan)
+							activeTaskID = task.ID
+							fmt.Printf("[Planner] Started Plan %s\n", plan.ID)
+						} else {
+							fmt.Printf("[Router - %s] %s\n> ", intent.Action, intent.InitialPrompt)
+						}
+					} else {
+						fmt.Println("Unknown command.")
+						fmt.Print("> ")
+					}
+
+				case log := <-tm.OutputChan:
+					// Clear current line if possible or just print
+					// Simple print for now
+					fmt.Printf("\r%s\n> ", log)
+
+				case id := <-tm.TaskDoneChan:
+					fmt.Printf("\r[Task Manager] Task %s Finished.\n> ", id)
 				}
 			}
 		},
