@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/sjhoeksma/druppie/core/internal/config"
@@ -66,9 +67,17 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 			if model == "" {
 				model = "llama3"
 			}
-			return &OllamaProvider{Model: model, BaseURL: "http://localhost:11434"}, nil
+			baseURL := "http://localhost:11434"
+			if pCfg.URL != "" {
+				baseURL = pCfg.URL
+			}
+			return &OllamaProvider{Model: model, BaseURL: baseURL}, nil
 		case "lmstudio":
-			return &LMStudioProvider{Model: pCfg.Model, BaseURL: "http://localhost:1234/v1"}, nil
+			baseURL := "http://localhost:1234/v1"
+			if pCfg.URL != "" {
+				baseURL = pCfg.URL
+			}
+			return &LMStudioProvider{Model: pCfg.Model, BaseURL: baseURL}, nil
 
 		default:
 			return nil, fmt.Errorf("unknown provider type: %s", pCfg.Type)
@@ -121,12 +130,45 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 	return mgr, nil
 }
 
-// Generate uses the default provider
+const (
+	MaxRetries    = 3
+	RetryDelay    = 2 * time.Second
+	GlobalTimeout = 120 * time.Second // 2 minutes as upper bound
+)
+
+// Generate uses the default provider with retry and timeout logic
 func (m *Manager) Generate(ctx context.Context, prompt string, systemPrompt string) (string, error) {
 	if m.defaultProvider == nil {
 		return "", fmt.Errorf("no default provider configured")
 	}
-	return m.defaultProvider.Generate(ctx, prompt, systemPrompt)
+
+	var lastErr error
+	for i := 0; i < MaxRetries; i++ {
+		// Create a context with timeout for this specific attempt
+		attemptCtx, cancel := context.WithTimeout(ctx, GlobalTimeout)
+
+		if i > 0 {
+			fmt.Printf("[LLM] Retry attempt %d/%d...\n", i+1, MaxRetries)
+		}
+
+		resp, err := m.defaultProvider.Generate(attemptCtx, prompt, systemPrompt)
+		cancel() // Ensure we release the timeout resources immediately
+
+		if err == nil {
+			return resp, nil
+		}
+
+		lastErr = err
+		fmt.Printf("[LLM] Attempt %d failed: %v. Retrying in %v...\n", i+1, err, RetryDelay)
+
+		// Wait before retry, listening for parent context cancellation
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(RetryDelay):
+		}
+	}
+	return "", fmt.Errorf("llm generate failed after %d attempts: %w", MaxRetries, lastErr)
 }
 
 // Close closes all providers
@@ -500,9 +542,19 @@ func (p *LMStudioProvider) Close() error {
 	return nil
 }
 
-// Helper to strip markdown code blocks
+// Helper to strip markdown code blocks and reasoning traces
 func cleanResponse(text string) string {
 	text = strings.TrimSpace(text)
+
+	// Remove <think>...</think> blocks (DeepSeek style)
+	if start := strings.Index(text, "<think>"); start != -1 {
+		if end := strings.Index(text, "</think>"); end != -1 {
+			// Remove the thinking block including tags
+			text = text[:start] + text[end+len("</think>"):]
+		}
+	}
+	text = strings.TrimSpace(text)
+
 	if strings.HasPrefix(text, "```json") {
 		text = strings.TrimPrefix(text, "```json")
 		text = strings.TrimSuffix(text, "```")

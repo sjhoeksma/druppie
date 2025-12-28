@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -69,7 +70,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		// Check if we are in 'core' and need to move up to project root
 		cwd, _ := os.Getwd()
 		if filepath.Base(cwd) == "core" {
-			fmt.Println("Running in 'core', moving working directory up to project root.")
 			_ = os.Chdir("..")
 		}
 
@@ -492,56 +492,41 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Log router step to plan log
 			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
 
-			// Auto-resolve questions loop (Max 5 rounds)
-			for i := 0; i < 5; i++ {
-				if len(plan.Steps) == 0 {
-					break
-				}
-				lastStep := plan.Steps[len(plan.Steps)-1]
-				if lastStep.Action != "ask_questions" {
-					break
-				}
+			// Log router step to plan log
+			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
 
-				// Extract Questions and Assumptions
-				var assumptions []interface{}
-				if as, ok := lastStep.Params["assumptions"]; ok {
-					if listAs, isListAs := as.([]interface{}); isListAs {
-						assumptions = listAs
+			// Initialize TaskManager for execution
+			tm := NewTaskManager(planner)
+			task := tm.StartTask(context.Background(), plan)
+			fmt.Printf("[Planner] Started Plan %s execution...\n", plan.ID)
+
+			// Execution Loop
+			done := false
+			for !done {
+				select {
+				case log := <-tm.OutputChan:
+					fmt.Println(log)
+				case <-time.After(500 * time.Millisecond):
+					// Check status periodically
+					// Note: Direct access is slightly racy but acceptable for this CLI tool
+					if task.Status == TaskStatusWaitingInput {
+						fmt.Println("[Auto-Pilot] Input required. Auto-accepting defaults...")
+						// Simulate user verify/accept delay
+						time.Sleep(1 * time.Second)
+						task.InputChan <- "/accept"
+					} else if task.Status == TaskStatusCompleted {
+						fmt.Println("[Auto-Pilot] Plan execution completed successfully.")
+						done = true
+					} else if task.Status == TaskStatusError {
+						fmt.Println("[Auto-Pilot] Plan execution failed.")
+						done = true
 					}
 				}
-				var questions []interface{}
-				if qs, ok := lastStep.Params["questions"]; ok {
-					if list, isList := qs.([]interface{}); isList {
-						questions = list
-					} else {
-						questions = []interface{}{qs}
-					}
-				}
-
-				// Build Answer
-				var details strings.Builder
-				for i, q := range questions {
-					val := "Unknown"
-					if i < len(assumptions) {
-						val = fmt.Sprintf("%v", assumptions[i])
-					}
-					details.WriteString(fmt.Sprintf("%v - %v\n", q, val))
-				}
-				answer := details.String()
-				if answer == "" {
-					answer = "User accepted defaults."
-				}
-
-				fmt.Fprintf(os.Stderr, "[Auto-Plan] Accepting defaults for step %d...\n", lastStep.ID)
-
-				// Update Plan
-				updatedPlan, err := planner.UpdatePlan(context.Background(), &plan, answer)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[Error] Auto-resolving failed: %v\n", err)
-					break
-				}
-				plan = *updatedPlan
 			}
+
+			// Fetch final state
+			finalPlan, _ := planner.Store.GetPlan(plan.ID)
+			plan = finalPlan
 
 			validJSON, _ := json.MarshalIndent(plan, "", "  ")
 			fmt.Println(string(validJSON))

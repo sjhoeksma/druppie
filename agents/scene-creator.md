@@ -17,3 +17,6 @@ Your primary function is to **execute the production of individual media scenes*
 - **Audio Generation**: Generate voiceovers from script text using TTS.
 - **Assembling**: Combine the generated video and audio into a single `.mp4` file for the scene.
 - **Parallel Execution**: You transform a single scene entry into a completely finished media file.
+
+## Execution Mode
+This agent is designed for **Batch Processing**. It is typically invoked multiple times in parallel, where each instance processes a single scene from a list provided by the `content-creator`.

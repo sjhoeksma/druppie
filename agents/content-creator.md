@@ -183,9 +183,18 @@ flowchart TD
 ```
 
 ## Scripting Guidelines
-When generating a 'script_outline':
-1. **Language**: 
-   - 'title' and 'description': MUST be in the User's Language.
-   - 'image_prompt' and 'video_prompt': MUST be in English (optimized for AI generation).
-2. **Format**: JSON array of objects.
-   - { "duration": "...", "title": "...", "description": "...", "image_prompt": "...", "video_prompt": "..." }
+When generating a 'script_outline' (as a parameter):
+1. **Mandatory Fields**: You **MUST** include the following fields for EVERY scene object:
+   - `duration`: (e.g. "10s")
+   - `title`: (User Language)
+   - `description`: (User Language)
+   - `image_prompt`: (English, highly detailed for SDXL)
+   - `video_prompt`: (English, description of motion for ComfyUI)
+2. **Format**: Valid JSON array of objects.
+3. **Example**:
+   ```json
+   [
+     { "duration": "5s", "title": "Intro", "description": "...", "image_prompt": "cinematic shot of...", "video_prompt": "slow pan over..." }
+   ]
+   ```
+4. **Planner Compatibility**: The `script_outline` array triggers the Planner's Batch Processing Strategy. Ensure every item in the array has all necessary fields (prompt, duration) to be effective as parameters for the `scene-creator` agent.

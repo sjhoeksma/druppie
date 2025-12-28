@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 )
@@ -29,6 +30,7 @@ type TaskManager struct {
 	planner      *planner.Planner
 	OutputChan   chan string // Channel to send logs/output to the main CLI loop
 	TaskDoneChan chan string // Signals when a task is fully complete
+	dispatcher   *executor.Dispatcher
 }
 
 type Task struct {
@@ -46,6 +48,7 @@ func NewTaskManager(p *planner.Planner) *TaskManager {
 		planner:      p,
 		OutputChan:   make(chan string, 100),
 		TaskDoneChan: make(chan string, 10),
+		dispatcher:   executor.NewDispatcher(),
 	}
 }
 
@@ -378,35 +381,16 @@ func (tm *TaskManager) executeSceneCreation(ctx context.Context, step *model.Ste
 	// Detect tool usage based on Action or Params
 	// The planner should have populated 'action' with something descriptive
 
+	// Delegate to Block Executors
+	if tm.dispatcher != nil {
+		if exec, err := tm.dispatcher.GetExecutor(step.Action); err == nil {
+			return exec.Execute(ctx, *step, tm.OutputChan)
+		}
+	}
+
 	action := strings.ToLower(step.Action)
 
-	if strings.Contains(action, "video") || strings.Contains(action, "scene") {
-		sceneID := fmt.Sprintf("%d", step.ID) // Default
-		if sid, ok := step.Params["scene_id"]; ok {
-			sceneID = fmt.Sprintf("%v", sid)
-		}
-
-		// 1. Simulate Audio Generation (TTS)
-		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] Generating Audio for Scene %s...", sceneID)
-		time.Sleep(1 * time.Second)
-		tm.OutputChan <- fmt.Sprintf("✅ [TTS] Audio generated: %s_audio.mp3", sceneID)
-
-		// 2. Simulate ComfyUI Video Generation
-		tm.OutputChan <- fmt.Sprintf("🎥 [ComfyUI] Generating Video for Scene %s...", sceneID)
-		// Simulating API latency
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(3 * time.Second):
-		}
-		tm.OutputChan <- fmt.Sprintf("✅ [ComfyUI] Video generated: %s_video.mp4", sceneID)
-
-		// 3. Assemble
-		tm.OutputChan <- fmt.Sprintf("🎬 [FFmpeg] Assembling Scene %s...", sceneID)
-		time.Sleep(500 * time.Millisecond)
-		tm.OutputChan <- fmt.Sprintf("✅ [Scene Creator] Scene %s Complete: %s_scene_final.mp4", sceneID, sceneID)
-		return nil
-	}
+	// Legacy handlers for non-refactored actions
 
 	if strings.Contains(action, "image") {
 		// Simulate SDXL Image Generation
