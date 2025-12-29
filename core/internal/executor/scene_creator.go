@@ -15,6 +15,10 @@ type SceneCreatorExecutor struct{}
 
 func (e *SceneCreatorExecutor) CanHandle(action string) bool {
 	action = strings.ToLower(action)
+	// Explicitly exclude the Lead Agent actions (Video Content Creator) to prevent it from running generation simulation
+	if action == "video-content-creator" || action == "draft_scenes" {
+		return false
+	}
 	return strings.Contains(action, "video") ||
 		strings.Contains(action, "scene") ||
 		action == "scene-creator"

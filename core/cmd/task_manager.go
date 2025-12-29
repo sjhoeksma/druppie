@@ -189,7 +189,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		// Check for interactive steps
 		for _, idx := range batchIndices {
 			step := &task.Plan.Steps[idx]
-			if step.Action == "ask_questions" || step.Action == "content-review" {
+			isReview := step.Action == "content-review" || step.Action == "draft_scenes"
+			if step.Action == "ask_questions" || isReview {
 				// Stop batching, prioritize this interactive step alone
 				batchIndices = []int{idx}
 				activeStep = step
@@ -310,7 +311,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.OutputChan <- sb.String()
 			tm.OutputChan <- "Options: [Type answer] | '/accept' (defaults) | '/stop'"
 
-		} else if activeStep.Action == "content-review" {
+		} else if activeStep.Action == "content-review" || activeStep.Action == "draft_scenes" {
 			tm.OutputChan <- fmt.Sprintf("\n[%s] Review content (%s):", task.ID, activeStep.AgentID)
 			tm.OutputChan <- formatStepParams(activeStep.Params)
 			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
@@ -450,7 +451,21 @@ func formatStepParams(params map[string]interface{}) string {
 	var sb strings.Builder
 
 	// Specific handler for AV Script (V2)
-	if val, ok := params["av_script"]; ok {
+	// Specific handler for AV Script (V2)
+	// Check for 'av_script' OR 'scenes_draft'
+	// Check for 'av_script', 'scenes_draft', 'script_outline', or 'scene_outline'
+	val, ok := params["av_script"]
+	if !ok {
+		val, ok = params["scenes_draft"]
+	}
+	if !ok {
+		val, ok = params["script_outline"]
+	}
+	if !ok {
+		val, ok = params["scene_outline"]
+	}
+
+	if ok {
 		sb.WriteString("🎬 **AV Script Blueprint**\n\n")
 		if scenes, ok := val.([]interface{}); ok {
 			for i, s := range scenes {
@@ -463,73 +478,31 @@ func formatStepParams(params map[string]interface{}) string {
 					}
 					duration := fmt.Sprintf("%v", scene["estimated_duration"])
 					if duration == "<nil>" || duration == "" {
-						duration = "Unknown"
+						// Fallback to 'duration' if estimated_duration is missing
+						if d, ok := scene["duration"]; ok {
+							duration = fmt.Sprintf("%v", d)
+						} else {
+							duration = "Unknown"
+						}
 					}
 					profile := ""
 					if p, ok := scene["voice_profile"]; ok {
 						profile = fmt.Sprintf(" [%v]", p)
 					}
 
-					sb.WriteString(fmt.Sprintf("   %d. ⏱️ %s%s\n", i+1, duration, profile))
-					sb.WriteString(fmt.Sprintf("      🗣️ Audio: \"%s\"\n", audio))
-					sb.WriteString(fmt.Sprintf("      👀 Visual: \"%s\"\n\n", visual))
+					idDisplay := fmt.Sprintf("%d", i+1)
+					if sid, ok := scene["scene_id"]; ok {
+						idDisplay = fmt.Sprintf("%v", sid)
+					}
+
+					sb.WriteString(fmt.Sprintf("   🎬 Scene %s [Duration: %s]%s\n", idDisplay, duration, profile))
+					sb.WriteString(fmt.Sprintf("       � Audio:  \"%s\"\n", audio))
+					sb.WriteString(fmt.Sprintf("       �️ Visual: \"%s\"\n\n", visual))
 				}
 			}
 			return sb.String()
-		}
-	}
-
-	// Legacy / Fallback for script_outline
-	if val, ok := params["script_outline"]; ok {
-		sb.WriteString("🎬 **Script Outline**\n\n")
-		// script_outline is usually a list of objects
-		if scenes, ok := val.([]interface{}); ok {
-			for i, s := range scenes {
-				if scene, ok := s.(map[string]interface{}); ok {
-					title := "Scene"
-					if t, ok := scene["title"]; ok {
-						title = fmt.Sprintf("%v", t)
-					}
-					duration := ""
-					if d, ok := scene["duration"]; ok {
-						duration = fmt.Sprintf("%v", d)
-					}
-					description := ""
-					if d, ok := scene["description"]; ok {
-						description = fmt.Sprintf("%v", d)
-					}
-
-					prompt := ""
-					if p, ok := scene["prompt"]; ok {
-						prompt = fmt.Sprintf("%v", p)
-					}
-					imagePrompt := ""
-					if ip, ok := scene["image_prompt"]; ok {
-						imagePrompt = fmt.Sprintf("%v", ip)
-					}
-					videoPrompt := ""
-					if vp, ok := scene["video_prompt"]; ok {
-						videoPrompt = fmt.Sprintf("%v", vp)
-					}
-
-					sb.WriteString(fmt.Sprintf("   %d. **%s** (%s): %s\n", i+1, title, duration, description))
-					if imagePrompt != "" || videoPrompt != "" {
-						if imagePrompt != "" {
-							sb.WriteString(fmt.Sprintf("      🖼️  Image: \"%s\"\n", imagePrompt))
-						}
-						if videoPrompt != "" {
-							sb.WriteString(fmt.Sprintf("      🎥 Video: \"%s\"\n", videoPrompt))
-						}
-						sb.WriteString("\n")
-					} else {
-						// Fallback legacy
-						sb.WriteString(fmt.Sprintf("      \"%s\"\n\n", prompt))
-					}
-				} else if str, ok := s.(string); ok {
-					// Handle plain string format
-					sb.WriteString(fmt.Sprintf("   %d. %s\n\n", i+1, str))
-				}
-			}
+		} else if str, ok := val.(string); ok {
+			sb.WriteString(str)
 			return sb.String()
 		}
 	}

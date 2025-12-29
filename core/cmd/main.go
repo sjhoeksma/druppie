@@ -528,8 +528,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			finalPlan, _ := planner.Store.GetPlan(plan.ID)
 			plan = finalPlan
 
-			validJSON, _ := json.MarshalIndent(plan, "", "  ")
-			fmt.Println(string(validJSON))
+			// validJSON, _ := json.MarshalIndent(plan, "", "  ")
+			// fmt.Println(string(validJSON))
 		},
 	}
 

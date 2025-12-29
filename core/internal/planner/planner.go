@@ -86,7 +86,7 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 	for _, a := range agents {
 		detailedList = append(detailedList, fmt.Sprintf("%s: %s", a.ID, a.Description))
 	}
-	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator'.\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For architecture, use 'architect'.\n- For task refinement or if the goal is vague, ALWAYS include 'business-analyst'.\nExample: [\"business-analyst\", \"video-content-creator\"]", intent.Prompt, detailedList)
+	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator' ONLY (it replaces business-analyst).\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For architecture, use 'architect'.\n- For other VAGUE goals, include 'business-analyst'.\nExample: [\"video-content-creator\"]", intent.Prompt, detailedList)
 	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
 		return nil
@@ -352,6 +352,10 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	for _, s := range plan.Steps {
 		// Detect script in params
 		if outline, ok := s.Params["script_outline"]; ok {
+			if list, ok := outline.([]interface{}); ok {
+				scriptLength = len(list)
+			}
+		} else if outline, ok := s.Params["script_outline"]; ok {
 			if list, ok := outline.([]interface{}); ok {
 				scriptLength = len(list)
 			}

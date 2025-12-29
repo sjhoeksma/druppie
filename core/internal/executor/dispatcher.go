@@ -12,10 +12,11 @@ type Dispatcher struct {
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
 		executors: []Executor{
-			&SceneCreatorExecutor{},
 			&AudioCreatorExecutor{},
 			&VideoCreatorExecutor{},
-			// Add more executors here as we refactor
+			&ImageCreatorExecutor{}, // Start valid Image Executor
+			// Legacy/Fallback last
+			&SceneCreatorExecutor{},
 		},
 	}
 }

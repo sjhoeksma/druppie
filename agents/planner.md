@@ -28,7 +28,7 @@ Strategies:
      2. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
      2. **Identify Next Action**:
         - **Task Node**: `state "Task: [Name]\nSkill: [Skill]"`
-          - **Action**: Schedule a step for the **Current Agent** using `[Skill]`.
+          - **Action**: Schedule a step for the **Current Agent** using the `[Skill]` string as the JSON `action`. Do NOT use the Task `[Name]` as the action.
         - **Agent Node**: `state "Agent: [ID]"`
           - **Action**: Schedule a step for Sub-Agent `[ID]`. Look up their default skill/action or context.
         - **Block Node**: `state "Block: [Name]"`
@@ -53,12 +53,12 @@ Strategies:
    - **Anti-Pattern**: Do NOT schedule redundant 'ensure_availability' or 'video-generation' loops after the Final Output is produced. Do NOT invent new steps after the workflow ends.
 
 7. **Structure Rules**:
-   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt'), NO diff characters (`+`, `-`). **ALL KEYS MUST BE DOUBLE QUOTED**.
+   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een'), NO diff characters (`+`, `-`). NO 'scene_number' (use 'scene_id'). NO 'haar' field (use 'estimated_duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
    - **Verification**: Ensure every object ends cleanly with `}`.
    - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S'.
    - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
    - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects.
-   - **Language Handling**: Respect the `User Language` for content fields (titles, descriptions) but use English for technical prompts (image/video generation).
+   - **Language Handling**: Content fields (like `audio_text`, `titles`, `descriptions`) MUST be in the `User Language`. Technical Prompts (like `visual_description`, `image_prompt`) MUST be in ENGLISH.
 
 CRITICAL INSTRUCTION ON LANGUAGE:
 The 'User Language' is defined above.

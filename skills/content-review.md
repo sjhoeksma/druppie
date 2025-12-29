@@ -10,7 +10,6 @@ This skill acts as a Quality Gate. It displays structured content to the user an
 
 ## Parameters
 - `av_script` (JSON): The Audio-Visual script to review.
-- `script_outline` (JSON): (Legacy) The script outline to review.
 - `summary` (String): A text summary of the content.
 
 ## Behavior
