@@ -6,7 +6,7 @@ type: spec-agent
 sub_agents: ["audio-creator", "video-creator", "image-creator"]
 condition: "Run to orchestrate the entire video creation workflow (Refinement -> Script -> Audio -> Video)."
 version: 2.1.0
-skills: ["ask_questions", "content-review","video-review", "orchestration"]
+skills: ["ask_questions", "content-review","video-review"]
 priority: 100.0
 workflow: |
   stateDiagram
@@ -27,55 +27,46 @@ workflow: |
     state Sences {
       direction LR
       state "Task: Draft Scenes\nSkill: content-review" as DraftScenes
-      state "Task: Review Scenes\nSkill: ask_questions" as ReviewScenes
       [*] --> DraftScenes
-      DraftScenes --> ReviewScenes: Scenes Drafted
-      ReviewScenes --> DraftScenes: Refine Sences
-      ReviewScenes --> [*]: Approved Sences
+      DraftScenes --> DraftScenes: Refine Sences
+      DraftScenes --> [*]: Approved Sences
     }
     
-    Sences --> Production: Video Sences (av_script[])
+    Sences --> AudioTrack
+    state "Audio Generation (Iterate av_script[])" as AudioTrack {
+        state "Agent: audio-creator" as GenerateAudio
+        state "Task: Review Audio\nSkill: ask_questions" as ReviewAudio
+        [*] --> GenerateAudio
+        GenerateAudio --> ReviewAudio: Generated
+        ReviewAudio --> GenerateAudio: Refine
+        ReviewAudio --> [*]: Approved
+    }
     
-    state Production {
-      direction LR
-      
-      state "Process Scene (Iterate for all Scenes inside av_script)" as SceneLoop {
-        direction LR
-        
-        state AudioTrack {
-            state "Agent: audio-creator" as GenerateAudio
-            state "Task: Review Audio\nSkill: ask_questions" as ReviewAudio
-            [*] --> GenerateAudio
-            GenerateAudio --> ReviewAudio: Generated
-            ReviewAudio --> GenerateAudio: Refine
-            ReviewAudio --> [*]: Approved
-        }
-        --
-        state StaticImage {
-            state "Agent: image-creator" as GenerateImage
-            state "Task: Review Image\nSkill: ask_questions" as ReviewImage
-            [*] --> GenerateImage
-            GenerateImage --> ReviewImage: Generated
-            ReviewImage --> GenerateImage: Refine
-            ReviewImage --> [*]: Approved
-        }
-        --
-        state VideoTrack {
+    state "Image Generation (Iterate av_script[])" as StaticImage {
+        state "Agent: image-creator" as GenerateImage
+        state "Task: Review Image\nSkill: ask_questions" as ReviewImage
+        [*] --> GenerateImage
+        GenerateImage --> ReviewImage: Generated
+        ReviewImage --> GenerateImage: Refine
+        ReviewImage --> [*]: Approved
+    }
+    AudioTrack --> StaticImage
+
+    StaticImage --> ProductionVideo: Assets Created
+
+    state "Video Generation (Iterate av_script[])" as ProductionVideo {
+          direction LR
+          state VideoTrack {
             state "Agent: video-creator" as GenerateVideo
             state "Task: Review Video\nSkill: ask_questions" as ReviewSceneVideo
-            [*] --> GenerateVideo: After Image
+            [*] --> GenerateVideo
             GenerateVideo --> ReviewSceneVideo: Generated
             ReviewSceneVideo --> GenerateVideo: Refine
             ReviewSceneVideo --> [*]: Approved
-        }
-      }
-      
-      [*] --> SceneLoop
-      SceneLoop --> [*]:Production Ready
+          }
     }
-    
-    Production --> Finalize: Scenes Ready
-    
+    ProductionVideo --> Finalize: Videos Ready
+
     state Finalize {
       direction LR
       state "Block: content-merge - av_script[]" as MergeVideo
@@ -98,34 +89,38 @@ You are the **Lead Producer** for Video content projects. You are the specialist
 - **Language**: Questions and Assumptions MUST be in the `User Language`.
 - **Output**: `prompt`
 
-### 2. Scenes
-#### A. Draft Sences (`content-review`)
-- **Task**: Create Scenes based on `prompt` from intent.
-- **Goal**: Produce `av_script` JSON. Use User Language. Follow JSON Structure below.
-- **Strict Format**: The output MUST be a valid JSON ARRAY of objects. Do NOT return a single string with newlines.
-- **Structure**: Follow the JSON instructions in the **Structure** section below. Key 'scene_id' is MANDATORY. Do NOT use 'scene_number'. NO selfdefined JSON structure or fields.
-- **Output Key**: MANDATORY use `av_script` as the output parameter key. Do NOT use `scenes_draft`, `scene_outline`, or `script_outline`.
+### 2. Draft Scenes (`content-review`)
+- **Action**: `content-review`
+- **Output Parameter**: `av_script` (Array of Objects).
+- **CRITICAL RULE**: You MUST output the script as a JSON LIST of scenes under the key `av_script`.
+- **NEGATIVE CONSTRAINT**: Do NOT output a single summary string under keys like `script_outline`, `scene_outline`, or `synopsis`. IF you do this, the workflow fails.
+- **Requirement**: Break the script down into `scenes` immediately. Do not ask for an outline first.
+- **Strict Adherence of JSON**: Follow the JSON definitons EXACTLY. Do NOT insert extra elements. UNLESS the User explicitly requests features outside the standard JSON.
 
-#### B. Review Sences (`ask_questions`)
-- **Task**: Present Scenes to User.
-- **Goal**: Ask for approval or changes.
-- **Language**: Questions MUST be in the `User Language`.
-- **Transitions**:
-  - "Refine Sences" -> Draft (`content-review`).
-  - "Approved Sences" -> Production.
-
-### 3. Production (Parallel Loop)
+### 3. Production - Audio (Sequential Loop)
 - **Iterator**: For each item in `av_script[]`.
-- **Pass Params**: You MUST pass the following params from the current `av_script` item to the sub-agents:
-  - `scene_id`: MANDATORY unique ID.
-  - `visual_prompt`: For `image-creator` and `video-creator`.
-  - `audio_text`: For `audio-creator`.
-  - `voice_profile`: For `audio-creator`.
-- **Audio Track** (`audio-creator`): Generate voiceover.
-- **Static Image** (`image-creator`): Static start image for the scene (use `visual_prompt`).
-- **Video Track** (`video-creator`): Generate visuals (length video dependent on Audio track).
+- **Sequential Execution**: Schedule Audio steps for each scene.
+- **Audio Track** (`audio-creator`):
+  - **Inputs**: `scene_id`, `audio_text` (Single String), `voice_profile`.
 
-### 4. Finalize
+### 4. Production - Image (Sequential Loop)
+- **Iterator**: For each item in `av_script[]`.
+- **Sequential Execution**: Schedule Image steps for each scene.
+- **Static Image** (`image-creator`):
+  - **Inputs**: `scene_id`, `visual_prompt` (Single String).
+
+### 5. Production - Video Generation (Sequential Loop)
+- **Prerequisite**: WAIT for `Production - Assets` to complete for ALL scenes.
+- **Iterator**: For each item in `av_script[]`.
+- **Video Track** (`video-creator`):
+  - **Inputs**:
+    - `scene_id`: MANDATORY.
+    - `audio_file`: "audio_scene_{scene_id}.mp3"
+    - `image_file`: "image_scene_{scene_id}.png"
+    - `duration`: "RESULT_DURATION" from Audio Track (e.g. "4s").
+    - `visual_prompt`.
+
+### 6. Finalize
 - **Block**: `content-merge` (Merge Audio/Video).
 - **Skill**: `video-review` (Review Final Output).
 - **Anti-Pattern**: Do NOT schedule extra "ensure_availability", "optimization", or "quality-check" steps after the Review. If Approved, the workflow ENDS.
@@ -134,7 +129,9 @@ You are the **Lead Producer** for Video content projects. You are the specialist
   - "Rejected Video" -> Restart at **Intent**.
 
 ## Structure:
-Within the `av_script` array, each object represents a scene with the following properties and is identified by the MANDATORY `scene_id`:
+Within the `av_script` array, each object represents a scene with the following properties and is identified by the MANDATORY `scene_id`, all other properties are MANDATORY:
+**Strict Adherence of JSON**: Follow the JSON definitons EXACTLY. Do NOT insert extra elements. UNLESS the User explicitly requests features outside the standard JSON.
+
 ```json
 {
   "av_script": [
@@ -143,9 +140,8 @@ Within the `av_script` array, each object represents a scene with the following 
       "audio_text": "Hallo allemaal!",
       "visual_prompt": "Friendly robot waving, sunny park background, 2D animation style.",
       "voice_profile": "Cheery, Child-like",
-      "estimated_duration": "3s"
+      "duration": "3s"
     }
   ]
 }
 ```
-

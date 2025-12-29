@@ -236,10 +236,21 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 		}
 	}
 
-	// Ensure all steps have a status
+	// Ensure all steps have a status and normalized params
 	for i := range steps {
 		if steps[i].Status == "" {
 			steps[i].Status = "pending"
+		}
+		// Normalize 'av_script' aliases
+		if steps[i].Params != nil {
+			for _, alias := range []string{"script_outline", "scene_outline", "scenes_draft", "scenes"} {
+				if val, ok := steps[i].Params[alias]; ok {
+					if _, hasAv := steps[i].Params["av_script"]; !hasAv {
+						steps[i].Params["av_script"] = val
+						delete(steps[i].Params, alias)
+					}
+				}
+			}
 		}
 	}
 
@@ -485,6 +496,18 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			AgentID: ps.AgentID,
 			Action:  ps.Action,
 			Params:  ps.Params,
+		}
+
+		// Normalize 'av_script' aliases
+		if s.Params != nil {
+			for _, alias := range []string{"script_outline", "scene_outline", "scenes_draft", "scenes"} {
+				if val, ok := s.Params[alias]; ok {
+					if _, hasAv := s.Params["av_script"]; !hasAv {
+						s.Params["av_script"] = val
+						delete(s.Params, alias)
+					}
+				}
+			}
 		}
 
 		// Resolve Dependencies

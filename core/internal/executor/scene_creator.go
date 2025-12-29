@@ -16,7 +16,10 @@ type SceneCreatorExecutor struct{}
 func (e *SceneCreatorExecutor) CanHandle(action string) bool {
 	action = strings.ToLower(action)
 	// Explicitly exclude the Lead Agent actions (Video Content Creator) to prevent it from running generation simulation
-	if action == "video-content-creator" || action == "draft_scenes" {
+	if action == "video-content-creator" ||
+		action == "draft_scenes" ||
+		action == "draftscenes" ||
+		action == "content-review" {
 		return false
 	}
 	return strings.Contains(action, "video") ||
@@ -59,6 +62,7 @@ func (e *SceneCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	outputChan <- fmt.Sprintf("🎬 [FFmpeg] Assembling Scene %s...", sceneID)
 	time.Sleep(500 * time.Millisecond)
 	outputChan <- fmt.Sprintf("✅ [Scene Creator] Scene %s Complete: %s_scene_final.mp4", sceneID, sceneID)
+	outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s_scene_final.mp4", sceneID)
 
 	return nil
 }

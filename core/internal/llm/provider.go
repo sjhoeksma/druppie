@@ -78,6 +78,15 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				baseURL = pCfg.URL
 			}
 			return &LMStudioProvider{Model: pCfg.Model, BaseURL: baseURL}, nil
+		case "openrouter":
+			model := pCfg.Model
+			if model == "" {
+				model = "google/gemini-2.0-flash-exp:free"
+			}
+			return &OpenRouterProvider{
+				Model:  model,
+				APIKey: pCfg.APIKey,
+			}, nil
 
 		default:
 			return nil, fmt.Errorf("unknown provider type: %s", pCfg.Type)
@@ -539,6 +548,76 @@ func (p *LMStudioProvider) Generate(ctx context.Context, prompt string, systemPr
 }
 
 func (p *LMStudioProvider) Close() error {
+	return nil
+}
+
+// --- OpenRouter Provider ---
+
+type OpenRouterProvider struct {
+	Model  string
+	APIKey string
+}
+
+func (p *OpenRouterProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, error) {
+	url := "https://openrouter.ai/api/v1/chat/completions"
+
+	payload := map[string]interface{}{
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"model":       p.Model,
+		"temperature": 0.7,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if p.APIKey != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.APIKey))
+	}
+	req.Header.Set("HTTP-Referer", "druppie")
+	req.Header.Set("X-Title", "Druppie Core")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("openrouter request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("openrouter error %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// OpenAI format response
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode openrouter response: %w", err)
+	}
+
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("no content from openrouter")
+	}
+
+	return cleanResponse(result.Choices[0].Message.Content), nil
+}
+
+func (p *OpenRouterProvider) Close() error {
 	return nil
 }
 

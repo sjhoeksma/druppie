@@ -3,7 +3,7 @@ llm:
     providers:
       gemini:
         type: gemini
-        model: gemini-1.5-flash
+        model: gemini-2.5-flash
         api_key: ""
         project_id: "" # (string, NOT number)
         client_id: ""
@@ -12,6 +12,10 @@ llm:
         type: ollama
         model: qwen3:8b
         url: http://localhost:11434
+      openrouter:
+        type: openrouter
+        model: google/gemini-2.0-flash-exp:free
+        api_key: ""
     
 server:
     port: "8080"

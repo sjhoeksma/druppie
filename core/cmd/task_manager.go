@@ -217,9 +217,19 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Try Executor Dispatcher first
 					// We need to capture output, so we need a helper or channel bridge
 					outputBridge := make(chan string)
+					var resultBuilder strings.Builder
 					go func() {
 						for msg := range outputBridge {
 							tm.OutputChan <- msg
+							// Capture Results
+							if strings.HasPrefix(msg, "RESULT_") {
+								// Format: RESULT_KEY=VALUE -> KEY: VALUE
+								parts := strings.SplitN(msg, "=", 2)
+								if len(parts) == 2 {
+									key := strings.TrimPrefix(parts[0], "RESULT_")
+									resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
+								}
+							}
 						}
 					}()
 
@@ -243,6 +253,9 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						tm.OutputChan <- fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, execErr)
 					}
 					step.Status = "completed"
+					if res := resultBuilder.String(); res != "" {
+						step.Result = res
+					}
 				}(idx)
 			}
 			execWG.Wait()
@@ -473,13 +486,13 @@ func formatStepParams(params map[string]interface{}) string {
 					// Extract fields safely
 					audio := fmt.Sprintf("%v", scene["audio_text"])
 					visual := fmt.Sprintf("%v", scene["visual_description"])
-					if visual == "<nil>" || visual == "" {
+					if visual == "<nil>" || visual == "Unknown" || visual == "" {
 						visual = fmt.Sprintf("%v", scene["visual_prompt"])
 					}
-					duration := fmt.Sprintf("%v", scene["estimated_duration"])
-					if duration == "<nil>" || duration == "" {
+					duration := fmt.Sprintf("%v", scene["duration"])
+					if duration == "<nil>" || duration == "Unknown" || duration == "" {
 						// Fallback to 'duration' if estimated_duration is missing
-						if d, ok := scene["duration"]; ok {
+						if d, ok := scene["estimated_duration"]; ok {
 							duration = fmt.Sprintf("%v", d)
 						} else {
 							duration = "Unknown"
@@ -496,8 +509,8 @@ func formatStepParams(params map[string]interface{}) string {
 					}
 
 					sb.WriteString(fmt.Sprintf("   🎬 Scene %s [Duration: %s]%s\n", idDisplay, duration, profile))
-					sb.WriteString(fmt.Sprintf("       � Audio:  \"%s\"\n", audio))
-					sb.WriteString(fmt.Sprintf("       �️ Visual: \"%s\"\n\n", visual))
+					sb.WriteString(fmt.Sprintf("       🔈 Audio:  \"%s\"\n", audio))
+					sb.WriteString(fmt.Sprintf("       👁️ Visual: \"%s\"\n\n", visual))
 				}
 			}
 			return sb.String()

@@ -16,8 +16,6 @@ func (e *VideoCreatorExecutor) CanHandle(action string) bool {
 }
 
 func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
-	outputChan <- fmt.Sprintf("🎥 [Video Creator] Processing Scene %d...", step.ID)
-
 	// Extract Scene ID
 	sceneID := fmt.Sprintf("%d", step.ID)
 	if sID, ok := step.Params["scene_id"]; ok {
@@ -26,9 +24,15 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		sceneID = fmt.Sprintf("%v", sID)
 	}
 
+	outputChan <- fmt.Sprintf("🎥 [Video Creator] Processing Scene %s...", sceneID)
+
 	// Extract params
 	visual := ""
 	if v, ok := step.Params["visual_description"]; ok {
+		visual = fmt.Sprintf("%v", v)
+	} else if v, ok := step.Params["visual_prompt"]; ok {
+		visual = fmt.Sprintf("%v", v)
+	} else if v, ok := step.Params["visual_prompts"]; ok {
 		visual = fmt.Sprintf("%v", v)
 	}
 
@@ -44,8 +48,17 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		audioFile = fmt.Sprintf("%v", f)
 	}
 
+	imageFile := ""
+	if f, ok := step.Params["image_file"]; ok {
+		imageFile = fmt.Sprintf("%v", f)
+	}
+
 	outputChan <- fmt.Sprintf("   👀 Visual: \"%s\"", visual)
+	if imageFile != "" {
+		outputChan <- fmt.Sprintf("   🖼️ Starting Image: %s", imageFile)
+	}
 	outputChan <- fmt.Sprintf("   ⏱️ Duration: %s", duration)
+
 	if audioFile != "" {
 		outputChan <- fmt.Sprintf("   🎵 Synced to: %s", audioFile)
 	} else {
@@ -62,6 +75,7 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 
 	filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
 	outputChan <- fmt.Sprintf("✅ [Video Creator] Asset Generated: %s", filename)
+	outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
 
 	return nil
 }

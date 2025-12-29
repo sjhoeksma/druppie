@@ -16,8 +16,6 @@ func (e *AudioCreatorExecutor) CanHandle(action string) bool {
 }
 
 func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
-	outputChan <- fmt.Sprintf("🎙️ [Audio Creator] Processing Scene %d...", step.ID)
-
 	// Extract Scene ID for naming
 	sceneID := fmt.Sprintf("%d", step.ID)
 	if sID, ok := step.Params["scene_id"]; ok {
@@ -26,9 +24,13 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		sceneID = fmt.Sprintf("%v", sID)
 	}
 
+	outputChan <- fmt.Sprintf("🎙️ [Audio Creator] Processing Scene %s...", sceneID)
+
 	// Extract params
 	text := ""
 	if t, ok := step.Params["audio_text"]; ok {
+		text = fmt.Sprintf("%v", t)
+	} else if t, ok := step.Params["audio_texts"]; ok {
 		text = fmt.Sprintf("%v", t)
 	} else if t, ok := step.Params["script_segment"]; ok {
 		text = fmt.Sprintf("%v", t) // Fallback

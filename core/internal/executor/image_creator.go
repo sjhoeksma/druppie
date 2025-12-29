@@ -16,21 +16,27 @@ func (e *ImageCreatorExecutor) CanHandle(action string) bool {
 }
 
 func (e *ImageCreatorExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
-	outputChan <- fmt.Sprintf("🎨 [Image Creator] Processing Scene %d...", step.ID)
-
 	// Extract Scene ID
 	sceneID := fmt.Sprintf("%d", step.ID)
 	if sID, ok := step.Params["scene_id"]; ok {
 		sceneID = fmt.Sprintf("%v", sID)
 	}
 
+	outputChan <- fmt.Sprintf("🎨 [Image Creator] Processing Scene %s...", sceneID)
+
 	// Extract Prompt
 	prompt := ""
 	if p, ok := step.Params["visual_prompt"]; ok {
 		prompt = fmt.Sprintf("%v", p)
+	} else if p, ok := step.Params["visual_prompts"]; ok {
+		prompt = fmt.Sprintf("%v", p)
 	} else if p, ok := step.Params["prompt"]; ok {
 		prompt = fmt.Sprintf("%v", p)
+	} else if p, ok := step.Params["image_prompt"]; ok {
+		prompt = fmt.Sprintf("%v", p)
 	} else if p, ok := step.Params["visual_description"]; ok {
+		prompt = fmt.Sprintf("%v", p)
+	} else { // Generic fallback
 		prompt = fmt.Sprintf("%v", p)
 	}
 

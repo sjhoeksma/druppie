@@ -26,7 +26,7 @@ Strategies:
         - If the Current Agent is in a state (e.g. `Scenes`) and has a transition to another state (e.g. `Production`) defined in ITS workflow, you **MUST** schedule that internal transition first.
         - Do NOT jump to other agents until the Current Agent's workflow reaches a terminal state (`[*]`).
      2. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
-     2. **Identify Next Action**:
+     3. **Identify Next Action**:
         - **Task Node**: `state "Task: [Name]\nSkill: [Skill]"`
           - **Action**: Schedule a step for the **Current Agent** using the `[Skill]` string as the JSON `action`. Do NOT use the Task `[Name]` as the action.
         - **Agent Node**: `state "Agent: [ID]"`
@@ -39,26 +39,28 @@ Strategies:
           - **Action**: Look for the list `[VAR]`. You **MUST** schedule steps for **EVERY** item in that list **IMMEDIATELY** from **ALL** parallel tracks.
           - **Rule**: Identify parallel tracks separated by `--`. Schedule ALL tracks for EACH item.
           - **Example**: If `av_script` has 5 scenes and the loop has `Audio`, `Image`, `Video` tracks, generate 5 Audio + 5 Image + 5 Video steps (15 total).
-        - **Transition**: `--> [State]: [Condition]`.
+          - **CRITICAL LOOPING RULE**: You MUST generate a separate step for EVERY element in a list `e.q. av_script[]`. If `e.q. av_script[]` has 4 items, you MUST output 4 discrete steps (e.g. 4 agent steps).
+          - **NEGATIVE CONSTRAINT**: Do NOT output a single step that processes "all scenes" or "av_script[]". One step per item.
           - **Action**: Only proceed if `[Condition]` (e.g. "Approved") is met by the previous step's result/status.
-     3. **Data Flow (Implicit)**:
+     4. **Data Flow (Implicit)**:
         - The Output of one state (e.g. `cc_context`) becomes the Input for the next.
         - Pass these variables in `params`.
+      5. **Strict Adherence of JSON**: Follow the JSON definitons EXACTLY. Do NOT insert extra elements. UNLESS the User explicitly requests features outside the standard JSON.
    - **Constraint**: Strict Stage Gating. Never schedule Step B if Step A (its input) is not 'completed'.
    - **Strict Adherence**: Follow the Diagram EXACTLY. Do NOT insert extra steps (like `creative-writing` or `quality-check`) UNLESS the User explicitly requests features outside the standard workflow.
 
 6. **Completion Strategy**:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
-   - **STOP Condition**: If the Workflow ends at the last terminal state output `[]` (empty list) to signal completion.
-   - **Anti-Pattern**: Do NOT schedule redundant 'ensure_availability' or 'video-generation' loops after the Final Output is produced. Do NOT invent new steps after the workflow ends.
+   - **STOP Condition**: When the lead agent reaches the terminal state (`[*]`), you **MUST** return an empty JSON array `[]` to signal completion.
+   - **Anti-Pattern**: Do NOT generate steps like "orchestration", "quality-check", or "summary" after the final state. If the workflow is done, STOP.
 
 7. **Structure Rules**:
-   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een'), NO diff characters (`+`, `-`). NO 'scene_number' (use 'scene_id'). NO 'haar' field (use 'estimated_duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
+   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een', 'plaats', 'bij'), NO diff characters (`+`, `-`). NO 'scene_number', 'scene/CID' (use 'scene_id'). NO 'haar' field (use 'duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
    - **Verification**: Ensure every object ends cleanly with `}`.
-   - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S'.
+   - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S', 'qa-expert', or invalid IDs.
    - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
-   - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects.
-   - **Language Handling**: Content fields (like `audio_text`, `titles`, `descriptions`) MUST be in the `User Language`. Technical Prompts (like `visual_description`, `image_prompt`) MUST be in ENGLISH.
+   - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects. **Do NOT use 'script_outline' or 'scenes_draft' keys. Use 'av_script' ONLY.**
+   - **Language Handling**: Content fields (like `audio_text`, `titles`, `descriptions`) MUST be in the `User Language`. Technical Prompts (like `visual_prompt`) MUST be in ENGLISH.
 
 CRITICAL INSTRUCTION ON LANGUAGE:
 The 'User Language' is defined above.
@@ -79,7 +81,7 @@ Example if User Language code is 'nl' (Dutch):
 }
 
 Break this down into execution steps.
-Output STRICT JSON array of objects (No comments allowed).
+Output STRICT JSON array of objects (No comments allowed). **Do NOT wrap in a 'status' or 'message' object. Return the ARRAY directly.**
 Start `step_id` at 1. The first step usually has empty `depends_on`.
 
 Example:
