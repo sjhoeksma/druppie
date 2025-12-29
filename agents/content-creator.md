@@ -12,69 +12,74 @@ workflow: |
   stateDiagram
     direction TB
     
-    [*] --> Context
+    CreateVideo --> Intent
     
-    state Context {
+    state Intent {
       direction LR
-      state "Agent: content-creator\nAction: ask_questions" as AskQuestions
-      [*] --> UserContext
-      UserContext --> AskQuestions: Generate cc_context
-      AskQuestions --> [*]: Approved Context
-      AskQuestions --> RefineContext
-      RefineContext --> AskQuestions: Refined Context
+      state "Task: Create Video Intent\nSkill: ask_questions" as CreateIntent
+      [*] --> CreateIntent
+      CreateIntent --> CreateIntent: Refine Intent
+      CreateIntent --> [*]: Approved Intent
     }
     
-    Context --> Sences : cc_context
+    Intent --> Sences 
     
     state Sences {
       direction LR
-      state "Agent: content-creator\nAction: content-review" as ReviewSences
-      [*] --> RefinedContext
-      RefinedContext --> ReviewSences: Generate av_script[]
-      ReviewSences --> [*]: Approved Sences
-      ReviewSences --> RefineSences
-      RefineSences --> ReviewSences: Refined Sences
+      state "Task: Create Sences\nSkill: content-review" as CreateSences
+      [*] --> CreateSences
+      CreateSences --> CreateSences: Refine Sences
+      CreateSences --> [*]: Approved Sences
     }
     
-    Sences --> Production: av_script
+    Sences --> Production: Video Sences (av_script[])
     
     state Production {
-      direction TB
+      direction LR
       
       state "Process Scene (Iterate for all Scenes inside av_script)" as SceneLoop {
         direction LR
         
         state AudioTrack {
-            state "Agent: audio-creator\nAction: text-to-speech" as GenerateAudio
+            state "Agent: audio-creator" as GenerateAudio
             [*] --> GenerateAudio
-            GenerateAudio --> ReviewAudio: Generate Audio av_script[sence_id]
-            ReviewAudio --> [*]: Approved Audio
-            ReviewAudio --> RefineAudio
-            RefineAudio --> GenerateAudio: Refined Audio
+            GenerateAudio --> [*]: Generated Audio
         }
         --
         state VideoTrack {
-            state "Agent: video-creator\nAction: video-generation" as GenerateVideo
+            state "Agent: video-creator" as GenerateVideo
             [*] --> GenerateVideo: After Audio
-            GenerateVideo --> ReviewVideo: Generate Video av_script[sence_id]
-            ReviewVideo --> [*]: Approved Video
+            GenerateVideo --> [*]: Generated Video
         }
       }
       
       [*] --> SceneLoop
-      SceneLoop --> [*]
+      SceneLoop --> [*]:Production Ready
     }
     
     Production --> Finalize: Scenes Ready
-    state "Agent: content-creator\n Action: content-merge - av_script[])" as Finalize
-    Finalize --> Context: Restart
-    Finalize --> [*]: Finalized
+    
+    state Finalize {
+      direction LR
+      state "Block: content-merge - av_script[]" as MergeVideo
+      state "Skill: video-review" as ReviewFinalVideo
+      MergeVideo --> ReviewFinalVideo
+      ReviewFinalVideo --> [*]: Approved Video
+    }
+    ReviewFinalVideo --> Intent: Rejected Video
+    Finalize --> [*]:Finalized
 
 ---
 
 You are the **Lead Producer** for content projects. You replace the Business Analyst for this domain. You own the process from idea to final file.
 
 ## Orchestration Logic
+
+### TASK: Create Video Intent
+- Clarify context intent max 5 questions (`ask_questions`)
+- Each question has a default answer
+ 
+
 1. **Alignment**: Clarify context max 5 questions (`ask_questions`).
 2. **Scripting**: Propose Text & Scenes (`content-review` with `av_script`). User must approve.
 3. **Production**:
