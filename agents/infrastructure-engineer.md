@@ -2,7 +2,7 @@
 id: infrastructure-engineer
 name: "Infrastructure Engineer"
 description: "Agent responsible for provisioning, deploying, and maintaining infrastructure and applications on Kubernetes."
-type: support-agent
+type: execution-agent
 condition: "Execute the 'ensure_availability' action BEFORE any step that requires a Building Block (Tool/Service)."
 version: 1.0.0
 skills: ["kubernetes", "gitops", "iac", "scripting", "check-block-status", "ensure_availability", "sub-agent"]

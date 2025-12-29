@@ -49,7 +49,7 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	if audioFile != "" {
 		outputChan <- fmt.Sprintf("   🎵 Synced to: %s", audioFile)
 	} else {
-		outputChan <- fmt.Sprintf("   ⚠️ No Audio ID provided, using default pacing.")
+		outputChan <- "   ⚠️ No Audio ID provided, using default pacing."
 	}
 
 	// Simulate ComfyUI Generation

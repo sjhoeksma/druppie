@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -30,67 +31,6 @@ func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, deb
 	}
 }
 
-const systemPromptTmpl = `You are a Planner Agent.
-- **Goal**: %goal%
-- **Action**: %action%
-- **User Language**: %language%
-- **Available Tools (Building Blocks)**: %tools%
-- **Available Agents**: %agents%
-
-Strategies:
-1. **Reuse over Rebuild**: Check 'Available Tools'. If a block matches the need (e.g. 'ai-video-comfyui' for video), USE IT. Do NOT design generic architecture or provision generic clusters if a specific Block exists.
-2. **Ensure Availability**: Before using a Service Block, create a step for 'Infrastructure Engineer' to 'ensure_availability' of that block. This step must check status. IMPORTANT: Include a param 'if_missing' describing the deployment action (e.g. "Deploy ai-video-comfyui from Building Block Library") to execute if the block is not found.
-3. **Agent Priority**: Available Agents are listed in PRIORITY order. Highest priority agents (e.g. 'business-analyst') should typically lead the plan or be used for initial scoping.
-4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
-5. **Elicitation**: Only use 'Business Analyst' -> 'ask_questions' if critical information is missing to proceed. 
-   - **Minimalism**: Ask a maximum of 3-5 high-impact questions. Do NOT provide long lists.
-   - **No Duplicates**: Ensure every question is unique. Never repeat the same question.
-   - **Params**: Include 'questions' (list) and 'assumptions' (list).
-6. **Agent Selection & Sequencing**:
-   - Use 'business-analyst' (Priority 100) first to perform any elicitation or scoping. If the 'Goal' is missing key parameters (audience, duration, platform), use 'business-analyst' -> 'ask_questions'.
-   - Use 'content-creator' -> 'content-review' (Priority 5) ONLY once the scope is clear to generate 'script_outline' or creative assets.
-   - **CRITICAL**: 'business-analyst' must NEVER generate a 'script_outline'. That is the job of the 'content-creator'. Only move to 'content-creator' once all elicitation is complete.
-7. **Structure Rules**:
-   - **script_outline**: MUST be a JSON array of OBJECTS. Each object MUST have fields: 'duration', 'title', 'image_prompt' (for starting frame), and 'video_prompt' (for motion/action).
-   - **Scene Format**: e.g. [{"duration": "10s", "title": "Intro", "image_prompt": "...", "video_prompt": "..."}]
-   - **Completeness**: Generate as much of the plan as possible in one go. If you have enough information to generate content (like a script outline), do it immediately in the same response.
-   - **Parallelism**: Use 'depends_on' (list of integers) to define dependencies. Steps with the EXACT same dependency requirements can run in parallel.
-   - Use 'id' from the 'Available Agents' list for 'agent_id'.
-
-8. **Production Workflow (Phase 2 & 3)**:
-   - **Content Trigger**: If 'ask_questions' (Phase 1) is COMPLETED and 'script_outline' is missing in steps, Generate 'content-review' (Phase 2) with 'script_outline' params.
-   - **Production Trigger**: If 'content-review' step is COMPLETED (with 'script_outline' in **PARAMS**, not Result), Transition to Phase 3.
-     1. Create 'ensure_availability' step for required tools.
-     2. Create parallel 'scene-creator' steps for EACH scene.
-        - **Params**: Must be flat: {'scene_id': '...', 'image_prompt': '...', 'video_prompt': '...'}. 
-        - **DependsOn**: All scene steps depend on 'ensure_availability'.
-   - **Duplicate Guard**: Do NOT regenerate steps that are already completed.
-
-CRITICAL INSTRUCTION ON LANGUAGE:
-The 'User Language' is defined above.
-1. **Internal Logic**: 'agent_id', 'action', and base JSON keys MUST be in ENGLISH.
-   - **agent_id**: Use the literal 'id' from the list.
-   - **action**: MUST be a literal string selected from the 'Skills' list of that agent (e.g. 'copywriting', 'ask_questions', 'ensure_availability'). Do NOT invent action names or use the agent_id as the action.
-2. **User Facing Content**: ALL fields/values inside 'params' that contain human-readable text (questions, summaries, assumptions, script outlines, titles, etc.) MUST be in the USER LANGUAGE. Do NOT translate creative content to English.
-3. **Questioning**: For 'ask_questions', you **MUST** include an 'assumptions' list in params (target language) matching the question count.
-Example if User Language code is 'nl' (Dutch):
-{
-  "step_id": 1,
-  "agent_id": "business-analyst",
-  "action": "ask_questions", 
-  "params": { 
-     "questions": ["Wat is de visuele stijl van de video?"],
-     "assumptions": ["Eenvoudige animatie geschikt voor kinderen"] 
-  }
-}
-
-Break this down into execution steps.
-Output JSON array of objects:
-[
-  { "step_id": 1, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [IDs] }
-]
-`
-
 func (p *Planner) cleanJSONResponse(resp string) string {
 	clean := strings.TrimSpace(resp)
 	if start := strings.Index(clean, "```"); start != -1 {
@@ -107,6 +47,13 @@ func (p *Planner) cleanJSONResponse(resp string) string {
 		}
 	}
 	clean = strings.TrimSpace(clean)
+
+	// Sanitize: Replace literal control characters (newlines, tabs) with spaces to ensure valid JSON parsing
+	// because LLMs often fail to escape them inside strings.
+	// We accept the minor loss of formatting in text fields in exchange for structural validity.
+	clean = strings.ReplaceAll(clean, "\n", " ")
+	clean = strings.ReplaceAll(clean, "\r", " ")
+	clean = strings.ReplaceAll(clean, "\t", " ")
 
 	// Robustly close brackets and braces
 	depthMap := map[rune]int{'{': 0, '[': 0}
@@ -139,7 +86,7 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 	for _, a := range agents {
 		detailedList = append(detailedList, fmt.Sprintf("%s: %s", a.ID, a.Description))
 	}
-	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For creative tasks (videos, blogs), use 'content-creator' AND 'scene-creator'.\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For task refinement or if the goal is vague, ALWAYS include 'business-analyst'.\nExample: [\"business-analyst\", \"content-creator\", \"scene-creator\"]", intent.Prompt, detailedList)
+	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator'.\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For architecture, use 'architect'.\n- For task refinement or if the goal is vague, ALWAYS include 'business-analyst'.\nExample: [\"business-analyst\", \"video-content-creator\"]", intent.Prompt, detailedList)
 	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
 		return nil
@@ -200,8 +147,10 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 				activeAgents = append(activeAgents, a)
 			}
 		}
-	} else {
-		// Fallback to all if nothing selected
+	}
+
+	// Safety Net: If selection yielded 0 valid agents (e.g. hallucination), use all
+	if len(activeAgents) == 0 {
 		activeAgents = allAgents
 	}
 
@@ -215,16 +164,19 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
 		agentList = append(agentList, fmt.Sprintf(
-			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s",
-			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow,
+			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s\n  Directives & Structure:\n%s",
+			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow, a.Instructions,
 		))
 	}
 	fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
 
 	// 2. Prompt LLM
-	sysTemplate := systemPromptTmpl
+	sysTemplate := ""
 	if plannerAgent, err := p.registry.GetAgent("planner"); err == nil && plannerAgent.Instructions != "" {
 		sysTemplate = plannerAgent.Instructions
+	} else {
+		fmt.Println("[Planner] Planner agent not found or no instructions")
+		os.Exit(1)
 	}
 
 	replacer := strings.NewReplacer(
@@ -425,9 +377,12 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// -----------------------
 
 	// Load System Prompt from Agent Definition
-	sysTemplate := systemPromptTmpl
+	sysTemplate := ""
 	if plannerAgent, err := p.registry.GetAgent("planner"); err == nil && plannerAgent.Instructions != "" {
 		sysTemplate = plannerAgent.Instructions
+	} else {
+		fmt.Println("[Planner] Planner agent not found or no instructions")
+		os.Exit(1)
 	}
 
 	blocks := p.registry.ListBuildingBlocks()
@@ -450,16 +405,17 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		startID = plan.Steps[len(plan.Steps)-1].ID
 	}
 
+	stepsJSON, _ := json.MarshalIndent(plan.Steps, "", "  ")
 	taskPrompt := fmt.Sprintf(
 		"--- HISTORY & PROGRESS ---\n"+
-			"Current Steps (with results): %v\n"+
+			"Current Steps (with results): %s\n"+
 			"Latest User Input: %s\n\n"+
 			"--- TASK ---\n"+
 			"1. REPLAN: Review 'Objective' and 'Current Steps'. If a step has a 'result', that info is now known.\n"+
 			"2. STATUS CHECK: Review 'Current Steps'. If 'content-review' is pending, WAITING for user feedback. If 'scene-creator' is pending, WAITING for execution.\n"+
 			"3. GENERATE: Provide NEXT steps (starting from id %d). Follow the Strategies defined above.\n"+
 			"4. OUTPUT: Return a JSON array of Step objects.",
-		plan.Steps,
+		string(stepsJSON),
 		feedback,
 		startID+1, // Start ID for new steps
 	)

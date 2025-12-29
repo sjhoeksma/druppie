@@ -277,7 +277,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 		// Send prompt to OutputChan
 		if activeStep.Action == "ask_questions" {
-			tm.OutputChan <- fmt.Sprintf("\n[%s] Input required: %s", task.ID, activeStep.Action)
+			tm.OutputChan <- fmt.Sprintf("[%s] [%s] Input required: %s", task.ID, activeStep.AgentID, activeStep.Action)
 
 			// Format questions
 			var assumptions []interface{}
@@ -373,7 +373,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 
 			// Standard update
-			tm.OutputChan <- fmt.Sprintf("[%s] Determining next steps...", task.ID)
+			tm.OutputChan <- fmt.Sprintf("[%s] [Planner] Determining next steps...", task.ID)
 			updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, answer)
 			if err != nil {
 				tm.OutputChan <- fmt.Sprintf("[%s] Error updating: %v", task.ID, err)
@@ -419,25 +419,25 @@ func (tm *TaskManager) executeSceneCreation(ctx context.Context, step *model.Ste
 
 	if strings.Contains(action, "image") {
 		// Simulate SDXL Image Generation
-		tm.OutputChan <- fmt.Sprintf("🖼️ [SDXL] Generating Image Asset: %v", step.Params)
+		tm.OutputChan <- fmt.Sprintf("🖼️ [SDXL] (%s) Generating Image Asset: %v", step.AgentID, step.Params)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(2 * time.Second):
 		}
-		tm.OutputChan <- fmt.Sprintf("✅ [SDXL] Image generated: %d_asset.png", step.ID)
+		tm.OutputChan <- fmt.Sprintf("✅ [SDXL] (%s) Image generated: %d_asset.png", step.AgentID, step.ID)
 		return nil
 	}
 
 	if strings.Contains(action, "speech") || strings.Contains(action, "tts") || strings.Contains(action, "voice") {
 		// Simulate TTS
-		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] Generating Voiceover: %v", step.Params)
+		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] (%s) Generating Voiceover: %v", step.AgentID, step.Params)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(1 * time.Second):
 		}
-		tm.OutputChan <- fmt.Sprintf("✅ [TTS] Audio generated: %d_voice.mp3", step.ID)
+		tm.OutputChan <- fmt.Sprintf("✅ [TTS] (%s) Audio generated: %d_voice.mp3", step.AgentID, step.ID)
 		return nil
 	}
 

@@ -21,28 +21,40 @@ Strategies:
 4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
 5. **Workflow-Driven Execution (MANDATORY)**:
    - **Check**: IF an Agent has a `Workflow` (Mermaid diagram), YOU MUST EXECUTE IT.
-   - **General Interpretation Rules**:
-     1. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
+   - **Interpretation Rules**:
+     1. **Priority Check**: Before looking for NEW agents, check the **Current Agent's Workflow**.
+        - If the Current Agent is in a state (e.g. `Scenes`) and has a transition to another state (e.g. `Production`) defined in ITS workflow, you **MUST** schedule that internal transition first.
+        - Do NOT jump to other agents until the Current Agent's workflow reaches a terminal state (`[*]`).
+     2. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
      2. **Identify Next Action**:
+        - **Task Node**: `state "Task: [Name]\nSkill: [Skill]"`
+          - **Action**: Schedule a step for the **Current Agent** using `[Skill]`.
+        - **Agent Node**: `state "Agent: [ID]"`
+          - **Action**: Schedule a step for Sub-Agent `[ID]`. Look up their default skill/action or context.
+        - **Block Node**: `state "Block: [Name]"`
+          - **Action**: Treat this as a Tool/Function call. Schedule a step for the **Current Agent** (or 'infrastructure-engineer' if setup needed) to invoke the tool `[Name]`.
         - **Standard Node**: `state "Agent: [ID]\nAction: [Skill]"`.
-          - **Action**: Schedule a step for `[ID]` using `[Skill]`.
+          - **Action**: Schedule a step for Agent `[ID]` using Skill `[Skill]`.
         - **Batch Node**: `state "(Iterate ... [VAR])"`.
-          - **Action**: Look for a context variable matching `[VAR]` (e.g. from previous output). Creates steps for **EACH** item.
+          - **Action**: Look for the list `[VAR]`. You **MUST** schedule steps for **EVERY** item in that list **IMMEDIATELY** from **ALL** parallel tracks.
+          - **Rule**: Identify parallel tracks separated by `--`. Schedule ALL tracks for EACH item.
+          - **Example**: If `av_script` has 5 scenes and the loop has `Audio`, `Image`, `Video` tracks, generate 5 Audio + 5 Image + 5 Video steps (15 total).
         - **Transition**: `--> [State]: [Condition]`.
           - **Action**: Only proceed if `[Condition]` (e.g. "Approved") is met by the previous step's result/status.
      3. **Data Flow (Implicit)**:
         - The Output of one state (e.g. `cc_context`) becomes the Input for the next.
         - Pass these variables in `params`.
-   - **Fallback**: If no Workflow, use Dependency-Driven Execution (check Prerequisites -> Schedule).
-   - **Batching**: If an agent needs to process a list (e.g. Scenes), generate a step for EACH item.
    - **Constraint**: Strict Stage Gating. Never schedule Step B if Step A (its input) is not 'completed'.
+   - **Strict Adherence**: Follow the Diagram EXACTLY. Do NOT insert extra steps (like `creative-writing` or `quality-check`) UNLESS the User explicitly requests features outside the standard workflow.
 
 6. **Completion Strategy**:
-   - The plan is complete when NO further agents can be triggered (all conditions met or dependencies exhausted).
-   - **Anti-Pattern**: Do NOT schedule 'confirmation' or 'wrap-up' steps unless explicitly required by an Agent's condition.
+   - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
+   - **STOP Condition**: If the Workflow ends at the last terminal state output `[]` (empty list) to signal completion.
+   - **Anti-Pattern**: Do NOT schedule redundant 'ensure_availability' or 'video-generation' loops after the Final Output is produced. Do NOT invent new steps after the workflow ends.
 
 7. **Structure Rules**:
-   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments (`//`), no trailing commas.
+   - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt'), NO diff characters (`+`, `-`). **ALL KEYS MUST BE DOUBLE QUOTED**.
+   - **Verification**: Ensure every object ends cleanly with `}`.
    - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S'.
    - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
    - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects.

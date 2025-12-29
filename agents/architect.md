@@ -2,7 +2,7 @@
 id: architect
 name: "Architect"
 description: "Primary architecture agent"
-type: agent
+type: spec-agent
 version: 1.0.0
 skills: ["mermaid", "main-agent", "architectural-design"]
 subagents: ["business-analyst", "data-scientist", "tester"] 
