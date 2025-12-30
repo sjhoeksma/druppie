@@ -10,6 +10,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
+	"github.com/sjhoeksma/druppie/core/internal/workflows"
 )
 
 // TaskStatus definition
@@ -25,12 +26,13 @@ const (
 
 // TaskManager manages active planning tasks
 type TaskManager struct {
-	mu           sync.Mutex
-	tasks        map[string]*Task
-	planner      *planner.Planner
-	OutputChan   chan string // Channel to send logs/output to the main CLI loop
-	TaskDoneChan chan string // Signals when a task is fully complete
-	dispatcher   *executor.Dispatcher
+	mu              sync.Mutex
+	tasks           map[string]*Task
+	planner         *planner.Planner
+	OutputChan      chan string // Channel to send logs/output to the main CLI loop
+	TaskDoneChan    chan string // Signals when a task is fully complete
+	dispatcher      *executor.Dispatcher
+	workflowManager *workflows.Manager
 }
 
 type Task struct {
@@ -43,13 +45,15 @@ type Task struct {
 }
 
 func NewTaskManager(p *planner.Planner) *TaskManager {
-	return &TaskManager{
-		tasks:        make(map[string]*Task),
-		planner:      p,
-		OutputChan:   make(chan string, 100),
-		TaskDoneChan: make(chan string, 10),
-		dispatcher:   executor.NewDispatcher(),
+	tm := &TaskManager{
+		tasks:           make(map[string]*Task),
+		planner:         p,
+		OutputChan:      make(chan string, 100),
+		TaskDoneChan:    make(chan string, 10),
+		dispatcher:      executor.NewDispatcher(),
+		workflowManager: workflows.NewManager(),
 	}
+	return tm
 }
 
 // StartTask creates a background task for a given plan and starts the execution loop
@@ -118,6 +122,46 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 	}()
 
 	task.Status = TaskStatusRunning
+
+	// --- INTERCEPTION: NATIVE WORKFLOW ENGINE ---
+	if len(task.Plan.SelectedAgents) > 0 {
+		agentID := task.Plan.SelectedAgents[0]
+		if wf, ok := tm.workflowManager.GetWorkflow(agentID); ok {
+			tm.OutputChan <- fmt.Sprintf("🚀 [Task Manager] Switching to Native Workflow Engine for agent: %s", agentID)
+
+			// Build Context
+			wc := &workflows.WorkflowContext{
+				Ctx:        task.Ctx,
+				LLM:        tm.planner.GetLLM(),
+				Dispatcher: tm.dispatcher,
+				OutputChan: tm.OutputChan,
+				InputChan:  task.InputChan,
+				UpdateStatus: func(status string) {
+					tm.mu.Lock()
+					defer tm.mu.Unlock()
+					switch status {
+					case "Waiting Input":
+						task.Status = TaskStatusWaitingInput
+					case "Running":
+						task.Status = TaskStatusRunning
+					default:
+						task.Status = TaskStatusRunning
+					}
+				},
+			}
+
+			// Execute
+			err := wf.Run(wc, task.Plan.Intent.Prompt)
+			if err != nil {
+				tm.OutputChan <- fmt.Sprintf("❌ [Workflow] Execution failed: %v", err)
+				task.Status = TaskStatusError
+			} else {
+				tm.OutputChan <- fmt.Sprintf("✅ [Workflow] Execution completed successfully.")
+			}
+			return // STOP HERE, DO NOT PROCEED TO JSON PLAN EXECUTOR
+		}
+	}
+	// --------------------------------------------
 
 	// Inner loop state
 	// In the original main.go, this loop continuously checks plan.Steps

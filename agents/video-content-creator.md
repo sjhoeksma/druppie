@@ -6,6 +6,7 @@ type: spec-agent
 sub_agents: ["audio-creator", "video-creator", "image-creator"]
 condition: "Run to orchestrate the entire video creation workflow (Refinement -> Script -> Audio -> Video)."
 version: 2.1.0
+native: true
 skills: ["ask_questions", "content-review", "expand_loop", "video-review", "image-review", "audio-review"]
 priority: 100.0
 workflow: |

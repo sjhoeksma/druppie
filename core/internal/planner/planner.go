@@ -22,6 +22,10 @@ type Planner struct {
 	Debug    bool
 }
 
+func (p *Planner) GetLLM() llm.Provider {
+	return p.llm
+}
+
 func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, debug bool) *Planner {
 	return &Planner{
 		llm:      llm,

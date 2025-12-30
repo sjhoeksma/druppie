@@ -3,6 +3,7 @@ id: planner
 name: "Planner"
 type: system-agent
 description: "System agent responsible for breaking down user goals into actionable plans."
+native: true
 version: 1.0.0
 priority: 1000.0
 ---
