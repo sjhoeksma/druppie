@@ -145,7 +145,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				for {
 					select {
 					case msg := <-tm.OutputChan:
-						fmt.Println(msg) // Print to console
+						// fmt.Println(msg) // Silence console output
 
 						// Extract Plan ID roughly
 						var planID string
