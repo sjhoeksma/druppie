@@ -35,12 +35,12 @@ Strategies:
           - **Action**: Treat this as a Tool/Function call. Schedule a step for the **Current Agent** (or 'infrastructure-engineer' if setup needed) to invoke the tool `[Name]`.
         - **Standard Node**: `state "Agent: [ID]\nAction: [Skill]"`.
           - **Action**: Schedule a step for Agent `[ID]` using Skill `[Skill]`.
-        - **Batch Node**: `state "(Iterate ... [VAR])"`.
-          - **Action**: Look for the list `[VAR]`. You **MUST** schedule steps for **EVERY** item in that list **IMMEDIATELY** from **ALL** parallel tracks.
-          - **Rule**: Identify parallel tracks separated by `--`. Schedule ALL tracks for EACH item.
-          - **Example**: If `av_script` has 5 scenes and the loop has `Audio`, `Image`, `Video` tracks, generate 5 Audio + 5 Image + 5 Video steps (15 total).
-          - **CRITICAL LOOPING RULE**: You MUST generate a separate step for EVERY element in a list `e.q. av_script[]`. If `e.q. av_script[]` has 4 items, you MUST output 4 discrete steps (e.g. 4 agent steps).
-          - **NEGATIVE CONSTRAINT**: Do NOT output a single step that processes "all scenes" or "av_script[]". One step per item.
+        - **Expansion Node**: `state "...(EXPAND [VAR])..."`.
+          - **Action**: You **MUST** UNROLL the loop. Look for the list `[VAR]` in params.
+          - **Rule**: Generate **N separate steps** (one for each item in the list) **IMMEDIATELY**.
+          - **Example**: If `av_script` has 5 scenes, you MUST output 5 discrete steps (e.g. 5 Audio tasks).
+          - **CRITICAL**: Do NOT generate a single step that "processes all". You MUST generate individual steps: `Step A (Scene 1)`, `Step B (Scene 2)`, etc.
+          - **NEGATIVE CONSTRAINT**: Forbidden to output a single step for the whole list. One step per item.
           - **Action**: Only proceed if `[Condition]` (e.g. "Approved") is met by the previous step's result/status.
      4. **Data Flow (Implicit)**:
         - The Output of one state (e.g. `cc_context`) becomes the Input for the next.

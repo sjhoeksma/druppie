@@ -267,7 +267,9 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	if p.Store != nil {
 		_ = p.Store.SavePlan(plan)
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")
-		_ = p.Store.LogInteraction(plan.ID, "Planner Create", sysPrompt, resp+"\n\nRESULTING PLAN:\n"+string(planJSON))
+		_ = p.Store.LogInteraction(plan.ID, "Planner Create",
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", sysPrompt),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
 	}
 
 	return plan, nil
@@ -600,7 +602,9 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	if p.Store != nil {
 		_ = p.Store.SavePlan(*plan)
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")
-		_ = p.Store.LogInteraction(plan.ID, "Planner Update", fullPrompt, resp+"\n\nRESULTING PLAN:\n"+string(planJSON))
+		_ = p.Store.LogInteraction(plan.ID, fmt.Sprintf("Planner Update (Step %d)", startID+1),
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", fullPrompt),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
 	}
 
 	return plan, nil

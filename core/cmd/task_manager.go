@@ -216,9 +216,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Execute Step Logic
 					// Try Executor Dispatcher first
 					// We need to capture output, so we need a helper or channel bridge
+					// We need to capture output, so we need a helper or channel bridge
 					outputBridge := make(chan string)
 					var resultBuilder strings.Builder
+					var msgWG sync.WaitGroup
+
+					msgWG.Add(1)
 					go func() {
+						defer msgWG.Done()
 						for msg := range outputBridge {
 							tm.OutputChan <- msg
 							// Capture Results
@@ -236,7 +241,6 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Try matching by AgentID first (e.g. "audio-creator")
 					exec, err := tm.dispatcher.GetExecutor(step.AgentID)
 					if err != nil {
-						// Try matching by Action (e.g. "text-to-speech")
 						exec, err = tm.dispatcher.GetExecutor(step.Action)
 					}
 
@@ -244,10 +248,10 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					if err == nil {
 						execErr = exec.Execute(task.Ctx, *step, outputBridge)
 					} else {
-						// Fallback to legacy
 						execErr = tm.executeStep(task.Ctx, step)
 					}
 					close(outputBridge)
+					msgWG.Wait() // Wait for all logs to be processed
 
 					if execErr != nil {
 						tm.OutputChan <- fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, execErr)
