@@ -9,7 +9,7 @@ Since Druppie Core includes the UI and depends on project root context, you must
 
 ```bash
 cd ..
-docker build -t druppie-core -f core/Dockerfile .
+docker build -t druppie-core .
 ```
 
 ### Local CLI
@@ -74,7 +74,7 @@ If you’ve made changes to the code or UI and want to update your running `drup
 
 1.  **Rebuild the Image**:
     ```bash
-    docker build -t druppie-core -f core/Dockerfile .
+    docker build -t druppie-core .
     ```
 
 2.  **Stop & Remove Old Container**:
