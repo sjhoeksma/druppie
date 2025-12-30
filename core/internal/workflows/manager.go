@@ -5,6 +5,8 @@ import (
 
 	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
+	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/store"
 )
 
 // WorkflowContext carries the dependencies needed by a workflow
@@ -12,9 +14,12 @@ type WorkflowContext struct {
 	Ctx          context.Context
 	LLM          llm.Provider
 	Dispatcher   *executor.Dispatcher
+	Store        store.Store
+	PlanID       string
 	OutputChan   chan<- string
 	InputChan    <-chan string
-	UpdateStatus func(status string) // Callback to update task status (e.g. "Waiting Input")
+	UpdateStatus func(status string)
+	AppendStep   func(step model.Step) // Callback to add a executed step to the plan log
 }
 
 // Workflow defines the interface for a hard-coded process

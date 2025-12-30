@@ -134,6 +134,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				Ctx:        task.Ctx,
 				LLM:        tm.planner.GetLLM(),
 				Dispatcher: tm.dispatcher,
+				Store:      tm.planner.Store,
+				PlanID:     task.ID,
 				OutputChan: tm.OutputChan,
 				InputChan:  task.InputChan,
 				UpdateStatus: func(status string) {
@@ -148,6 +150,36 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						task.Status = TaskStatusRunning
 					}
 				},
+				AppendStep: func(s model.Step) {
+					tm.mu.Lock()
+					defer tm.mu.Unlock()
+
+					// Retrieve current plan to ensure we don't overwrite concurrency (though simpler here)
+					storedPlan, err := tm.planner.Store.GetPlan(task.ID)
+					if err != nil {
+						tm.OutputChan <- fmt.Sprintf("⚠️ [TaskManager] Failed to sync plan update: %v", err)
+						return
+					}
+
+					// Auto-increment ID if not set
+					if s.ID == 0 {
+						s.ID = len(storedPlan.Steps) + 1
+					}
+					// Ensure status is completed
+					if s.Status == "" {
+						s.Status = "completed"
+					}
+
+					storedPlan.Steps = append(storedPlan.Steps, s)
+
+					// Update Store
+					if err := tm.planner.Store.SavePlan(storedPlan); err != nil {
+						tm.OutputChan <- fmt.Sprintf("⚠️ [TaskManager] Failed to save plan update: %v", err)
+					}
+
+					// Update local reference
+					task.Plan = &storedPlan
+				},
 			}
 
 			// Execute
@@ -157,6 +189,15 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				task.Status = TaskStatusError
 			} else {
 				tm.OutputChan <- "✅ [Workflow] Execution completed successfully."
+
+				// Finalize Plan JSON status
+				tm.mu.Lock()
+				storedPlan, err := tm.planner.Store.GetPlan(task.ID)
+				if err == nil {
+					storedPlan.Status = "completed"
+					_ = tm.planner.Store.SavePlan(storedPlan)
+				}
+				tm.mu.Unlock()
 			}
 			return // STOP HERE, DO NOT PROCEED TO JSON PLAN EXECUTOR
 		}
