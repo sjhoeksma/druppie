@@ -1053,8 +1053,16 @@
 
                 case '/stop':
                     if (state.currentPlanId) {
-                        await sendTaskInput(state.currentPlanId, '/stop');
-                        addChatMessage('ai', '🛑 Stop signal sent.');
+                        try {
+                            const resp = await fetch(`/v1/plans/${state.currentPlanId}/stop`, { method: 'POST' });
+                            if (resp.ok) {
+                                addChatMessage('ai', '🛑 Stop signal sent.');
+                            } else {
+                                addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                            }
+                        } catch (e) {
+                            addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                        }
                     } else {
                         addChatMessage('ai', '⚠️ No active plan to stop.');
                     }
@@ -1274,7 +1282,13 @@
                     return;
                 }
 
+                // Hide rejected steps from Kanban
+                if (step.status === 'rejected') {
+                    return;
+                }
+
                 const card = document.createElement('div');
+                // ... (rest of logic)
                 card.className = `task-card status-${step.status}`;
                 card.onclick = () => openStepModal(step, plan);
 
@@ -1299,7 +1313,7 @@
                 if (step.status === 'running' || step.status === 'waiting_input') {
                     targetCol = elements.cols.running.querySelector('.col-cards');
                     counts.running++;
-                } else if (step.status === 'completed') {
+                } else if (step.status === 'completed' || step.status === 'failed' || step.status === 'stopped' || step.status === 'error') {
                     targetCol = elements.cols.completed.querySelector('.col-cards');
                     counts.completed++;
                 } else {
@@ -1319,17 +1333,21 @@
 
         function renderStepList(plan) {
             elements.stepLogs.innerHTML = '';
-            // Show completed, running AND waiting steps
-            plan.steps.filter(s => s.status === 'completed' || s.status === 'running' || s.status === 'waiting_input').forEach(s => {
+            // Show completed, running, waiting AND rejected steps
+            plan.steps.filter(s => s.status === 'completed' || s.status === 'running' || s.status === 'waiting_input' || s.status === 'rejected').forEach(s => {
                 const item = document.createElement('div');
                 item.className = 'step-log-item';
                 if (s.status === 'waiting_input') item.style.borderColor = 'var(--accent)';
+                if (s.status === 'rejected') {
+                    item.style.borderColor = '#ef4444';
+                    item.style.opacity = '0.7';
+                }
 
                 item.innerHTML = `
                     <div class="step-log-header">
                         <span class="tag-agent">[${s.agent_id}]</span>
                         <span class="tag-action">${s.action}</span>
-                        <span style="margin-left:auto; color: ${s.status === 'waiting_input' ? 'var(--accent)' : 'inherit'}">${s.status}</span>
+                        <span style="margin-left:auto; color: ${s.status === 'waiting_input' ? 'var(--accent)' : (s.status === 'rejected' ? '#ef4444' : 'inherit')}">${s.status}</span>
                     </div>
                     ${s.result ? `<div class="step-log-content">${s.result}</div>` : ''}
                 `;
@@ -1460,7 +1478,21 @@
 
         async function submitModalAction(action) {
             if (!currentPlan) return;
-            await sendTaskInput(currentPlan.plan_id, action);
+
+            if (action === '/stop') {
+                try {
+                    const resp = await fetch(`/v1/plans/${currentPlan.plan_id}/stop`, { method: 'POST' });
+                    if (resp.ok) {
+                        addChatMessage('ai', '🛑 Stop signal sent from modal.');
+                    } else {
+                        addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                    }
+                } catch (e) {
+                    addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                }
+            } else {
+                await sendTaskInput(currentPlan.plan_id, action);
+            }
             closeStepModal();
         }
 

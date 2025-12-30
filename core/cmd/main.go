@@ -172,7 +172,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}()
 
 			r := chi.NewRouter()
-			r.Use(middleware.Logger)
+			// Custom Error-Only Logger (Silences 200 OKs)
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+					t1 := time.Now()
+					defer func() {
+						// Log only if status >= 400
+						if ww.Status() >= 400 {
+							fmt.Printf("[HTTP] %s %s -> %d (%dB) in %s\n",
+								r.Method, r.URL.Path, ww.Status(), ww.BytesWritten(), time.Since(t1))
+						}
+					}()
+					next.ServeHTTP(ww, r)
+				})
+			})
 			r.Use(middleware.Recoverer)
 
 			// API Routes
@@ -456,6 +470,25 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 					// Restart the task
 					tm.StartTask(context.Background(), plan)
+
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r.Post("/plans/{id}/stop", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					if !strings.HasPrefix(id, "plan-") {
+						id = "plan-" + id
+					}
+
+					// Stop the task via TaskManager
+					tm.StopTask(id)
+
+					// Force update plan status to stopped
+					plan, err := plannerService.Store.GetPlan(id)
+					if err == nil {
+						plan.Status = "stopped"
+						_ = plannerService.Store.SavePlan(plan)
+					}
 
 					w.WriteHeader(http.StatusOK)
 				})

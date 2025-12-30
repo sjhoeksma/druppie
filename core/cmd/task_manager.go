@@ -125,6 +125,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 	task.Status = TaskStatusRunning
 
+	// Update Store to reflect Running state immediately
+	tm.mu.Lock()
+	if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+		p.Status = "running"
+		_ = tm.planner.Store.SavePlan(p)
+	}
+	tm.mu.Unlock()
+
 	// --- INTERCEPTION: NATIVE WORKFLOW ENGINE ---
 	if len(task.Plan.SelectedAgents) > 0 {
 		agentID := task.Plan.SelectedAgents[0]
@@ -242,6 +250,12 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				storedPlan, getErr := tm.planner.Store.GetPlan(task.ID)
 				if getErr == nil {
 					storedPlan.Status = "stopped"
+					// Reset active steps to pending so they can be retried on resume
+					for i := range storedPlan.Steps {
+						if storedPlan.Steps[i].Status == "running" || storedPlan.Steps[i].Status == "waiting_input" {
+							storedPlan.Steps[i].Status = "pending"
+						}
+					}
 					_ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
@@ -276,6 +290,12 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "stopped"
+				// Reset active steps to pending
+				for i := range p.Steps {
+					if p.Steps[i].Status == "running" || p.Steps[i].Status == "waiting_input" {
+						p.Steps[i].Status = "pending"
+					}
+				}
 				_ = tm.planner.Store.SavePlan(p)
 			}
 			tm.mu.Unlock()
@@ -575,7 +595,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 
 			// Apply to plan
-			if answer == "/accept" {
+			if answer == "/accept" || answer == "accept" {
 				task.Plan.Steps[activeStepIdx].Status = "completed"
 				_ = tm.planner.Store.SavePlan(*task.Plan)
 
@@ -589,8 +609,17 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				continue
 			}
 
+			// Feedback / Rejection
+			// If this was a review step, mark it as rejected so it's hidden from Kanban
+			// and cleaner in history.
+			if activeStep.Action == "content-review" || activeStep.Action == "draft_scenes" || strings.Contains(strings.ToLower(activeStep.Action), "review") {
+				task.Plan.Steps[activeStepIdx].Status = "rejected"
+				task.Plan.Steps[activeStepIdx].Result = fmt.Sprintf("Rejected by user: %s", answer)
+				_ = tm.planner.Store.SavePlan(*task.Plan)
+			}
+
 			// Standard update
-			tm.OutputChan <- fmt.Sprintf("[%s] [Planner] Determining next steps...", task.ID)
+			tm.OutputChan <- fmt.Sprintf("[%s] [Planner] Processing feedback/input...", task.ID)
 			updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, answer)
 			if err != nil {
 				tm.OutputChan <- fmt.Sprintf("[%s] Error updating: %v", task.ID, err)
