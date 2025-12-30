@@ -66,35 +66,53 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 
 	// PHASE A: AUDIO
 	wc.OutputChan <- "🎙️ [VideoWorkflow] Phase 1/3: Audio Generation..."
-	script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, w.generateAudio)
-	if err != nil {
-		return err
-	}
-
-	if err := w.reviewPhase(wc, "Audio", script.Scenes); err != nil {
-		return err
+	for {
+		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, w.generateAudio)
+		if err != nil {
+			return err
+		}
+		feedback, err := w.reviewPhase(wc, "Audio", script.Scenes)
+		if err != nil {
+			return err
+		}
+		if feedback == "" {
+			break
+		}
+		wc.OutputChan <- "⚠️ Retrying Audio Generation..."
 	}
 
 	// PHASE B: IMAGES
 	wc.OutputChan <- "🎨 [VideoWorkflow] Phase 2/3: Image Generation..."
-	script.Scenes, err = w.runPhase(wc, "image-creator", "image-generation", script.Scenes, w.generateImage)
-	if err != nil {
-		return err
-	}
-
-	if err := w.reviewPhase(wc, "Images", script.Scenes); err != nil {
-		return err
+	for {
+		script.Scenes, err = w.runPhase(wc, "image-creator", "image-generation", script.Scenes, w.generateImage)
+		if err != nil {
+			return err
+		}
+		feedback, err := w.reviewPhase(wc, "Images", script.Scenes)
+		if err != nil {
+			return err
+		}
+		if feedback == "" {
+			break
+		}
+		wc.OutputChan <- "⚠️ Retrying Image Generation..."
 	}
 
 	// PHASE C: VIDEO
 	wc.OutputChan <- "🎬 [VideoWorkflow] Phase 3/3: Video Generation..."
-	script.Scenes, err = w.runPhase(wc, "video-creator", "video-generation", script.Scenes, w.generateVideo)
-	if err != nil {
-		return err
-	}
-
-	if err := w.reviewPhase(wc, "Final Video", script.Scenes); err != nil {
-		return err
+	for {
+		script.Scenes, err = w.runPhase(wc, "video-creator", "video-generation", script.Scenes, w.generateVideo)
+		if err != nil {
+			return err
+		}
+		feedback, err := w.reviewPhase(wc, "Final Video", script.Scenes)
+		if err != nil {
+			return err
+		}
+		if feedback == "" {
+			break
+		}
+		wc.OutputChan <- "⚠️ Retrying Video Generation..."
 	}
 
 	// 4. Merge
@@ -182,12 +200,13 @@ func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action st
 	return ordered, nil
 }
 
-func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName string, _scenes []Scene) error {
+func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName string, _scenes []Scene) (string, error) {
 	actionName := fmt.Sprintf("review_%s", strings.ToLower(strings.ReplaceAll(phaseName, " ", "_")))
 	wc.OutputChan <- fmt.Sprintf("\n🔎 [Review] Please review generated %s assets.", phaseName)
 	wc.OutputChan <- "Options: '/accept' to proceed | '/stop' | give feedback"
 
-	stepID := 2000 + len(_scenes) // Unique ID based on phase
+	// Ensure unique ID for retries
+	stepID := 2000 + len(_scenes) + int(time.Now().Unix()%1000)
 	wc.AppendStep(model.Step{
 		ID:      stepID,
 		AgentID: "video-content-creator",
@@ -201,7 +220,7 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 
 	select {
 	case <-wc.Ctx.Done():
-		return wc.Ctx.Err()
+		return "", wc.Ctx.Err()
 	case input := <-wc.InputChan:
 		if input == "/stop" {
 			wc.AppendStep(model.Step{
@@ -211,17 +230,30 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 				Status:  "failed",
 				Result:  "User rejected validation",
 			})
-			return fmt.Errorf("user stopped at %s review", phaseName)
+			return "", fmt.Errorf("user stopped at %s review", phaseName)
 		}
-		wc.OutputChan <- fmt.Sprintf("✅ [Review] %s Approved.", phaseName)
+		if input == "/accept" || input == "" || strings.EqualFold(input, "accept") {
+			wc.OutputChan <- fmt.Sprintf("✅ [Review] %s Approved.", phaseName)
+			wc.AppendStep(model.Step{
+				ID:      stepID,
+				AgentID: "video-content-creator",
+				Action:  actionName,
+				Status:  "completed",
+				Result:  "Approved by user",
+			})
+			return "", nil
+		}
+
+		// Feedback
 		wc.AppendStep(model.Step{
 			ID:      stepID,
 			AgentID: "video-content-creator",
 			Action:  actionName,
-			Status:  "completed",
-			Result:  "Approved by user",
+			Status:  "rejected",
+			Result:  fmt.Sprintf("Rejected: %s", input),
 		})
-		return nil
+		wc.OutputChan <- fmt.Sprintf("⚠️ [Review] Feedback received: %s. Retrying phase...", input)
+		return input, nil
 	}
 }
 
@@ -346,7 +378,7 @@ Key Rules:
 			if input == "/stop" {
 				return AVScript{}, fmt.Errorf("user cancelled")
 			}
-			if input == "/accept" || input == "" {
+			if input == "/accept" || input == "" || strings.EqualFold(input, "accept") {
 				wc.AppendStep(model.Step{
 					ID:      stepID,
 					AgentID: "video-content-creator",
@@ -356,6 +388,13 @@ Key Rules:
 				})
 				return script, nil
 			}
+			wc.AppendStep(model.Step{
+				ID:      stepID,
+				AgentID: "video-content-creator",
+				Action:  "draft_scenes",
+				Status:  "rejected",
+				Result:  fmt.Sprintf("Rejected: %s", input),
+			})
 			currentPrompt = fmt.Sprintf("Fix: %s. Prev: %s", input, clean)
 		}
 	}
