@@ -217,6 +217,10 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Try Executor Dispatcher first
 					// We need to capture output, so we need a helper or channel bridge
 					// We need to capture output, so we need a helper or channel bridge
+					// Capture output to a buffer to avoid interleaving in parallel execution
+					var logBuffer []string
+					var logMu sync.Mutex
+
 					outputBridge := make(chan string)
 					var resultBuilder strings.Builder
 					var msgWG sync.WaitGroup
@@ -225,15 +229,24 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					go func() {
 						defer msgWG.Done()
 						for msg := range outputBridge {
-							tm.OutputChan <- msg
-							// Capture Results
+							// Check if it's a result or a log
 							if strings.HasPrefix(msg, "RESULT_") {
-								// Format: RESULT_KEY=VALUE -> KEY: VALUE
+								// Result processing remains same
 								parts := strings.SplitN(msg, "=", 2)
 								if len(parts) == 2 {
 									key := strings.TrimPrefix(parts[0], "RESULT_")
 									resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
 								}
+								// Do NOT log functional results to user console to keep clean?
+								// Or log them? The user example showed RESULT_VIDEO_FILE...
+								// Let's keep logging them but buffered.
+								logMu.Lock()
+								logBuffer = append(logBuffer, msg)
+								logMu.Unlock()
+							} else {
+								logMu.Lock()
+								logBuffer = append(logBuffer, msg)
+								logMu.Unlock()
 							}
 						}
 					}()
@@ -254,8 +267,19 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					msgWG.Wait() // Wait for all logs to be processed
 
 					if execErr != nil {
-						tm.OutputChan <- fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, execErr)
+						logMu.Lock()
+						logBuffer = append(logBuffer, fmt.Sprintf("[%s] Step %d Failed: %v", task.ID, step.ID, execErr))
+						logMu.Unlock()
 					}
+
+					// Flush Logs Atomically
+					tm.OutputChan <- fmt.Sprintf("--- Step %d: %s (%s) ---", step.ID, step.Action, step.AgentID)
+					logMu.Lock()
+					for _, line := range logBuffer {
+						tm.OutputChan <- line
+					}
+					logMu.Unlock()
+					tm.OutputChan <- fmt.Sprintf("--------------------------------")
 					step.Status = "completed"
 					if res := resultBuilder.String(); res != "" {
 						step.Result = res

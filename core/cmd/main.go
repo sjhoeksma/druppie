@@ -492,9 +492,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Log router step to plan log
 			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
 
-			// Log router step to plan log
-			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
-
 			// Initialize TaskManager for execution
 			tm := NewTaskManager(planner)
 			task := tm.StartTask(context.Background(), plan)

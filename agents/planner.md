@@ -21,27 +21,22 @@ Strategies:
 4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
 5. **Workflow-Driven Execution (MANDATORY)**:
    - **Check**: IF an Agent has a `Workflow` (Mermaid diagram), YOU MUST EXECUTE IT.
-   - **Interpretation Rules**:
-     1. **Priority Check**: Before looking for NEW agents, check the **Current Agent's Workflow**.
-        - If the Current Agent is in a state (e.g. `Scenes`) and has a transition to another state (e.g. `Production`) defined in ITS workflow, you **MUST** schedule that internal transition first.
-        - Do NOT jump to other agents until the Current Agent's workflow reaches a terminal state (`[*]`).
-     2. **Locate Plan Status**: Match the current execution state (completed steps) to a **State** in the diagram.
-     3. **Identify Next Action**:
-        - **Task Node**: `state "Task: [Name]\nSkill: [Skill]"`
-          - **Action**: Schedule a step for the **Current Agent** using the `[Skill]` string as the JSON `action`. Do NOT use the Task `[Name]` as the action.
-        - **Agent Node**: `state "Agent: [ID]"`
-          - **Action**: Schedule a step for Sub-Agent `[ID]`. Look up their default skill/action or context.
-        - **Block Node**: `state "Block: [Name]"`
-          - **Action**: Treat this as a Tool/Function call. Schedule a step for the **Current Agent** (or 'infrastructure-engineer' if setup needed) to invoke the tool `[Name]`.
-        - **Standard Node**: `state "Agent: [ID]\nAction: [Skill]"`.
-          - **Action**: Schedule a step for Agent `[ID]` using Skill `[Skill]`.
-        - **Expansion Node**: `state "...(EXPAND [VAR])..."`.
-          - **Action**: You **MUST** UNROLL the loop. Look for the list `[VAR]` in params.
-          - **Rule**: Generate **N separate steps** (one for each item in the list) **IMMEDIATELY**.
-          - **Example**: If `av_script` has 5 scenes, you MUST output 5 discrete steps (e.g. 5 Audio tasks).
-          - **CRITICAL**: Do NOT generate a single step that "processes all". You MUST generate individual steps: `Step A (Scene 1)`, `Step B (Scene 2)`, etc.
-          - **NEGATIVE CONSTRAINT**: Forbidden to output a single step for the whole list. One step per item.
-          - **Action**: Only proceed if `[Condition]` (e.g. "Approved") is met by the previous step's result/status.
+   - **Interpretation Rules (In Priority Order)**:
+     1. **Macro Node (HIGHEST PRIORITY)**: 
+        - **Pattern**: `state "MACRO_EXPAND_LOOP..."` (or containing "MACRO_EXPAND_LOOP").
+        - **Action**: Schedule a **SINGLE** step with `action: "expand_loop"` and `agent_id: "planner"`.
+        - **Params**:
+          - `iterator_key`: Value after `Key:` (e.g. "av_script").
+          - `target_agent`: Value after `Target:` (e.g. "audio-creator").
+          - `target_action`: Value after `Do:` (e.g. "text-to-speech").
+        - **STOP**: Do NOT generate further steps for this node. The system expands it.
+     2. **Priority Check**: Check the **Current Agent's Workflow**.
+        - If the Current Agent is in a state (e.g. `Scenes`) and has a transition to another state, schedule that internal transition first.
+     3. **Locate Plan Status**: Match the current execution state to a **State** in the diagram.
+     4. **Identify Next Action (If not Macro)**:
+        - **Task Node**: `state "Task: [Name]\nSkill: [Skill]"` -> Action: `[Skill]`.
+        - **Agent Node**: `state "Agent: [ID]"` -> Action: Default skill for `[ID]`.
+        - **Transition**: `--> [State]: [Condition]` -> Proceed only if condition met.
      4. **Data Flow (Implicit)**:
         - The Output of one state (e.g. `cc_context`) becomes the Input for the next.
         - Pass these variables in `params`.

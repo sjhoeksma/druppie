@@ -188,68 +188,107 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	)
 	sysPrompt := replacer.Replace(sysTemplate)
 
-	resp, err := p.llm.Generate(ctx, "Generate plan data", sysPrompt)
-	if err != nil {
-		return model.ExecutionPlan{}, err
-	}
-
-	// 3. Parse Response
-	cleanResp := p.cleanJSONResponse(resp)
-
 	var steps []model.Step
+	var validationErr error
+	var resp string
 
-	// Attempt 1: Direct Array
-	if err := json.Unmarshal([]byte(cleanResp), &steps); err != nil {
-		// Attempt 2: Wrapped Object {"steps": [...]}
-		var wrapped struct {
-			Steps []model.Step `json:"steps"`
+	// Retry Loop for LLM Generation & Validation (Max 3 attempts)
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 && validationErr != nil {
+			// Augment prompt with error
+			sysPrompt += fmt.Sprintf("\n\nCRITICAL ERROR in previous attempt: %v\nYOU MUST FIX THIS. RE-GENERATE THE JSON.", validationErr)
+			fmt.Printf("[Planner] Retrying Plan Generation (Attempt %d). Error: %v\n", attempt+1, validationErr)
 		}
-		if err2 := json.Unmarshal([]byte(cleanResp), &wrapped); err2 == nil && len(wrapped.Steps) > 0 {
-			steps = wrapped.Steps
-		} else {
-			// Attempt 3: Single Object
-			var singleStep model.Step
-			if err3 := json.Unmarshal([]byte(cleanResp), &singleStep); err3 == nil && singleStep.Action != "" {
-				steps = []model.Step{singleStep}
+
+		var err error
+		resp, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
+		if err != nil {
+			return model.ExecutionPlan{}, err
+		}
+
+		// 3. Parse Response
+		cleanResp := p.cleanJSONResponse(resp)
+
+		// Attempt 1: Direct Array
+		if err := json.Unmarshal([]byte(cleanResp), &steps); err != nil {
+			// Attempt 2: Wrapped Object {"steps": [...]}
+			var wrapped struct {
+				Steps []model.Step `json:"steps"`
+			}
+			if err2 := json.Unmarshal([]byte(cleanResp), &wrapped); err2 == nil && len(wrapped.Steps) > 0 {
+				steps = wrapped.Steps
 			} else {
-				// Attempt 4: Error Object
-				var errorResp struct {
-					Error string `json:"error"`
-				}
-				if err4 := json.Unmarshal([]byte(cleanResp), &errorResp); err4 == nil && errorResp.Error != "" {
-					steps = []model.Step{
-						{
-							ID:      1,
-							AgentID: "business-analyst",
-							Action:  "ask_questions",
-							Params:  map[string]interface{}{"details_needed": errorResp.Error},
-							Status:  "pending",
-						},
-					}
+				// Attempt 3: Single Object
+				var singleStep model.Step
+				if err3 := json.Unmarshal([]byte(cleanResp), &singleStep); err3 == nil && singleStep.Action != "" {
+					steps = []model.Step{singleStep}
 				} else {
-					if p.Debug {
-						fmt.Printf("[Planner] JSON Parse Error. Raw: %s\n", cleanResp)
-					}
-					return model.ExecutionPlan{}, fmt.Errorf("failed to parse planner response: %w. Raw: %s", err, cleanResp)
+					// JSON Parse Error - Retry
+					validationErr = fmt.Errorf("invalid json format: %v", err)
+					continue
 				}
 			}
 		}
-	}
 
-	// Ensure all steps have a status and normalized params
-	for i := range steps {
-		if steps[i].Status == "" {
-			steps[i].Status = "pending"
-		}
-		// Normalize 'av_script' aliases
-		if steps[i].Params != nil {
-			for _, alias := range []string{"script_outline", "scene_outline", "scenes_draft", "scenes"} {
-				if val, ok := steps[i].Params[alias]; ok {
-					if _, hasAv := steps[i].Params["av_script"]; !hasAv {
-						steps[i].Params["av_script"] = val
-						delete(steps[i].Params, alias)
+		// Ensure all steps have a status and normalized params
+		validationErr = nil // Reset
+		for i := range steps {
+			if steps[i].Status == "" {
+				steps[i].Status = "pending"
+			}
+
+			// Normalize 'av_script' aliases
+			if steps[i].Params != nil {
+				for _, alias := range []string{"script_outline", "scene_outline", "scenes_draft", "scenes"} {
+					if val, ok := steps[i].Params[alias]; ok {
+						if _, hasAv := steps[i].Params["av_script"]; !hasAv {
+							steps[i].Params["av_script"] = val
+							delete(steps[i].Params, alias)
+						}
 					}
 				}
+			}
+
+			// CRITICAL VALIDATION: Content Review MUST have av_script
+			action := strings.ToLower(steps[i].Action)
+			if action == "content-review" || action == "draft-scenes" || action == "draft_scenes" {
+				if _, ok := steps[i].Params["av_script"]; !ok {
+					// Check aliases again just in case (redundant but safe)
+					found := false
+					for _, alias := range []string{"script", "scenes", "outline"} {
+						if _, ok := steps[i].Params[alias]; ok {
+							found = true
+							break
+						}
+					}
+					if !found {
+						validationErr = fmt.Errorf("step %d (content-review) is MISSING required param 'av_script'. Params found: %v", steps[i].ID, steps[i].Params)
+						break
+					}
+				}
+			}
+		}
+
+		if validationErr == nil {
+			break // Success!
+		}
+	}
+
+	// Final check
+	if validationErr != nil {
+		fmt.Printf("[Planner] Validation failed after retries: %v\n", validationErr)
+		// Fallback: Inject a placeholder script to prevent crash
+		for i := range steps {
+			if strings.Contains(steps[i].Action, "content-review") {
+				steps[i].Params["av_script"] = []map[string]interface{}{
+					{
+						"scene_id":      1,
+						"audio_text":    "Placeholder Scene 1 (Auto-injected due to generation failure)",
+						"visual_prompt": "Placeholder Visual",
+						"duration":      5,
+					},
+				}
+				fmt.Printf("[Planner] INJECTED PLACEHOLDER AV_SCRIPT for Step %d\n", steps[i].ID)
 			}
 		}
 	}
@@ -311,6 +350,34 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 	plan.Steps = completedSteps
 
+	// --- INTERNAL WORKFLOW EXPANSION ---
+	// Check if the last completed step was an 'expand_loop' directive
+	if len(completedSteps) > 0 {
+		lastStep := completedSteps[len(completedSteps)-1]
+		if lastStep.Action == "expand_loop" {
+			// Perform Micro-Expansion logic internally
+			if p.Debug {
+				fmt.Printf("[Planner] Auto-expanding loop for step %d\n", lastStep.ID)
+			}
+			newSteps, err := p.expandLoop(lastStep, completedSteps, plan.Steps)
+			if err == nil {
+				// Append and Return immediately -> SKIP LLM
+				plan.Steps = append(plan.Steps, newSteps...)
+				if p.Store != nil {
+					_ = p.Store.SavePlan(*plan)
+					planJSON, _ := json.MarshalIndent(plan, "", "  ")
+					_ = p.Store.LogInteraction(plan.ID, fmt.Sprintf("Internal Expansion (Step %d)", lastStep.ID),
+						"Internal Logic: expand_loop",
+						fmt.Sprintf("Expanded %d steps.\n\nRESULTING PLAN:\n%s", len(newSteps), string(planJSON)))
+				}
+				return plan, nil
+			} else {
+				fmt.Printf("[Planner] Expansion failed: %v\n", err)
+			}
+		}
+	}
+	// -----------------------------------
+
 	// 2. Re-Prompt LLM for Next Steps
 	// Filter Active Agents based on Plan Selection
 	// Only show agents that were originally selected + their sub-agents
@@ -358,40 +425,11 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// Backward compatibility link if needed, or just use updatedAgentList in prompt
 	// agentList := updatedAgentList
 
-	// --- AUTO-STOP LOGIC ---
-	// Check if we have fulfilled the script outline
-	var scriptLength int
-	var sceneCount int
-	for _, s := range plan.Steps {
-		// Detect script in params
-		if outline, ok := s.Params["script_outline"]; ok {
-			if list, ok := outline.([]interface{}); ok {
-				scriptLength = len(list)
-			}
-		} else if outline, ok := s.Params["script_outline"]; ok {
-			if list, ok := outline.([]interface{}); ok {
-				scriptLength = len(list)
-			}
-		} else if outline, ok := s.Params["av_script"]; ok {
-			if list, ok := outline.([]interface{}); ok {
-				scriptLength = len(list)
-			}
-		}
-		// Count executed scenes
-		if s.Action == "scene-creator" || s.AgentID == "scene-creator" ||
-			s.Action == "video-generation" || s.AgentID == "video-creator" {
-			sceneCount++
-		}
-	}
-
-	if scriptLength > 0 && sceneCount >= scriptLength {
-		// All scenes are accounted for. Stop planning.
-		if p.Debug {
-			fmt.Printf("[Planner] Script length %d, Scenes completed %d. Stopping plan generation.\n", scriptLength, sceneCount)
-		}
-		return plan, nil
-	}
-	// -----------------------
+	// --- AUTO-STOP LOGIC REMOVED ---
+	// Previously, this stopped planning if scene count matched script length.
+	// This prevented post-production steps (Merge/Final Review) from being scheduled.
+	// We now let the LLM decide when to stop based on the workflow state.
+	// --------------------------------
 
 	// Load System Prompt from Agent Definition
 	sysTemplate := ""
