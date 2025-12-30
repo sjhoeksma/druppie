@@ -6,8 +6,8 @@ RUN apk add --no-cache git
 
 WORKDIR /app
 
-# Copy go mod first for caching
-COPY core/go.mod core/go.sum ./core/
+# Copy core directory first (sacrificing some caching for reliability)
+COPY core/ ./core/
 WORKDIR /app/core
 RUN go mod download
 
@@ -17,7 +17,7 @@ COPY . .
 
 # Build the binary
 WORKDIR /app/core
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/druppie-core ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/druppie ./cmd
 
 # Run Stage
 FROM gcr.io/distroless/static:nonroot
@@ -57,8 +57,8 @@ ENV HOME=/app
 VOLUME /app/.druppie
 
 # Expose port
-EXPOSE 8080
+EXPOSE 80
 
 USER 65532:65532
 
-ENTRYPOINT ["/app/druppie-core", "serve"]
+ENTRYPOINT ["/app/druppie", "serve"]

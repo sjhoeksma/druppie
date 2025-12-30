@@ -92,7 +92,7 @@ To run the Druppie Core server (including UI and backend logic) using Docker in 
 
 1.  **Build the image** (execute from the project root):
     ```bash
-    docker build -t druppie-core -f core/Dockerfile .
+    docker build -t druppie-core .
     ```
 
 2.  **Run the container**:
