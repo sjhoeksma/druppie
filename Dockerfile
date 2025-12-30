@@ -1,8 +1,8 @@
 # Build Stage
 FROM golang:alpine AS builder
 
-# Install git for dependencies
-RUN apk add --no-cache git
+# Install git and upx for dependencies and compression
+RUN apk add --no-cache git upx
 
 WORKDIR /app
 
@@ -17,7 +17,9 @@ COPY . .
 
 # Build the binary
 WORKDIR /app/core
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/druppie ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/druppie ./cmd
+# Compress binary
+RUN upx --best --lzma /app/druppie
 
 # Run Stage
 FROM gcr.io/distroless/static:nonroot
@@ -46,7 +48,7 @@ COPY --from=builder /app/mcp /app/mcp
 COPY --from=builder /app/research /app/research
 COPY --from=builder /app/script /app/script
 COPY --from=builder /app/skills /app/skills
-COPY --from=builder /app/story /app/story
+# COPY --from=builder /app/story /app/story
 COPY --from=builder /app/tools /app/tools
 COPY --from=builder /app/ui /app/ui
 
@@ -57,7 +59,7 @@ ENV HOME=/app
 VOLUME /app/.druppie
 
 # Expose port
-EXPOSE 80
+EXPOSE 8080
 
 USER 65532:65532
 
