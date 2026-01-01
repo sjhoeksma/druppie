@@ -40,6 +40,13 @@
             box-sizing: border-box;
         }
 
+        /* Hide Scrollbars */
+        ::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            background: transparent;
+        }
+
         html,
         body {
             height: 100%;
@@ -268,7 +275,7 @@
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s, border-color 0.2s;
             cursor: default;
@@ -686,6 +693,9 @@
             body {
                 flex-direction: column;
                 display: flex;
+                height: 100vh;
+                height: 100dvh;
+                /* Dynamic Height for iOS Address Bar */
             }
 
             /* Unwrap Sidebar to reorder children independently */
@@ -723,7 +733,7 @@
             #main-view {
                 order: 2;
                 /* 2. Kanban Middle */
-                height: 25vh;
+                height: 22vh;
                 /* Reduced height to save space */
                 flex: none;
                 width: 100%;
@@ -758,7 +768,10 @@
                 width: 100%;
                 bottom: auto;
                 flex: none;
-                z-index: 50;
+                flex-shrink: 0;
+                /* Ensure it never shrinks */
+                z-index: 200;
+                /* Higher than input */
                 max-height: 35vh;
                 /* Compact console */
                 overflow: hidden;
@@ -779,13 +792,14 @@
                 flex-direction: row;
                 padding: 0.5rem;
                 overflow-x: auto;
-                overflow-y: hidden;
+                overflow-y: visible;
+                /* Allow headers to show */
                 gap: 0.5rem;
                 scroll-snap-type: x mandatory;
             }
 
             .kanban-col {
-                min-width: 85vw;
+                min-width: 50vw;
                 scroll-snap-align: center;
                 height: 100%;
                 background: rgba(255, 255, 255, 0.02);
@@ -802,6 +816,32 @@
                 overflow-y: auto;
                 max-height: calc(25vh - 3rem);
                 /* Match main-view height */
+            }
+
+
+
+            /* Compact Cards for Mobile */
+            .task-card .task-meta {
+                display: none;
+            }
+
+            .task-card {
+                padding: 0.4rem;
+                gap: 0rem;
+                font-size: 0.75rem;
+            }
+
+            .task-card .task-header .task-agent {
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+
+            .task-card .task-header .task-id {
+                font-size: 0.65rem;
+            }
+
+            .task-card .task-header {
+                margin-bottom: 0.1rem;
             }
 
             .modal-content {
