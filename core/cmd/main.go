@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,30 +40,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	var debug bool
 	var planID string
 
-	// Helper to find project root
-	findProjectRoot := func() (string, error) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-
-		// Traverse up until we find .druppie or blocks
-		for {
-			if _, err := os.Stat(filepath.Join(cwd, ".druppie")); err == nil {
-				return cwd, nil
-			}
-			if _, err := os.Stat(filepath.Join(cwd, "blocks")); err == nil {
-				return cwd, nil
-			}
-
-			parent := filepath.Dir(cwd)
-			if parent == cwd {
-				// Reached root without finding
-				return "", fmt.Errorf("project root not found (missing .druppie or blocks)")
-			}
-			cwd = parent
-		}
-	}
+	// Register commands
+	rootCmd.AddCommand(newGenerateCmd())
+	rootCmd.AddCommand(newCliCmd())
 
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine
@@ -145,7 +125,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				for {
 					select {
 					case msg := <-tm.OutputChan:
-						// fmt.Println(msg) // Silence console output
+						//fmt.Println(msg) // Output to console for visibility
 
 						// Extract Plan ID roughly
 						var planID string
@@ -160,6 +140,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							} else {
 								planID = rest
 							}
+							// Sanitize ID (remove trailing punctuation)
+							planID = strings.TrimRight(planID, ".,;:!?\")")
 						}
 
 						// Save to store
@@ -178,8 +160,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 					t1 := time.Now()
 					defer func() {
-						// Log only if status >= 400
-						if ww.Status() >= 400 {
+						// Log only if status >= 400 and not 404 (suppress Not Found noise)
+						if ww.Status() >= 400 && ww.Status() != 404 {
 							fmt.Printf("[HTTP] %s %s -> %d (%dB) in %s\n",
 								r.Method, r.URL.Path, ww.Status(), ww.BytesWritten(), time.Since(t1))
 						}
@@ -206,27 +188,60 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				r.Post("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
 					var req struct {
 						Prompt string `json:"prompt"`
+						PlanID string `json:"plan_id"` // Optional: Context for continuing chat
 					}
 					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 						http.Error(w, "Invalid request body", http.StatusBadRequest)
 						return
 					}
 
-					// Create plan skeleton IMMEDIATELY for UI visibility
-					planID := fmt.Sprintf("plan-%d", time.Now().Unix())
-					pendingPlan := model.ExecutionPlan{
-						ID: planID,
-						Intent: model.Intent{
-							InitialPrompt: req.Prompt,
-							Prompt:        req.Prompt,
-						},
-						Status: "pending",
-						Steps:  []model.Step{},
+					var currentPlan model.ExecutionPlan
+					var planID string
+					isNewPlan := true
+
+					// Check if we are continuing an existing conversation
+					if req.PlanID != "" {
+						if p, err := plannerService.Store.GetPlan(req.PlanID); err == nil {
+							currentPlan = p
+							planID = p.ID
+							isNewPlan = false
+						}
 					}
 
-					// Save pending plan to store
-					if err := plannerService.Store.SavePlan(pendingPlan); err != nil {
-						http.Error(w, fmt.Sprintf("Failed to create plan: %v", err), http.StatusInternalServerError)
+					if isNewPlan {
+						// Create new plan skeleton
+						planID = fmt.Sprintf("plan-%d", time.Now().Unix())
+						currentPlan = model.ExecutionPlan{
+							ID: planID,
+							Intent: model.Intent{
+								InitialPrompt: req.Prompt,
+								Prompt:        req.Prompt,
+							},
+							Status: "completed",
+							Steps:  []model.Step{},
+						}
+					} else {
+						// Update status of existing plan to indicate activity
+						currentPlan.Status = "running"
+					}
+
+					// Store User Input as a Step (for both New and Existing plans)
+					newStepID := 1
+					if len(currentPlan.Steps) > 0 {
+						newStepID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+					}
+					currentPlan.Steps = append(currentPlan.Steps, model.Step{
+						ID:      newStepID,
+						AgentID: "user",
+						Action:  "user_query",
+						Status:  "running",
+						Result:  req.Prompt,
+					})
+					currentPlan.Status = "running"
+
+					// Save plan state (create or update timestamp/status)
+					if err := plannerService.Store.SavePlan(currentPlan); err != nil {
+						http.Error(w, fmt.Sprintf("Failed to save plan: %v", err), http.StatusInternalServerError)
 						return
 					}
 
@@ -234,7 +249,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(map[string]interface{}{
 						"intent": model.Intent{Action: "analyzing"},
-						"plan":   pendingPlan,
+						"plan":   currentPlan,
 					})
 
 					// Process asynchronously
@@ -242,52 +257,178 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					go func() {
 						tm.OutputChan <- fmt.Sprintf("[%s] Analyzing request...", planID)
 
-						// 1. Analyze Intent
-						intent, rawRouterResp, err := routerService.Analyze(context.Background(), req.Prompt)
+						effectivePrompt := req.Prompt
+						if !isNewPlan {
+							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Loading plan %s. Steps found: %d", planID, len(currentPlan.Steps))
+							// 1. Build Context
+							history := ""
+							// Exclude the last step (current request) which was already appended
+							priorSteps := currentPlan.Steps[:len(currentPlan.Steps)-1]
+
+							startIdx := 0
+							if len(priorSteps) > 20 {
+								startIdx = len(priorSteps) - 20
+							}
+							for _, s := range priorSteps[startIdx:] {
+								switch s.Action {
+								case "user_query":
+									history += fmt.Sprintf("User: %s\n", s.Result)
+								case "general_chat":
+									history += fmt.Sprintf("AI: %s\n", s.Result)
+								}
+							}
+							effectivePrompt = fmt.Sprintf("History:\n%s\nRequest: %s", history, req.Prompt)
+							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Constructed History: %s", history)
+						}
+
+						// 2. Analyze Intent
+						intent, rawRouterResp, err := routerService.Analyze(context.Background(), effectivePrompt)
 						if err != nil {
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
-							pendingPlan.Status = "stopped"
-							_ = plannerService.Store.SavePlan(pendingPlan)
+							currentPlan.Status = "stopped"
+							_ = plannerService.Store.SavePlan(currentPlan)
 							return
 						}
 
 						tm.OutputChan <- fmt.Sprintf("[%s] Intent: %s", planID, intent.Action)
 
-						// 2. Planning (if needed)
+						// Update currentPlan with the analyzed intent
+						currentPlan.Intent.Action = intent.Action
+						currentPlan.Intent.Category = intent.Category
+						currentPlan.Intent.Language = intent.Language
+						currentPlan.Intent.ContentType = intent.ContentType
+
+						// Mark user_query as completed (since plan is now generated)
+						// This ensures it is preserved by task_manager's cleanup logic,
+						// fixing the issue where "pending" steps were being deleted.
+						for i, s := range currentPlan.Steps {
+							if s.Action == "user_query" && s.Status == "running" {
+								currentPlan.Steps[i].Status = "completed"
+								///currentPlan.Status = "running" //We are now running
+								_ = plannerService.Store.SavePlan(currentPlan)
+							}
+						}
+
+						// 3. Execution
 						if intent.Action == "create_project" {
-							fullPlan, err := plannerService.CreatePlan(context.Background(), intent)
+							// If we were chatting, we might want to start fresh or pivot.
+							// For simplicity, we treat this as a "New Plan" triggering event.
+							// Stop the active task to prevent it from marking the plan as "Completed"
+							// while we are generating the new plan.
+							tm.StopTask(planID)
+							// Wait longer to ensure `runTaskLoop` has fully exited and flushed its "stopped" state to disk
+							time.Sleep(500 * time.Millisecond)
+
+							// Reload plan from store to ensure we have the very latest state (including any "stopped" status wrote by the dying task)
+							// This prevents us from saving a stale version that might be overwritten or merging blindly.
+							if freshPlan, err := plannerService.Store.GetPlan(planID); err == nil {
+								// We must preserve the INTENT from our local `currentPlan` / `req` because
+								// the fresh plan from disk might be stale regarding the *new* intent we just analyzed.
+								// `currentPlan` has the `intent` from router. `freshPlan` has the old intent.
+								// Only `Steps` and `Status` are relevant from disk.
+								// Actually, `currentPlan` in this scope has the NEW intent from Router (Line 305).
+								// We want to keep that. We only want to ensure `Steps` are up to date (e.g. if Step 1 completed).
+								currentPlan.Steps = freshPlan.Steps
+								// But we ignore freshPlan.Status because we are about to force it to Running.
+							}
+
+							// User wants "content of current chat retained".
+							// So we pass the effectivePrompt (with history) to the Planner!
+							intent.InitialPrompt = effectivePrompt
+							intent.Prompt = effectivePrompt // Planner uses this
+
+							// Indicate we are starting the work
+							currentPlan.Status = "running"
+							// Add a temporary step to show in Kanban even without UI hacks
+							newStepID := 1
+							if len(currentPlan.Steps) > 0 {
+								newStepID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+							}
+							genPlanStep := model.Step{
+								ID:      newStepID,
+								AgentID: "planner",
+								Action:  "generate_plan",
+								Status:  "running",
+								Result:  "Designing execution plan...",
+							}
+							currentPlan.Steps = append(currentPlan.Steps, genPlanStep)
+							_ = plannerService.Store.SavePlan(currentPlan)
+							tm.OutputChan <- fmt.Sprintf("[%s] Generating Plan...", planID)
+
+							fullPlan, err := plannerService.CreatePlan(context.Background(), intent, planID)
 							if err != nil {
 								tm.OutputChan <- fmt.Sprintf("[%s] Planner failed: %v", planID, err)
-								// Update pending plan to failed
-								pendingPlan.Status = "stopped"
-								_ = plannerService.Store.SavePlan(pendingPlan)
+								currentPlan.Status = "stopped"
+								// Mark generate_plan as failed
+								currentPlan.Steps[len(currentPlan.Steps)-1].Status = "failed"
+								currentPlan.Steps[len(currentPlan.Steps)-1].Result = fmt.Sprintf("Failed: %v", err)
+								_ = plannerService.Store.SavePlan(currentPlan)
 								return
 							}
 
-							// IMPORTANT: Use the pending plan ID, don't create a new one
-							fullPlan.ID = planID
-							fullPlan.Status = "running"
+							// Mark generate_plan as completed
+							currentPlan.Steps[len(currentPlan.Steps)-1].Status = "completed"
+							currentPlan.Steps[len(currentPlan.Steps)-1].Result = "Plan generated."
+
+							// MERGE new steps into current plan
+							nextID := currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+							for i := range fullPlan.Steps {
+								fullPlan.Steps[i].ID = nextID + i
+								// Fix dependencies if they refer to local IDs (1, 2...)
+								// This is tricky. Usually dependencies are relative to the new block.
+								// We should shift them by (nextID - 1).
+								var newDeps []int
+								for _, dep := range fullPlan.Steps[i].DependsOn {
+									newDeps = append(newDeps, dep+(nextID-1))
+								}
+								fullPlan.Steps[i].DependsOn = newDeps
+							}
+							currentPlan.Steps = append(currentPlan.Steps, fullPlan.Steps...)
+							currentPlan.SelectedAgents = fullPlan.SelectedAgents
+							currentPlan.Status = "running"
 
 							tm.OutputChan <- fmt.Sprintf("[%s] Plan created. Starting task...", planID)
 
 							// Log router step
-							_ = plannerService.Store.LogInteraction(fullPlan.ID, "Router", req.Prompt, rawRouterResp)
+							_ = plannerService.Store.LogInteraction(currentPlan.ID, "Router", req.Prompt, rawRouterResp)
 
-							// Save updated plan (replaces pending plan)
-							_ = plannerService.Store.SavePlan(fullPlan)
+							// Save updated plan
+							_ = plannerService.Store.SavePlan(currentPlan)
 
 							// START THE TASK
-							tm.StartTask(context.Background(), fullPlan)
+							tm.StartTask(context.Background(), currentPlan)
 						} else {
 							tm.OutputChan <- fmt.Sprintf("[%s] Request handled by Router (no plan needed).", planID)
 
-							// Log to generic interaction log
-							_ = plannerService.Store.LogInteraction("", "Router", req.Prompt, rawRouterResp)
+							// Log to plan-specific log so UI sees it
+							_ = plannerService.Store.LogInteraction(planID, "Router", effectivePrompt, rawRouterResp)
 
-							// Update plan status to completed (non-project intent)
-							pendingPlan.Status = "completed"
-							_ = plannerService.Store.SavePlan(pendingPlan)
+							// Determine result to show
+							resultText := intent.Answer
+							if resultText == "" {
+								resultText = rawRouterResp
+							}
+
+							// Output the response to the console
+							tm.OutputChan <- fmt.Sprintf("[%s] Response: %s", planID, resultText)
+
+							// Update plan status to completed and store the answer as a step
+							currentPlan.Status = "completed"
+
+							newID := 1
+							if len(currentPlan.Steps) > 0 {
+								newID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+							}
+
+							currentPlan.Steps = append(currentPlan.Steps, model.Step{
+								ID:      newID,
+								AgentID: "router",
+								Action:  "general_chat",
+								Status:  "completed",
+								Result:  resultText,
+							})
+							_ = plannerService.Store.SavePlan(currentPlan)
 						}
 					}()
 				})
@@ -376,9 +517,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							}
 						} else {
 							// No active task - mark as stopped if it claims to be running
-							if plans[i].Status == "running" || plans[i].Status == "waiting_input" {
-								plans[i].Status = "stopped"
-							}
+							// Commented out to prevent UI flickering "Stopped" during short transitions or if task is running in background but not in memory list yet?
+							// Actually, if task is NOT in memory, it IS stopped effectively.
+							// BUT during `CreatePlan`, we StopTask provided we manually set status="running".
+							// So if we trust Disk, we should NOT override here.
+							// if plans[i].Status == "running" || plans[i].Status == "waiting_input" {
+							// 	plans[i].Status = "stopped"
+							// }
 						}
 					}
 					tm.mu.Unlock()
@@ -413,9 +558,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 					} else {
 						// No active task - check if plan says running but task is gone
-						if plan.Status == "running" || plan.Status == "waiting_input" {
-							plan.Status = "stopped"
-						}
+						// We prefer to return the persistent status (even if zombie) to avoid race conditions during startup
+						// if plan.Status == "running" || plan.Status == "waiting_input" {
+						// 	  plan.Status = "stopped"
+						// }
 					}
 					tm.mu.Unlock()
 
@@ -493,6 +639,76 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					w.WriteHeader(http.StatusOK)
 				})
 
+				r.Post("/plans/{id}/files", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					if !strings.HasPrefix(id, "plan-") {
+						id = "plan-" + id
+					}
+
+					// Update max upload size to 50MB
+					r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+					if err := r.ParseMultipartForm(50 << 20); err != nil {
+						http.Error(w, "File too big", http.StatusBadRequest)
+						return
+					}
+
+					file, header, err := r.FormFile("file")
+					if err != nil {
+						http.Error(w, "Invalid file", http.StatusBadRequest)
+						return
+					}
+					defer file.Close()
+
+					rootDir, _ := findProjectRoot()
+					if rootDir == "" {
+						http.Error(w, "Project root not found", http.StatusInternalServerError)
+						return
+					}
+
+					targetDir := filepath.Join(rootDir, ".druppie", "files", id)
+					if err := os.MkdirAll(targetDir, 0755); err != nil {
+						http.Error(w, "Failed to create directory", http.StatusInternalServerError)
+						return
+					}
+
+					filename := header.Filename
+					dstPath := filepath.Join(targetDir, filename)
+					dst, err := os.Create(dstPath)
+					if err != nil {
+						http.Error(w, "Failed to create file", http.StatusInternalServerError)
+						return
+					}
+					defer dst.Close()
+
+					if _, err := io.Copy(dst, file); err != nil {
+						http.Error(w, "Failed to save file", http.StatusInternalServerError)
+						return
+					}
+
+					// Update Plan in Store
+					tm.mu.Lock()
+					plan, err := plannerService.Store.GetPlan(id)
+					if err == nil {
+						exists := false
+						for _, f := range plan.Files {
+							if f == filename {
+								exists = true
+								break
+							}
+						}
+						if !exists {
+							plan.Files = append(plan.Files, filename)
+							_ = plannerService.Store.SavePlan(plan)
+						}
+					}
+					tm.mu.Unlock()
+
+					_ = plannerService.Store.LogInteraction(id, "System", "File Upload", fmt.Sprintf("Uploaded file: %s", filename))
+
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(fmt.Sprintf(`{"filename": "%s"}`, filename)))
+				})
+
 				r.Get("/logs/{id}", func(w http.ResponseWriter, r *http.Request) {
 					id := chi.URLParam(r, "id")
 					if !strings.HasPrefix(id, "plan-") {
@@ -543,26 +759,44 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					tm.mu.Unlock()
 
 					if !ok {
-						// Task not started yet - handle stop command directly
-						if req.Input == "/stop" {
-							plan, err := plannerService.Store.GetPlan(id)
-							if err == nil {
-								plan.Status = "stopped"
-								_ = plannerService.Store.SavePlan(plan)
-								w.WriteHeader(http.StatusOK)
-								return
+						// Task not active in memory. Try to resume from store if plan exists.
+						plan, err := plannerService.Store.GetPlan(id)
+						if err == nil {
+							// Plan exists! Resume it.
+							tm.OutputChan <- fmt.Sprintf("[%s] Resuming inactive plan from store on input received...", id)
+
+							// Force status update to valid running state before starting
+							plan.Status = "running"
+							_ = plannerService.Store.SavePlan(plan)
+
+							// Start the task
+							task = tm.StartTask(context.Background(), plan)
+
+							// Proceed to use 'task' for input
+						} else {
+							// Task not in memory AND Plan not found in store
+
+							// Task not started yet - handle stop command directly
+							if req.Input == "/stop" {
+								plan, err := plannerService.Store.GetPlan(id)
+								if err == nil {
+									plan.Status = "stopped"
+									_ = plannerService.Store.SavePlan(plan)
+									w.WriteHeader(http.StatusOK)
+									return
+								}
 							}
+							http.Error(w, "Task not found", http.StatusNotFound)
+							return
 						}
-						http.Error(w, "Task not found", http.StatusNotFound)
-						return
 					}
 
-					// Send to task
+					// Send to task (Buffered channel allows immediate return)
 					select {
 					case task.InputChan <- req.Input:
 						w.WriteHeader(http.StatusOK)
-					case <-time.After(2 * time.Second):
-						http.Error(w, "Task is not waiting for input", http.StatusConflict)
+					default:
+						http.Error(w, "Task input buffer full", http.StatusServiceUnavailable)
 					}
 				})
 			})
@@ -592,6 +826,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				port = "8080"
 			}
 			fmt.Printf("Starting server on port %s...\n", port)
+			// Binds to 0.0.0.0 (all interfaces)
 			if err := http.ListenAndServe(":"+port, r); err != nil {
 				fmt.Printf("Server failed: %v\n", err)
 				os.Exit(1)
@@ -751,7 +986,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						if intent.Action == "create_project" {
-							plan, err := planner.CreatePlan(context.Background(), intent)
+							plan, err := planner.CreatePlan(context.Background(), intent, "")
 							if err != nil {
 								fmt.Printf("[Error] Planner failed: %v\n> ", err)
 								continue
@@ -793,30 +1028,127 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			prompt := strings.Join(args, " ")
-			intent, rawRouterResp, err := router.Analyze(context.Background(), prompt)
+
+			// Load or Create Plan
+			var currentPlan model.ExecutionPlan
+			effectivePrompt := prompt
+			isNewPlan := true
+
+			if planID != "" {
+				if p, err := planner.Store.GetPlan(planID); err == nil {
+					currentPlan = p
+					isNewPlan = false
+					fmt.Printf("[Chat] Resuming plan: %s\n", planID)
+				}
+			}
+
+			if isNewPlan {
+				if planID == "" {
+					// Generate a new ID if not provided
+					planID = fmt.Sprintf("plan-%d", time.Now().Unix())
+				}
+				currentPlan = model.ExecutionPlan{
+					ID: planID,
+					Intent: model.Intent{
+						InitialPrompt: prompt,
+						Prompt:        prompt,
+					},
+					Status: "pending",
+					Steps:  []model.Step{},
+				}
+			} else {
+				// 0. Store User Input
+				newStepID := 1
+				if len(currentPlan.Steps) > 0 {
+					newStepID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+				}
+				currentPlan.Steps = append(currentPlan.Steps, model.Step{
+					ID: newStepID, AgentID: "user", Action: "user_query", Status: "running", Result: prompt,
+				})
+				currentPlan.Status = "running"
+				_ = planner.Store.SavePlan(currentPlan)
+
+				// 1. Build Context
+				history := ""
+				startIdx := 0
+				if len(currentPlan.Steps) > 20 {
+					startIdx = len(currentPlan.Steps) - 20
+				}
+				for _, s := range currentPlan.Steps[startIdx:] {
+					switch s.Action {
+					case "user_query":
+						history += fmt.Sprintf("User: %s\n", s.Result)
+					case "general_chat":
+						history += fmt.Sprintf("AI: %s\n", s.Result)
+					}
+				}
+				effectivePrompt = fmt.Sprintf("History:\n%s\nRequest: %s", history, prompt)
+				//fmt.Printf("[DEBUG] Constructed History Steps: %d\n", len(currentPlan.Steps))
+			}
+
+			// Initialize TaskManager early to unify output
+			tm := NewTaskManager(planner)
+
+			intent, rawRouterResp, err := router.Analyze(context.Background(), effectivePrompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)
 			}
 
-			if intent.Action != "create_project" {
-				_ = planner.Store.LogInteraction("", "Router", prompt, rawRouterResp)
-				fmt.Printf("Intent was '%s', which doesn't trigger a planner in this CLI.\n", intent.Action)
-				return
-			}
+			var responseOutput string
 
-			plan, err := planner.CreatePlan(context.Background(), intent)
-			if err != nil {
-				fmt.Printf("Planner failed: %v\n", err)
-				os.Exit(1)
+			if intent.Action != "create_project" {
+				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", effectivePrompt, rawRouterResp)
+
+				answer := intent.Answer
+				if answer == "" {
+					answer = rawRouterResp
+				}
+
+				// Append AI Step
+				newStepID := 1
+				if len(currentPlan.Steps) > 0 {
+					newStepID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
+				}
+				currentPlan.Steps = append(currentPlan.Steps, model.Step{
+					ID: newStepID, AgentID: "router", Action: "general_chat", Status: "completed", Result: answer,
+				})
+				currentPlan.Status = "completed"
+				_ = planner.Store.SavePlan(currentPlan)
+
+				if intent.Answer != "" {
+					responseOutput = fmt.Sprintf("[%s]\n ** AI Response:**\n%s", currentPlan.ID, intent.Answer)
+				} else {
+					responseOutput = fmt.Sprintf("[%s] Intent was '%s', which doesn't trigger a planner in this CLI.\n", currentPlan.ID, intent.Action)
+				}
+			} else {
+				// Update intent for planner
+				intent.InitialPrompt = effectivePrompt
+				intent.Prompt = effectivePrompt
+
+				var err error
+				currentPlan, err = planner.CreatePlan(context.Background(), intent, currentPlan.ID)
+				if err != nil {
+					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
+				// Log router step to plan log
+				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", prompt, rawRouterResp)
+				// Explicitly save the plan to disk so TaskManager can find it
+				if err := planner.Store.SavePlan(currentPlan); err != nil {
+					fmt.Printf("[%s] Failed to save plan: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
 			}
-			// Log router step to plan log
-			_ = planner.Store.LogInteraction(plan.ID, "Router", prompt, rawRouterResp)
 
 			// Initialize TaskManager for execution
-			tm := NewTaskManager(planner)
-			task := tm.StartTask(context.Background(), plan)
-			fmt.Printf("[Planner] Started Plan %s execution...\n", plan.ID)
+			task := tm.StartTask(context.Background(), currentPlan)
+			fmt.Printf("[%s] Started Plan execution...\n", currentPlan.ID)
+
+			// Inject the postponed AI response if exists
+			if responseOutput != "" {
+				tm.OutputChan <- responseOutput
+			}
 
 			// Execution Loop
 			done := false
@@ -844,11 +1176,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// Fetch final state
-			finalPlan, _ := planner.Store.GetPlan(plan.ID)
-			plan = finalPlan
-
-			// validJSON, _ := json.MarshalIndent(plan, "", "  ")
+			finalPlan, _ := planner.Store.GetPlan(currentPlan.ID)
+			currentPlan = finalPlan
+			// validJSON, _ := json.MarshalIndent(currentPlan, "", "  ")
 			// fmt.Println(string(validJSON))
+			fmt.Println("") // Add one more empty line on exit
 		},
 	}
 

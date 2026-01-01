@@ -113,7 +113,7 @@ const DOC_REGISTRY = {
     ],
     "scripts": [
         { name: "Overview", path: "script/overview.md" },
-        { name: "Druppie CLI", path: "druppie.sh" },
+        { name: "Druppie CLI", path: "script/druppie.sh" },
         { name: "Install Kubernetes (RKE2/k3d)", path: "script/install_k8s.sh" },
         { name: "Platform Bootstrap (Base)", path: "script/setup_dev_env.sh" },
         { name: "Data Tools (Gitea/MinIO/Qdrant)", path: "script/setup_data_tools.sh" },

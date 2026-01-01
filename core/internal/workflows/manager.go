@@ -11,15 +11,16 @@ import (
 
 // WorkflowContext carries the dependencies needed by a workflow
 type WorkflowContext struct {
-	Ctx          context.Context
-	LLM          llm.Provider
-	Dispatcher   *executor.Dispatcher
-	Store        store.Store
-	PlanID       string
-	OutputChan   chan<- string
-	InputChan    <-chan string
-	UpdateStatus func(status string)
-	AppendStep   func(step model.Step) // Callback to add a executed step to the plan log
+	Ctx               context.Context
+	LLM               llm.Provider
+	Dispatcher        *executor.Dispatcher
+	Store             store.Store
+	PlanID            string
+	OutputChan        chan<- string
+	InputChan         <-chan string
+	UpdateStatus      func(status string)
+	AppendStep        func(step model.Step) int // Callback to add a executed step to the plan log
+	FindCompletedStep func(action string, paramKey string, paramValue interface{}) *model.Step
 }
 
 // Workflow defines the interface for a hard-coded process

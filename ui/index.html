@@ -3,9 +3,16 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Druppie Command Center</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Druppie">
+    <meta name="theme-color" content="#0f172a">
+    <title>Druppie</title>
     <link rel="icon" type="image/svg+xml" href="../druppie_logo.svg">
+    <link rel="apple-touch-icon" href="../druppie_logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -33,35 +40,60 @@
             box-sizing: border-box;
         }
 
+        /* Hide Scrollbars */
+        ::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            background: transparent;
+        }
+
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+        }
+
         body {
             font-family: 'Outfit', sans-serif;
             background-color: var(--bg-deep);
             color: var(--text-main);
             height: 100vh;
-            display: flex;
             overflow: hidden;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            grid-template-rows: 1fr max-content;
+            grid-template-areas:
+                "sidebar main"
+                "console console";
         }
 
         /* Layout */
         #sidebar {
-            width: 380px;
+            grid-area: sidebar;
+            width: 100%;
+            /* Fill grid column */
             background: var(--bg-card);
             border-right: 1px solid var(--glass-border);
             display: flex;
             flex-direction: column;
             z-index: 10;
+            overflow: hidden;
+            /* Force container constraint */
+            min-height: 0;
+            /* Allow shrinking in Grid */
         }
 
         #main-view {
-            flex: 1;
+            grid-area: main;
             display: flex;
             flex-direction: column;
             position: relative;
+            overflow: hidden;
         }
 
         /* Sidebar / Chat Area */
         .sidebar-header {
-            padding: 1.5rem;
+            padding: 0.5rem 0.5rem 0.5rem 0.5rem;
             border-bottom: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
@@ -97,6 +129,95 @@
             white-space: pre-wrap;
         }
 
+        .param-box {
+            margin-top: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            max-height: 250px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .param-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            font-size: 0.85rem;
+        }
+
+        .param-list li {
+            margin-bottom: 0.5rem;
+            display: block;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        .param-list li:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .param-list .key {
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-family: 'JetBrains Mono', monospace;
+            display: inline;
+            margin-right: 0.5rem;
+        }
+
+        .param-list .val {
+            color: var(--text-main);
+            white-space: pre-wrap;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            display: inline;
+        }
+
+        .array-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.25rem;
+            border-left: 2px solid var(--accent);
+            display: block;
+        }
+
+        .array-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .item-header {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 0.75rem;
+            margin-bottom: 0.25rem;
+            opacity: 0.8;
+            display: block;
+        }
+
+        .sub-row {
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .sub-key {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            display: inline;
+            margin-right: 0.5rem;
+        }
+
+        .sub-val {
+            color: var(--text-main);
+            font-size: 0.8rem;
+            display: inline;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -124,7 +245,7 @@
         }
 
         .chat-input-wrapper {
-            padding: 1.25rem;
+            padding: 0rem;
             background: rgba(15, 23, 42, 0.5);
             backdrop-filter: blur(10px);
             border-top: 1px solid var(--glass-border);
@@ -155,8 +276,8 @@
         #send-btn {
             background: var(--accent);
             border: none;
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 0.75rem;
             cursor: pointer;
             display: flex;
@@ -172,7 +293,7 @@
         /* Kanban Board */
         #kanban-container {
             flex: 1;
-            padding: 2rem;
+            padding: 0rem 2rem 0rem 2rem;
             overflow-x: auto;
             display: flex;
             gap: 2rem;
@@ -197,7 +318,8 @@
         }
 
         .kanban-col {
-            flex: 0 0 320px;
+            flex: 1;
+            min-width: 200px;
             display: flex;
             flex-direction: column;
             gap: 0;
@@ -242,7 +364,7 @@
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s, border-color 0.2s;
             cursor: default;
@@ -295,10 +417,15 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            display: none;
         }
 
         /* Log Panel & Tabs */
         #bottom-panel {
+            grid-area: console;
+            position: relative;
+            width: 100%;
+            z-index: 50;
             max-height: 40vh;
             background: #0a0f1d;
             border-top: 1px solid var(--glass-border);
@@ -315,7 +442,7 @@
         }
 
         .tab-strip {
-            padding: 0 1.5rem;
+            padding: 0rem 0rem 0rem 0.5rem;
             background: rgba(255, 255, 255, 0.02);
             display: flex;
             gap: 2rem;
@@ -344,7 +471,8 @@
 
         .tab-content {
             flex: 1;
-            padding: 1rem 1.5rem;
+            padding: 1rem 1.5rem 3rem 1.5rem;
+            /* Extra bottom padding for scroll */
             overflow-y: auto;
             display: none;
         }
@@ -472,7 +600,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: 1rem;
         }
 
         #step-modal.active {
@@ -486,10 +614,36 @@
             max-width: 800px;
             width: 100%;
             max-height: 90vh;
-            overflow-y: auto;
-            padding: 2rem;
             position: relative;
             animation: modalSlideIn 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        .modal-close-overlay {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: all 0.2s;
+            z-index: 1010;
+        }
+
+        .modal-close-overlay:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
         }
 
         @keyframes modalSlideIn {
@@ -508,34 +662,41 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 0;
             border-bottom: 1px solid var(--glass-border);
+            flex: none;
         }
 
-        .modal-close {
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            width: 32px;
-            height: 32px;
-            border-radius: 0.5rem;
-            cursor: pointer;
+        /* Old modal-close removed/ignored */
+
+        #kanban-container {
+            flex: 1;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-dim);
-            transition: all 0.2s;
-        }
-
-        .modal-close:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-main);
+            gap: 1.5rem;
+            padding: 1rem;
+            /* Reduce padding to use more space */
+            overflow-x: auto;
+            align-items: flex-start;
         }
 
         .modal-body {
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid var(--glass-border);
+            background: var(--bg-card);
+            flex: none;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
         }
 
         .info-row {
@@ -616,6 +777,189 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        /* Mobile Responsive */
+        /* Mobile Responsive - Reordered Layout */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                display: flex;
+                height: 100vh;
+                height: 100dvh;
+                /* Dynamic Height for iOS Address Bar */
+            }
+
+            /* Unwrap Sidebar to reorder children independently */
+            #sidebar {
+                display: contents;
+                /* This makes children direct children of body */
+            }
+
+            /* Specific styles for sidebar content when unwrapped */
+            .sidebar-header {
+                order: 1;
+                /* 1. Header Top */
+                width: 100%;
+                background: var(--bg-card);
+                border-bottom: 1px solid var(--glass-border);
+                padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+                /* More space at bottom */
+                height: auto;
+                /* Allow growth */
+                min-height: 60px;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                /* Allow wrapping if needed */
+                position: sticky;
+                /* Keep header visible */
+                top: 0;
+                z-index: 100;
+                padding-top: env(safe-area-inset-top);
+                /* Handle Notch */
+                background: var(--bg-deep);
+                /* Ensure opacity over content */
+            }
+
+            #main-view {
+                order: 2;
+                /* 2. Kanban Middle */
+                height: 22vh;
+                /* Reduced height to save space */
+                flex: none;
+                width: 100%;
+                border-bottom: 1px solid var(--glass-border);
+                background: var(--bg-deep);
+            }
+
+            #chat-messages {
+                order: 3;
+                /* 3. Chat Area */
+                flex: 1;
+                width: 100%;
+                overflow-y: auto;
+                background: var(--bg-card);
+                padding: 1rem;
+            }
+
+            .chat-input-wrapper {
+                order: 4;
+                /* 4. Input Area */
+                width: 100%;
+                background: var(--bg-card);
+                padding: 0.5rem 0.5rem 0 0.5rem;
+                /* Minimal padding, bottom 0 */
+                border-top: 1px solid var(--glass-border);
+            }
+
+            /* 5. System Console (Bottom) */
+            #bottom-panel {
+                order: 5;
+                position: relative !important;
+                width: 100%;
+                bottom: auto;
+                flex: none;
+                flex-shrink: 0;
+                /* Ensure it never shrinks */
+                z-index: 200;
+                /* Higher than input */
+                max-height: 35vh;
+                /* Compact console */
+                overflow: hidden;
+                /* Ensure content stays inside */
+                padding-bottom: env(safe-area-inset-bottom);
+                /* Handle Home Indicator */
+            }
+
+            /* Adjust Tab Strip for Mobile */
+            .tab-strip {
+                padding: 0 0 0 0.5rem;
+                /* Push icon to right */
+                align-items: center;
+            }
+
+            /* Kanban Horizontal Strip */
+            #kanban-container {
+                flex-direction: row;
+                padding: 0.5rem;
+                overflow-x: auto;
+                overflow-y: visible;
+                /* Allow headers to show */
+                gap: 0.5rem;
+                scroll-snap-type: x mandatory;
+            }
+
+            .kanban-col {
+                min-width: 50vw;
+                scroll-snap-align: center;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.02);
+                border-radius: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+
+            .col-header {
+                padding: 0.25rem 0;
+                /* Minimal spacing for label */
+            }
+
+            .col-cards {
+                overflow-y: auto;
+                max-height: calc(25vh - 3rem);
+                /* Match main-view height */
+            }
+
+
+
+            /* Compact Cards for Mobile */
+            .task-card .task-meta {
+                display: none;
+            }
+
+            .task-card {
+                padding: 0.4rem;
+                gap: 0rem;
+                font-size: 0.75rem;
+            }
+
+            .task-card .task-header .task-agent {
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+
+            .task-card .task-header .task-id {
+                font-size: 0.65rem;
+            }
+
+            .task-card .task-header {
+                margin-bottom: 0.1rem;
+            }
+
+            .modal-content {
+                width: 95%;
+                /* Maximize width */
+                max-height: 95vh;
+                border-radius: 1rem 1rem 1rem 1rem;
+                /* Bottom sheet style */
+            }
+
+            .modal-footer {
+                padding: 1rem;
+                /* Reduce footer padding */
+            }
+
+            .modal-actions {
+                gap: 0.5rem;
+                margin-top: 0;
+            }
+
+            .modal-btn {
+                padding: 0.5rem;
+                font-size: 0.8rem;
+                white-space: nowrap;
+                /* Prevent wrap */
+            }
+        }
+
         .modal-btn.primary {
             background: var(--accent);
             color: var(--bg-deep);
@@ -648,7 +992,26 @@
         <header class="sidebar-header">
             <img src="../druppie_logo.svg" alt="Druppie" style="width: 48px; height: 48px;">
             <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-                <h1>Druppie UI</h1>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <h1>Druppie Chat</h1>
+                    <button onclick="createNewPlan()" title="New plan" style="
+                        background: transparent;
+                        border: 1px solid var(--glass-border);
+                        border-radius: 0.5rem;
+                        padding: 0.25rem;
+                        color: var(--text-dim);
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 28px;
+                        height: 28px;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.color='white'; this.style.borderColor='var(--accent)'"
+                        onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--glass-border)'">
+                        <i data-lucide="plus" size="16"></i>
+                    </button>
+                </div>
                 <select id="plan-selector" style="
                     background: var(--bg-deep);
                     border: 1px solid var(--glass-border);
@@ -660,7 +1023,7 @@
                     outline: none;
                     cursor: pointer;
                 ">
-                    <option value="">No active plan</option>
+                    <option value="">Geen actief plan</option>
                 </select>
             </div>
         </header>
@@ -668,20 +1031,50 @@
 
         <div id="chat-messages">
             <div class="message ai">
-                Hello! I am the Druppie Orchestrator. What would you like to build today?
+                Hallo! Ik ben Druppie, de AI-Orchestrator. Wat kan ik voor je doen ?
             </div>
         </div>
 
         <div class="chat-input-wrapper">
             <div class="chat-input-container">
-                <input type="text" id="prompt-input" placeholder="Type your request here...">
+                <input type="text" id="prompt-input" placeholder="Type je vraag of opdracht hier...">
+                <button id="send-btn" style="
+                    background: var(--accent);
+                    border: none;
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.75rem;
+                    color: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.25rem;
+                ">
+                    <i data-lucide="send" size="16"></i>
+                </button>
             </div>
-            <div style="display: flex; gap: 0.5rem; padding: 0.5rem 0; flex-wrap: wrap; align-items: center;">
+            <div
+                style="display: flex; gap: 0.25rem; padding: 0.5rem 0; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+                <input type="file" id="file-input" style="display: none;" onchange="handleFileUpload(this)">
+                <button onclick="document.getElementById('file-input').click()" title="Attach File" style="
+                    background: var(--glass-bg);
+                    border: 1px solid var(--glass-border);
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.5rem;
+                    color: var(--text-dim);
+                    font-size: 0.75rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                ">
+                    <i data-lucide="file-plus" size="14"></i>
+                </button>
                 <button onclick="handleCommand('/list')" title="List Plans (/list)" style="
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -695,7 +1088,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -709,7 +1102,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -723,7 +1116,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -737,7 +1130,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -747,19 +1140,7 @@
                 ">
                     <i data-lucide="book" size="14"></i>
                 </button>
-                <button id="send-btn" style="
-                    background: var(--accent);
-                    border: none;
-                    border-radius: 0.5rem;
-                    padding: 0.35rem 0.75rem;
-                    color: white;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <i data-lucide="send" size="16"></i>
-                </button>
+
             </div>
         </div>
     </aside>
@@ -768,7 +1149,15 @@
         <div id="kanban-container">
             <div class="kanban-col" id="col-pending">
                 <div class="col-header">
-                    <h3>Pending</h3>
+                    <h3>Wachtend</h3>
+                    <span class="task-count">0</span>
+                </div>
+                <div class="col-cards"></div>
+            </div>
+
+            <div class="kanban-col" id="col-interaction">
+                <div class="col-header">
+                    <h3>Interactie</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
@@ -776,7 +1165,7 @@
 
             <div class="kanban-col" id="col-running">
                 <div class="col-header">
-                    <h3>In Progress</h3>
+                    <h3>Bezig</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
@@ -784,58 +1173,61 @@
 
             <div class="kanban-col" id="col-completed">
                 <div class="col-header">
-                    <h3>Completed</h3>
+                    <h3>Voltooid</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
             </div>
         </div>
 
-        <div id="bottom-panel">
-            <div class="tab-strip">
-                <div class="tab-btn active" onclick="switchTab('system')">
-                    <i data-lucide="terminal" size="14"></i>
-                    System Console
-                </div>
-                <div class="tab-btn" onclick="switchTab('process')">
-                    <i data-lucide="activity" size="14"></i>
-                    Planner - Agents
-                </div>
-                <div style="flex: 1;"></div>
-                <button id="toggle-console-btn" onclick="toggleConsole()"
-                    style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 1rem; display: flex; align-items: center;"
-                    title="Toggle Console">
-                    <i data-lucide="chevron-down" size="16"></i>
-                </button>
-            </div>
+    </main>
 
-            <div id="system-tab" class="tab-content active">
-                <div id="log-content">
-                    <div class="log-entry info">Bridge active. Waiting for task...</div>
-                </div>
+    <div id="bottom-panel" class="collapsed">
+        <div class="tab-strip">
+            <div id="tab-btn-system" class="tab-btn active" onclick="switchTab('system')">
+                <i data-lucide="terminal" size="14"></i>
+                System Console
             </div>
+            <div id="tab-btn-process" class="tab-btn" onclick="switchTab('process')">
+                <i data-lucide="activity" size="14"></i>
+                Planner - Agents
+            </div>
+            <div style="flex: 1;"></div>
+            <button id="toggle-console-btn" onclick="toggleConsole()"
+                style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 1rem; display: flex; align-items: center;"
+                title="Toggle Console">
+                <i data-lucide="chevron-up" size="16"></i>
+            </button>
+        </div>
 
-            <div id="process-tab" class="tab-content">
-                <div id="step-log">
-                    <div class="message">No active plan.</div>
-                </div>
+        <div id="system-tab" class="tab-content active">
+            <div id="log-content">
+                <div class="log-entry info">Verbinding actief. Wacht op taken...</div>
             </div>
         </div>
-    </main>
+
+        <div id="process-tab" class="tab-content">
+            <div id="step-log">
+                <div class="message">Geen actief plan.</div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Step Detail Modal -->
     <div id="step-modal">
+        <button class="modal-close-overlay" onclick="closeStepModal()">
+            <i data-lucide="x" size="24"></i>
+        </button>
         <div class="modal-content">
             <div class="modal-header">
                 <div>
                     <h2 id="modal-title" style="font-size: 1.25rem; margin-bottom: 0.5rem;"></h2>
                     <div id="modal-subtitle" style="font-size: 0.875rem; color: var(--text-dim);"></div>
                 </div>
-                <button class="modal-close" onclick="closeStepModal()">
-                    <i data-lucide="x" size="18"></i>
-                </button>
             </div>
             <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer" style="display: none;"></div>
         </div>
     </div>
 
@@ -846,7 +1238,9 @@
             currentPlanId: null,
             lastLogIndex: 0,
             pollingInterval: null,
-            isWaitingForInput: false
+            pollingInterval: null,
+            isWaitingForInput: false,
+            shownStepIds: new Set()
         };
 
         const elements = {
@@ -858,6 +1252,7 @@
             planSelector: document.getElementById('plan-selector'),
             cols: {
                 pending: document.getElementById('col-pending'),
+                interaction: document.getElementById('col-interaction'),
                 running: document.getElementById('col-running'),
                 completed: document.getElementById('col-completed')
             }
@@ -870,10 +1265,12 @@
 
             state.currentPlanId = selectedPlanId;
             state.lastLogIndex = 0;
+            state.shownStepIds = new Set();
             elements.systemLogs.innerHTML = '';
             elements.stepLogs.innerHTML = '';
+            elements.chat.innerHTML = '';
 
-            addChatMessage('ai', `🔄 Switched to plan: ${selectedPlanId}`);
+            addChatMessage('ai', `🔄 Wissel naar plan: ${selectedPlanId}`);
             startMonitoring();
         };
 
@@ -884,7 +1281,7 @@
                 const plans = await resp.json();
 
                 const currentValue = elements.planSelector.value;
-                elements.planSelector.innerHTML = '<option value="">Select a plan...</option>';
+                elements.planSelector.innerHTML = '<option value="">Selecteer of Maak een plan...</option>';
 
                 plans.forEach(plan => {
                     const option = document.createElement('option');
@@ -905,7 +1302,7 @@
                     elements.planSelector.appendChild(option);
                 });
             } catch (e) {
-                console.error('Failed to update plan selector:', e);
+                console.error('Fout bij het selecteren van het plan:', e);
             }
         }
 
@@ -914,15 +1311,36 @@
         updatePlanSelector();
 
         function switchTab(name) {
+            const panel = document.getElementById('bottom-panel');
+            const btnId = name === 'system' ? 'tab-btn-system' : 'tab-btn-process';
+            const clickedBtn = document.getElementById(btnId);
+
+            // Robust check for active state
+            const isAlreadyActive = clickedBtn.classList.contains('active');
+
+            if (isAlreadyActive) {
+                // If active, just toggle the panel visibility
+                toggleConsole();
+                return;
+            }
+
+            // If switching to a NEW tab:
+            // 1. Deactivate all buttons
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            // 2. Hide all contents
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
+            // 3. Activate specific button and content
+            clickedBtn.classList.add('active');
             if (name === 'system') {
-                document.querySelector('[onclick="switchTab(\'system\')"]').classList.add('active');
                 document.getElementById('system-tab').classList.add('active');
             } else {
-                document.querySelector('[onclick="switchTab(\'process\')"]').classList.add('active');
                 document.getElementById('process-tab').classList.add('active');
+            }
+
+            // 4. Ensure panel is OPEN (remove collapsed) if it was closed
+            if (panel.classList.contains('collapsed')) {
+                toggleConsole();
             }
         }
 
@@ -939,6 +1357,41 @@
                 btn.innerHTML = '<i data-lucide="chevron-down" size="16"></i>';
             }
             lucide.createIcons();
+        }
+
+        async function handleFileUpload(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+
+            if (!state.currentPlanId) {
+                addChatMessage('ai', '⚠️ Geen actief plan. Selecteer of maak eerst een plan voordat je bestanden uploadt.');
+                input.value = ''; // Reset input
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const msg = addChatMessage('ai', `📁 Uploaden van bestand: ${file.name}...`);
+
+            try {
+                const resp = await fetch(`/v1/plans/${state.currentPlanId}/files`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (resp.ok) {
+                    msg.textContent = `✅ Bestand geupload: ${file.name}`;
+                    // Optionally notify planner if waiting for input?
+                    // For now, just logging it to chat is fine, the planner will see it in context next turn.
+                } else {
+                    const err = await resp.text();
+                    msg.textContent = `❌ Fout bij uploaden: ${err}`;
+                }
+            } catch (e) {
+                msg.textContent = `❌ Netwerk fout: ${e.message}`;
+            }
+            input.value = ''; // Reset input to allow re-uploading same file
         }
 
         async function sendMessage() {
@@ -960,13 +1413,16 @@
             }
 
             // Optimistic UI: Show immediate feedback
-            const thinkingMsg = addChatMessage('ai', '🤔 Analyzing your request...');
+            const thinkingMsg = addChatMessage('ai', '🤔 Analyseren van je verzoek...');
 
             try {
                 const resp = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
+                    body: JSON.stringify({
+                        prompt,
+                        plan_id: state.currentPlanId
+                    })
                 });
                 const data = await resp.json();
 
@@ -974,12 +1430,31 @@
                 thinkingMsg.remove();
 
                 if (data.plan) {
-                    state.currentPlanId = data.plan.plan_id;
-                    state.lastLogIndex = 0;
-                    elements.systemLogs.innerHTML = '';
-                    elements.stepLogs.innerHTML = '';
+                    // Reset state if we are switching to a new/different plan
+                    if (state.currentPlanId !== data.plan.plan_id) {
+                        state.shownStepIds = new Set();
+                        state.lastLogIndex = 0;
+                        elements.systemLogs.innerHTML = '';
+                        elements.stepLogs.innerHTML = '';
+                        // Clear chat history so we can rebuild it from the new plan correctly
+                        // Note: This temporarily removes the optimistic user bubble, but strict consistency restores it
+                        elements.chat.innerHTML = '';
+                        // Restore the user prompt immediately
+                        addChatMessage('user', prompt);
 
-                    addChatMessage('ai', `✅ Plan created: ${state.currentPlanId}\nStarting orchestration...`);
+                        // Prevent duplication in updatePlan by fast-forwarding the shown ID
+                        if (data.plan.steps && data.plan.steps.length > 0) {
+                            const lastStep = data.plan.steps[data.plan.steps.length - 1];
+                            if (lastStep.action === 'user_query') {
+                                state.shownStepIds = state.shownStepIds || new Set();
+                                state.shownStepIds.add(lastStep.step_id);
+                            }
+                        }
+                    }
+                    state.currentPlanId = data.plan.plan_id;
+                    state.lastShownStepId = state.lastShownStepId || 0;
+
+                    // addChatMessage('ai', `✅ Plan gemaakt: ${state.currentPlanId}\nOrchestration gestart...`);
 
                     // Update plan selector to show new plan
                     updatePlanSelector();
@@ -987,7 +1462,11 @@
                     // Start monitoring immediately to show the pending plan
                     startMonitoring();
                 } else if (data.intent) {
-                    addChatMessage('ai', `Analysis: ${data.intent.action}.`);
+                    if (data.intent.answer) {
+                        addChatMessage('ai', data.intent.answer);
+                    } else {
+                        addChatMessage('ai', `Analyse: ${data.intent.action}.`);
+                    }
                 }
             } catch (err) {
                 thinkingMsg.remove();
@@ -1009,7 +1488,7 @@
                 <div class="task-action">${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}</div>
                 <div class="task-meta">
                      <i data-lucide="loader-2" size="12" class="lucide-spin"></i>
-                     initializing
+                     initialiseren
                 </div>
             `;
 
@@ -1042,12 +1521,12 @@
                         const plans = await resp.json();
                         if (plans && plans.length > 0) {
                             const list = plans.map(p => `• ${p.plan_id} - ${p.status}`).join('\n');
-                            addChatMessage('ai', `📋 Active Plans:\n${list}`);
+                            addChatMessage('ai', `📋 Actief Plan:\n${list}`);
                         } else {
-                            addChatMessage('ai', '📋 No active plans.');
+                            addChatMessage('ai', '📋 Geen actief plan.');
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Failed to list plans: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het weergeven van de actieve plannen: ${e.message}`);
                     }
                     break;
 
@@ -1056,15 +1535,15 @@
                         try {
                             const resp = await fetch(`/v1/plans/${state.currentPlanId}/stop`, { method: 'POST' });
                             if (resp.ok) {
-                                addChatMessage('ai', '🛑 Stop signal sent.');
+                                addChatMessage('ai', '🛑 Stop signaal verstuurd.');
                             } else {
-                                addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                                addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${await resp.text()}`);
                             }
                         } catch (e) {
-                            addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                            addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${e.message}`);
                         }
                     } else {
-                        addChatMessage('ai', '⚠️ No active plan to stop.');
+                        addChatMessage('ai', '⚠️ Geen actief plan om te stoppen.');
                     }
                     break;
 
@@ -1072,12 +1551,13 @@
                     if (parts[1]) {
                         state.currentPlanId = parts[1];
                         state.lastLogIndex = 0;
+                        state.shownStepIds = new Set();
                         elements.systemLogs.innerHTML = '';
                         elements.stepLogs.innerHTML = '';
-                        addChatMessage('ai', `🔄 Switched to plan: ${parts[1]}`);
+                        addChatMessage('ai', `🔄 Actief plan veranderd naar: ${parts[1]}`);
                         startMonitoring();
                     } else {
-                        addChatMessage('ai', '⚠️ Usage: /switch <plan-id>');
+                        addChatMessage('ai', '⚠️ Gebruik: /switch <plan-id>');
                     }
                     break;
 
@@ -1085,13 +1565,13 @@
                 case '/delete':
                     const delPlanId = parts[1] || state.currentPlanId;
                     if (!delPlanId) {
-                        addChatMessage('ai', '⚠️ No plan to delete. Usage: /del <plan-id>');
+                        addChatMessage('ai', '⚠️ Geen plan om te verwijderen. Gebruik: /del <plan-id>');
                         break;
                     }
                     try {
                         const resp = await fetch(`/v1/plans/${delPlanId}`, { method: 'DELETE' });
                         if (resp.ok) {
-                            addChatMessage('ai', `🗑️ Deleted plan: ${delPlanId}`);
+                            addChatMessage('ai', `🗑️ Plan verwijderd: ${delPlanId}`);
                             if (state.currentPlanId === delPlanId) {
                                 state.currentPlanId = null;
                                 elements.systemLogs.innerHTML = '';
@@ -1111,34 +1591,34 @@
                             }
                             updatePlanSelector();
                         } else {
-                            addChatMessage('ai', `❌ Failed to delete plan: ${await resp.text()}`);
+                            addChatMessage('ai', `❌ Fout bij het verwijderen van het plan: ${await resp.text()}`);
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Error deleting plan: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het verwijderen van het plan: ${e.message}`);
                     }
                     break;
 
                 case '/resume':
                     const resumePlanId = parts[1] || state.currentPlanId;
                     if (!resumePlanId) {
-                        addChatMessage('ai', '⚠️ No plan to resume. Usage: /resume <plan-id>');
+                        addChatMessage('ai', '⚠️ Geen plan om te hervatten. Gebruik: /resume <plan-id>');
                         break;
                     }
                     try {
                         const resp = await fetch(`/v1/plans/${resumePlanId}/resume`, { method: 'POST' });
                         if (resp.ok) {
-                            addChatMessage('ai', `▶️ Resumed plan: ${resumePlanId}`);
+                            addChatMessage('ai', `▶️ Plan hervat: ${resumePlanId}`);
                             updatePlanSelector();
                         } else {
-                            addChatMessage('ai', `❌ Failed to resume plan: ${await resp.text()}`);
+                            addChatMessage('ai', `❌ Fout bij het hervatten van het plan: ${await resp.text()}`);
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Error resuming plan: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het hervatten van het plan: ${e.message}`);
                     }
                     break;
 
                 default:
-                    addChatMessage('ai', `❓ Unknown command: ${command}\n\nAvailable commands:\n• /list - Show all plans\n• /stop - Stop current plan\n• /switch <plan-id> - Switch to a different plan\n• /del <plan-id> - Delete a plan\n• /resume <plan-id> - Resume a stopped plan`);
+                    addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan`);
             }
         }
 
@@ -1151,7 +1631,7 @@
                 });
                 if (resp.ok) {
                     state.isWaitingForInput = false;
-                    addChatMessage('ai', `Input sent. Resuming execution...`);
+                    addChatMessage('user', `Input verstuurd: ${text.length > 50 ? text.substring(0, 50) + '...' : text}`);
                 } else {
                     const err = await resp.text();
                     addChatMessage('ai', `Failed: ${err}`);
@@ -1161,10 +1641,14 @@
             }
         }
 
-        function addChatMessage(role, text) {
+        function addChatMessage(role, text, isHtml = false) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
-            div.textContent = text;
+            if (isHtml) {
+                div.innerHTML = text;
+            } else {
+                div.textContent = text;
+            }
             elements.chat.appendChild(div);
             div.scrollIntoView({ behavior: 'smooth' });
             return div; // Return element so it can be removed if needed
@@ -1187,18 +1671,158 @@
                 if (!resp.ok) return;
                 const plan = await resp.json();
 
-                if (plan.status === 'waiting_input' && !state.isWaitingForInput) {
-                    state.isWaitingForInput = true;
-                    // Find the step that is waiting
-                    const waitingStep = plan.steps.find(s => s.status === 'waiting_input' || (s.status === 'running' && plan.status === 'waiting_input'));
-                    const prompt = waitingStep && waitingStep.result ? waitingStep.result : 'Task is waiting for your input. Use buttons on Kanban or type feedback.';
-                    addChatMessage('ai', prompt);
-                } else if (plan.status !== 'waiting_input') {
-                    state.isWaitingForInput = false;
-                }
+                // Ensure steps exist
+                const steps = plan.steps || [];
+
+                // Generic Chat Result Logic using Set
+                state.shownStepIds = state.shownStepIds || new Set();
+
+                // Process steps in order they appear in the plan
+                steps.forEach(s => {
+                    if (s.status === 'completed' && !state.shownStepIds.has(s.step_id)) {
+                        let msg = null;
+                        let role = 'ai';
+
+                        if (s.agent_id === 'user' || s.action.startsWith('review_')) {
+                            role = 'user';
+                        }
+
+                        if (s.action === 'user_query' && s.result) {
+                            role = 'user';
+                            msg = s.result;
+                        } else if ((s.action === 'general_chat' || s.agent_id === 'router') && s.result) {
+                            msg = s.result;
+                        } else {
+                            // Generic Step Display
+                            let label = s.action.replace(/_/g, ' ');
+                            label = label.charAt(0).toUpperCase() + label.slice(1);
+
+                            let details = '';
+
+                            if (s.result && s.result.startsWith('RESULT_')) {
+                                const raw = s.result;
+                                const file = raw.split('=')[1] || raw;
+                                const type = raw.includes('VIDEO') ? '🎬 Video' : raw.includes('IMAGE') ? '🎨 Image' : '✅ Result';
+                                details = `<br><strong>${type}:</strong> ${file}`;
+                            } else {
+                                // Params Display
+                                if (s.params && Object.keys(s.params).length > 0) {
+                                    const entries = Object.entries(s.params).filter(([k, v]) => v !== null && v !== undefined);
+                                    if (entries.length > 0) {
+                                        let listHtml = '<ul class="param-list">';
+                                        entries.forEach(([k, v]) => {
+                                            let valStr = '';
+                                            if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
+                                                // Format Array of Objects (like av_script)
+                                                valStr = v.map((item, idx) => {
+                                                    let title = `Item ${idx + 1}`;
+                                                    if (item.scene_id) title = `Scene ${item.scene_id}`;
+
+                                                    let fields = Object.entries(item).map(([ik, iv]) => {
+                                                        // Recursive simple stringify for sub-fields if needed
+                                                        let displayVal = (typeof iv === 'object') ? JSON.stringify(iv) : String(iv);
+                                                        return `<div class="sub-row"><span class="key">${ik}:</span> <span class="sub-val">${displayVal}</span></div>`;
+                                                    }).join('');
+
+                                                    return `<div class="array-item"><div class="item-header">${title}</div>${fields}</div>`;
+                                                }).join('');
+                                                // For array items, we use a div for val to allow block display of items
+                                                listHtml += `<li><span class="key">${k}:</span> <div class="val" style="display:block">${valStr}</div></li>`;
+                                            } else if (typeof v === 'object') {
+                                                valStr = JSON.stringify(v, null, 2);
+                                                listHtml += `<li><span class="key">${k}:</span> <span class="val">${valStr}</span></li>`;
+                                            } else {
+                                                valStr = String(v);
+                                                listHtml += `<li><span class="key">${k}:</span> <span class="val">${valStr}</span></li>`;
+                                            }
+                                        });
+                                        listHtml += '</ul>';
+
+                                        details += `<div class="param-box">${listHtml}</div>`;
+                                    }
+                                }
+
+                                // Result Display (if not Approved/Completed redundancy)
+                                if (s.result && s.result !== 'Approved' && s.result !== 'Approved by user' && s.result !== 'completed') {
+                                    details += `<br><span class="text-dim">Result: ${s.result}</span>`;
+                                }
+                            }
+
+                            msg = `✅ <strong>${label}</strong> completed.${details}`;
+                        }
+
+                        if (msg) {
+                            addChatMessage(role, msg, true);
+                        }
+
+                        state.shownStepIds.add(s.step_id);
+                    }
+                });
 
                 renderPlan(plan);
                 renderStepList(plan);
+
+                if (plan.status === 'waiting_input' && !state.isWaitingForInput) {
+                    state.isWaitingForInput = true;
+                    const waitingStep = plan.steps.find(s => s.status === 'waiting_input' || (s.status === 'running' && plan.status === 'waiting_input'));
+
+                    let label = 'Task';
+                    let content = 'Task is waiting for your input. Use buttons on Kanban or type feedback.';
+
+                    if (waitingStep) {
+                        label = waitingStep.action.replace(/_/g, ' ');
+                        label = label.charAt(0).toUpperCase() + label.slice(1);
+                        if (waitingStep.result) {
+                            content = waitingStep.result;
+                        }
+                    }
+
+                    // Format content (lists to param-list, text to divs)
+                    const formatContentToHtml = (text) => {
+                        if (!text) return '';
+                        const lines = text.split('\n');
+                        let html = '';
+                        let inList = false;
+                        let listHtml = '';
+
+                        lines.forEach(line => {
+                            const trimmed = line.trim();
+                            if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                if (!inList) {
+                                    inList = true;
+                                    listHtml = '<ul class="param-list">';
+                                }
+                                const content = trimmed.substring(2);
+                                let liContent = '';
+                                if (content.includes(': ')) {
+                                    const [k, ...rest] = content.split(': ');
+                                    const v = rest.join(': ');
+                                    liContent = `<span class="key">${k}:</span> <span class="val">${v}</span>`;
+                                } else {
+                                    liContent = `<span class="val">${content}</span>`;
+                                }
+                                listHtml += `<li>${liContent}</li>`;
+                            } else {
+                                if (inList) {
+                                    inList = false;
+                                    listHtml += '</ul>';
+                                    html += listHtml;
+                                }
+                                if (trimmed.length > 0) html += `<div>${line}</div>`;
+                            }
+                        });
+
+                        if (inList) {
+                            html += listHtml + '</ul>';
+                        }
+                        return html || text;
+                    };
+
+                    const msg = `❓ <strong>${label}</strong> waiting for your input.<br><div class="param-box">${formatContentToHtml(content)}</div>`;
+                    addChatMessage('ai', msg, true);
+                } else if (plan.status !== 'waiting_input') {
+                    state.isWaitingForInput = false;
+                }
             } catch (e) { }
         }
 
@@ -1233,6 +1857,7 @@
         }
 
         function renderPlan(plan) {
+            plan.steps = plan.steps || [];
             // Update Kanban background based on plan state
             const kanbanContainer = document.getElementById('kanban-container');
             kanbanContainer.className = `state-${plan.status}`;
@@ -1246,38 +1871,49 @@
 
             const counts = { pending: 0, running: 0, completed: 0 };
 
-            // If plan has no steps yet (pending state), show a placeholder
-            if (plan.steps.length === 0 && plan.status === 'pending') {
-                const card = document.createElement('div');
-                card.className = 'task-card status-pending';
-                card.onclick = () => openStepModal({
-                    step_id: 0,
-                    agent_id: 'orchestrator',
-                    action: 'Initializing plan...',
-                    status: 'pending',
-                    result: plan.intent.prompt || plan.intent.initial_prompt
-                }, plan);
+            // If plan has no steps yet, show a placeholder
+            if (plan.steps.length === 0) {
+                if (plan.status === 'pending' || plan.status === 'running') {
+                    const isRunning = plan.status === 'running';
+                    const card = document.createElement('div');
+                    card.className = `task-card status-${plan.status}`;
+                    card.onclick = () => openStepModal({
+                        step_id: 0,
+                        agent_id: 'orchestrator',
+                        action: isRunning ? 'Creating plan...' : 'Initializing plan...',
+                        status: plan.status,
+                        result: plan.intent.prompt || plan.intent.initial_prompt
+                    }, plan);
 
-                card.innerHTML = `
-                    <div class="task-header">
-                        <span class="task-agent">orchestrator</span>
-                        <span class="task-id">${plan.plan_id}</span>
-                    </div>
-                    <div class="task-action">Analyzing request...</div>
-                    <div class="task-meta">
-                         <i data-lucide="loader-2" size="12"></i>
-                         pending
-                    </div>
-                `;
+                    card.innerHTML = `
+                        <div class="task-header">
+                            <span class="task-agent">orchestrator</span>
+                            <span class="task-id">${plan.plan_id}</span>
+                        </div>
+                        <div class="task-action">${isRunning ? 'Generating Plan...' : 'Analyzing request...'}</div>
+                        <div class="task-meta">
+                            <i data-lucide="loader-2" size="12"></i>
+                            ${plan.status}
+                        </div>
+                    `;
 
-                const pendingCards = elements.cols.pending.querySelector('.col-cards');
-                if (pendingCards) pendingCards.appendChild(card);
-                counts.pending++;
-                lucide.createIcons();
+                    let targetContainer;
+                    if (isRunning) {
+                        targetContainer = elements.cols.running.querySelector('.col-cards');
+                        counts.running++;
+                    } else {
+                        targetContainer = elements.cols.pending.querySelector('.col-cards');
+                        counts.pending++;
+                    }
+
+                    if (targetContainer) targetContainer.appendChild(card);
+                    lucide.createIcons();
+                }
             }
 
             plan.steps.forEach(step => {
                 // Skip planner-generated placeholder steps that haven't been executed
+                // Show all steps including pending
                 if (step.status === 'pending' && !step.result) {
                     return;
                 }
@@ -1310,7 +1946,13 @@
                 `;
 
                 let targetCol;
-                if (step.status === 'running' || step.status === 'waiting_input') {
+                if (step.status === 'waiting_input') {
+                    targetCol = elements.cols.interaction.querySelector('.col-cards');
+                    // We don't track a separate count for interaction in the 'counts' object in the original code, 
+                    // but we should probably add it or reuse 'running'.
+                    // For now, let's assume we want to track it.
+                    // But wait, the original code had counts defined. I should update counts too.
+                } else if (step.status === 'running') {
                     targetCol = elements.cols.running.querySelector('.col-cards');
                     counts.running++;
                 } else if (step.status === 'completed' || step.status === 'failed' || step.status === 'stopped' || step.status === 'error') {
@@ -1325,6 +1967,7 @@
             });
 
             elements.cols.pending.querySelector('.task-count').textContent = counts.pending;
+            elements.cols.interaction.querySelector('.task-count').textContent = plan.steps.filter(s => s.status === 'waiting_input').length;
             elements.cols.running.querySelector('.task-count').textContent = counts.running;
             elements.cols.completed.querySelector('.task-count').textContent = counts.completed;
 
@@ -1354,7 +1997,7 @@
                 elements.stepLogs.appendChild(item);
             });
             if (elements.stepLogs.innerHTML === '') {
-                elements.stepLogs.innerHTML = '<div class="message">Waiting for agents to begin...</div>';
+                elements.stepLogs.innerHTML = '<div class="message">Wacht op agents om te beginnen...</div>';
             }
         }
 
@@ -1391,6 +2034,8 @@
             const title = document.getElementById('modal-title');
             const subtitle = document.getElementById('modal-subtitle');
             const body = document.getElementById('modal-body');
+            const footer = document.getElementById('modal-footer');
+            let footerHTML = '';
 
             title.textContent = step.action;
             subtitle.textContent = `${step.agent_id} • Step #${step.step_id} • Plan: ${plan.plan_id}`;
@@ -1446,16 +2091,16 @@
             }
 
             if (step.status === 'waiting_input' || (plan.status === 'waiting_input' && step.status === 'running')) {
-                bodyHTML += `
+                footerHTML = `
                     <div class="feedback-section">
                         <label class="info-label">Your Response:</label>
-                        <textarea id="feedback-input" class="feedback-input" placeholder="Type your feedback or refinement..."></textarea>
+                        <textarea id="feedback-input" class="feedback-input" placeholder="Type je feedback of verbetering..."></textarea>
                         <div class="modal-actions">
                             <button class="modal-btn primary" onclick="submitModalAction('/accept')">
-                                <i data-lucide="check" size="16"></i> Accept
+                                <i data-lucide="check" size="16"></i> Oké
                             </button>
                             <button class="modal-btn" onclick="submitModalFeedback()">
-                                <i data-lucide="message-square" size="16"></i> Send Feedback
+                                <i data-lucide="message-square" size="16"></i> Feedback
                             </button>
                             <button class="modal-btn danger" onclick="submitModalAction('/stop')">
                                 <i data-lucide="x" size="16"></i> Stop
@@ -1466,6 +2111,8 @@
             }
 
             body.innerHTML = bodyHTML;
+            footer.innerHTML = footerHTML;
+            footer.style.display = footerHTML ? 'flex' : 'none';
             modal.classList.add('active');
             lucide.createIcons();
         }
@@ -1476,6 +2123,13 @@
             currentPlan = null;
         }
 
+        // Close on ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeStepModal();
+            }
+        });
+
         async function submitModalAction(action) {
             if (!currentPlan) return;
 
@@ -1483,12 +2137,12 @@
                 try {
                     const resp = await fetch(`/v1/plans/${currentPlan.plan_id}/stop`, { method: 'POST' });
                     if (resp.ok) {
-                        addChatMessage('ai', '🛑 Stop signal sent from modal.');
+                        addChatMessage('user', '🛑 Stop signaal verstuurd vanuit modal.');
                     } else {
-                        addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                        addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${await resp.text()}`);
                     }
                 } catch (e) {
-                    addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                    addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${e.message}`);
                 }
             } else {
                 await sendTaskInput(currentPlan.plan_id, action);
@@ -1509,6 +2163,30 @@
         document.getElementById('step-modal').onclick = (e) => {
             if (e.target.id === 'step-modal') closeStepModal();
         };
+
+        function createNewPlan() {
+            if (state.pollingInterval) clearInterval(state.pollingInterval);
+            state.pollingInterval = null;
+            state.currentPlanId = null;
+            state.shownStepIds = new Set();
+            state.lastLogIndex = 0;
+
+            elements.planSelector.value = "";
+            elements.chat.innerHTML = '';
+            elements.systemLogs.innerHTML = '';
+            elements.stepLogs.innerHTML = '';
+
+            // Clear Kanban board
+            Object.values(elements.cols).forEach(col => {
+                const cardsContainer = col.querySelector('.col-cards');
+                if (cardsContainer) cardsContainer.innerHTML = '';
+                col.querySelector('.task-count').textContent = '0';
+            });
+            // Reset Kanban background
+            document.getElementById('kanban-container').className = '';
+
+            addChatMessage('ai', 'Nieuw plan gestart. Hoe kan ik je helpen?');
+        }
 
         elements.send.onclick = sendMessage;
         elements.prompt.onkeydown = (e) => {

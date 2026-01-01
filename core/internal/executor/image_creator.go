@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -42,11 +43,12 @@ func (e *ImageCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 
 	outputChan <- fmt.Sprintf("   📝 Logic: Generating image for \"%s\"", prompt)
 
-	// Simulate Latency
+	// Simulate Latency (1-5s)
+	delay := time.Duration(1000+rand.Intn(4000)) * time.Millisecond
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(2000 * time.Millisecond):
+	case <-time.After(delay):
 	}
 
 	filename := fmt.Sprintf("image_scene_%s.png", sceneID)

@@ -1,6 +1,6 @@
 # TODO
 
-- [ ] Fix GeoNode installation
+- [ ] Fix GeoNode installation, worrks only on intel based machines
 - [x] Fix KeyCloak installation
 - [x] Fix Press key ... message so it is only shown once on all
 - [x] Add ingress path to UI
@@ -18,7 +18,13 @@
 - [ ] Add authentication groups
 - [ ] Add K3D support intel based macs
 - [ ] Configure the total solution as one working piece 
+- [x] Convert generate_search_index to a druppie command and run it in docker file
+- [ ] Add security provider selection
+- [ ] Add authentication groups
+- [ ] Secret management
 
+# TESTING
 
-
-    
+- [ ] maak een kinder film over het zuiveren van afval water, 1 min, youtube
+- [ ] Kan je mij een verhaal vertellen over druppie
+- [ ] Vertel meer over het Druppie-platform.
