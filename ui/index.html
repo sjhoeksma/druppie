@@ -129,6 +129,95 @@
             white-space: pre-wrap;
         }
 
+        .param-box {
+            margin-top: 0.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            max-height: 250px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .param-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            font-size: 0.85rem;
+        }
+
+        .param-list li {
+            margin-bottom: 0.5rem;
+            display: block;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        .param-list li:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .param-list .key {
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-family: 'JetBrains Mono', monospace;
+            display: inline;
+            margin-right: 0.5rem;
+        }
+
+        .param-list .val {
+            color: var(--text-main);
+            white-space: pre-wrap;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            display: inline;
+        }
+
+        .array-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 0.25rem;
+            border-left: 2px solid var(--accent);
+            display: block;
+        }
+
+        .array-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .item-header {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 0.75rem;
+            margin-bottom: 0.25rem;
+            opacity: 0.8;
+            display: block;
+        }
+
+        .sub-row {
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .sub-key {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            display: inline;
+            margin-right: 0.5rem;
+        }
+
+        .sub-val {
+            color: var(--text-main);
+            font-size: 0.8rem;
+            display: inline;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -1149,8 +1238,9 @@
             currentPlanId: null,
             lastLogIndex: 0,
             pollingInterval: null,
+            pollingInterval: null,
             isWaitingForInput: false,
-            lastShownStepId: 0
+            shownStepIds: new Set()
         };
 
         const elements = {
@@ -1175,7 +1265,7 @@
 
             state.currentPlanId = selectedPlanId;
             state.lastLogIndex = 0;
-            state.lastShownStepId = 0;
+            state.shownStepIds = new Set();
             elements.systemLogs.innerHTML = '';
             elements.stepLogs.innerHTML = '';
             elements.chat.innerHTML = '';
@@ -1342,7 +1432,7 @@
                 if (data.plan) {
                     // Reset state if we are switching to a new/different plan
                     if (state.currentPlanId !== data.plan.plan_id) {
-                        state.lastShownStepId = 0;
+                        state.shownStepIds = new Set();
                         state.lastLogIndex = 0;
                         elements.systemLogs.innerHTML = '';
                         elements.stepLogs.innerHTML = '';
@@ -1356,7 +1446,8 @@
                         if (data.plan.steps && data.plan.steps.length > 0) {
                             const lastStep = data.plan.steps[data.plan.steps.length - 1];
                             if (lastStep.action === 'user_query') {
-                                state.lastShownStepId = lastStep.step_id;
+                                state.shownStepIds = state.shownStepIds || new Set();
+                                state.shownStepIds.add(lastStep.step_id);
                             }
                         }
                     }
@@ -1460,6 +1551,7 @@
                     if (parts[1]) {
                         state.currentPlanId = parts[1];
                         state.lastLogIndex = 0;
+                        state.shownStepIds = new Set();
                         elements.systemLogs.innerHTML = '';
                         elements.stepLogs.innerHTML = '';
                         addChatMessage('ai', `🔄 Actief plan veranderd naar: ${parts[1]}`);
@@ -1549,10 +1641,14 @@
             }
         }
 
-        function addChatMessage(role, text) {
+        function addChatMessage(role, text, isHtml = false) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
-            div.textContent = text;
+            if (isHtml) {
+                div.innerHTML = text;
+            } else {
+                div.textContent = text;
+            }
             elements.chat.appendChild(div);
             div.scrollIntoView({ behavior: 'smooth' });
             return div; // Return element so it can be removed if needed
@@ -1575,44 +1671,158 @@
                 if (!resp.ok) return;
                 const plan = await resp.json();
 
-                if (plan.status === 'waiting_input' && !state.isWaitingForInput) {
-                    state.isWaitingForInput = true;
-                    // Find the step that is waiting
-                    const waitingStep = plan.steps.find(s => s.status === 'waiting_input' || (s.status === 'running' && plan.status === 'waiting_input'));
-                    const prompt = waitingStep && waitingStep.result ? waitingStep.result : 'Task is waiting for your input. Use buttons on Kanban or type feedback.';
-                    addChatMessage('ai', prompt);
-                } else if (plan.status !== 'waiting_input') {
-                    state.isWaitingForInput = false;
-                }
-
                 // Ensure steps exist
                 const steps = plan.steps || [];
 
-                // Show General Chat Result Logic using Step IDs
-                // Always check for new completed steps regardless of plan status
-                if (true) {
-                    const completedSteps = steps.filter(s => s.status === 'completed')
-                        .sort((a, b) => a.step_id - b.step_id);
-                    const isInitialLoad = (state.lastShownStepId === 0);
+                // Generic Chat Result Logic using Set
+                state.shownStepIds = state.shownStepIds || new Set();
 
-                    completedSteps.forEach(s => {
-                        if (s.step_id > state.lastShownStepId) {
-                            if ((s.action === 'general_chat' || s.agent_id === 'router') && s.result) {
-                                addChatMessage('ai', s.result);
-                            } else if (s.action === 'user_query' && s.result) {
-                                // Only show user query if we are loading history
-                                // We detect this if current lastShownStepId is 0 or significantly behind
-                                if (isInitialLoad) {
-                                    addChatMessage('user', s.result);
+                // Process steps in order they appear in the plan
+                steps.forEach(s => {
+                    if (s.status === 'completed' && !state.shownStepIds.has(s.step_id)) {
+                        let msg = null;
+                        let role = 'ai';
+
+                        if (s.agent_id === 'user' || s.action.startsWith('review_')) {
+                            role = 'user';
+                        }
+
+                        if (s.action === 'user_query' && s.result) {
+                            role = 'user';
+                            msg = s.result;
+                        } else if ((s.action === 'general_chat' || s.agent_id === 'router') && s.result) {
+                            msg = s.result;
+                        } else {
+                            // Generic Step Display
+                            let label = s.action.replace(/_/g, ' ');
+                            label = label.charAt(0).toUpperCase() + label.slice(1);
+
+                            let details = '';
+
+                            if (s.result && s.result.startsWith('RESULT_')) {
+                                const raw = s.result;
+                                const file = raw.split('=')[1] || raw;
+                                const type = raw.includes('VIDEO') ? '🎬 Video' : raw.includes('IMAGE') ? '🎨 Image' : '✅ Result';
+                                details = `<br><strong>${type}:</strong> ${file}`;
+                            } else {
+                                // Params Display
+                                if (s.params && Object.keys(s.params).length > 0) {
+                                    const entries = Object.entries(s.params).filter(([k, v]) => v !== null && v !== undefined);
+                                    if (entries.length > 0) {
+                                        let listHtml = '<ul class="param-list">';
+                                        entries.forEach(([k, v]) => {
+                                            let valStr = '';
+                                            if (Array.isArray(v) && v.length > 0 && typeof v[0] === 'object') {
+                                                // Format Array of Objects (like av_script)
+                                                valStr = v.map((item, idx) => {
+                                                    let title = `Item ${idx + 1}`;
+                                                    if (item.scene_id) title = `Scene ${item.scene_id}`;
+
+                                                    let fields = Object.entries(item).map(([ik, iv]) => {
+                                                        // Recursive simple stringify for sub-fields if needed
+                                                        let displayVal = (typeof iv === 'object') ? JSON.stringify(iv) : String(iv);
+                                                        return `<div class="sub-row"><span class="key">${ik}:</span> <span class="sub-val">${displayVal}</span></div>`;
+                                                    }).join('');
+
+                                                    return `<div class="array-item"><div class="item-header">${title}</div>${fields}</div>`;
+                                                }).join('');
+                                                // For array items, we use a div for val to allow block display of items
+                                                listHtml += `<li><span class="key">${k}:</span> <div class="val" style="display:block">${valStr}</div></li>`;
+                                            } else if (typeof v === 'object') {
+                                                valStr = JSON.stringify(v, null, 2);
+                                                listHtml += `<li><span class="key">${k}:</span> <span class="val">${valStr}</span></li>`;
+                                            } else {
+                                                valStr = String(v);
+                                                listHtml += `<li><span class="key">${k}:</span> <span class="val">${valStr}</span></li>`;
+                                            }
+                                        });
+                                        listHtml += '</ul>';
+
+                                        details += `<div class="param-box">${listHtml}</div>`;
+                                    }
+                                }
+
+                                // Result Display (if not Approved/Completed redundancy)
+                                if (s.result && s.result !== 'Approved' && s.result !== 'Approved by user' && s.result !== 'completed') {
+                                    details += `<br><span class="text-dim">Result: ${s.result}</span>`;
                                 }
                             }
-                            state.lastShownStepId = s.step_id;
+
+                            msg = `✅ <strong>${label}</strong> completed.${details}`;
                         }
-                    });
-                }
+
+                        if (msg) {
+                            addChatMessage(role, msg, true);
+                        }
+
+                        state.shownStepIds.add(s.step_id);
+                    }
+                });
 
                 renderPlan(plan);
                 renderStepList(plan);
+
+                if (plan.status === 'waiting_input' && !state.isWaitingForInput) {
+                    state.isWaitingForInput = true;
+                    const waitingStep = plan.steps.find(s => s.status === 'waiting_input' || (s.status === 'running' && plan.status === 'waiting_input'));
+
+                    let label = 'Task';
+                    let content = 'Task is waiting for your input. Use buttons on Kanban or type feedback.';
+
+                    if (waitingStep) {
+                        label = waitingStep.action.replace(/_/g, ' ');
+                        label = label.charAt(0).toUpperCase() + label.slice(1);
+                        if (waitingStep.result) {
+                            content = waitingStep.result;
+                        }
+                    }
+
+                    // Format content (lists to param-list, text to divs)
+                    const formatContentToHtml = (text) => {
+                        if (!text) return '';
+                        const lines = text.split('\n');
+                        let html = '';
+                        let inList = false;
+                        let listHtml = '';
+
+                        lines.forEach(line => {
+                            const trimmed = line.trim();
+                            if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                if (!inList) {
+                                    inList = true;
+                                    listHtml = '<ul class="param-list">';
+                                }
+                                const content = trimmed.substring(2);
+                                let liContent = '';
+                                if (content.includes(': ')) {
+                                    const [k, ...rest] = content.split(': ');
+                                    const v = rest.join(': ');
+                                    liContent = `<span class="key">${k}:</span> <span class="val">${v}</span>`;
+                                } else {
+                                    liContent = `<span class="val">${content}</span>`;
+                                }
+                                listHtml += `<li>${liContent}</li>`;
+                            } else {
+                                if (inList) {
+                                    inList = false;
+                                    listHtml += '</ul>';
+                                    html += listHtml;
+                                }
+                                if (trimmed.length > 0) html += `<div>${line}</div>`;
+                            }
+                        });
+
+                        if (inList) {
+                            html += listHtml + '</ul>';
+                        }
+                        return html || text;
+                    };
+
+                    const msg = `❓ <strong>${label}</strong> waiting for your input.<br><div class="param-box">${formatContentToHtml(content)}</div>`;
+                    addChatMessage('ai', msg, true);
+                } else if (plan.status !== 'waiting_input') {
+                    state.isWaitingForInput = false;
+                }
             } catch (e) { }
         }
 
@@ -1958,7 +2168,7 @@
             if (state.pollingInterval) clearInterval(state.pollingInterval);
             state.pollingInterval = null;
             state.currentPlanId = null;
-            state.lastShownStepId = 0;
+            state.shownStepIds = new Set();
             state.lastLogIndex = 0;
 
             elements.planSelector.value = "";
