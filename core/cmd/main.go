@@ -259,7 +259,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 						effectivePrompt := req.Prompt
 						if !isNewPlan {
-							tm.OutputChan <- fmt.Sprintf("[DEBUG] Loading plan %s. Steps found: %d", planID, len(currentPlan.Steps))
+							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Loading plan %s. Steps found: %d", planID, len(currentPlan.Steps))
 							// 1. Build Context
 							history := ""
 							// Exclude the last step (current request) which was already appended
@@ -278,7 +278,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								}
 							}
 							effectivePrompt = fmt.Sprintf("History:\n%s\nRequest: %s", history, req.Prompt)
-							tm.OutputChan <- fmt.Sprintf("[DEBUG] Constructed History: %s", history)
+							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Constructed History: %s", history)
 						}
 
 						// 2. Analyze Intent

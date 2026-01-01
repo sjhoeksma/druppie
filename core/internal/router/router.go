@@ -44,10 +44,6 @@ func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, strin
 		return model.Intent{}, "", fmt.Errorf("llm generation failed: %w", err)
 	}
 
-	if r.store != nil && r.PlanID != "" {
-		_ = r.store.LogInteraction(r.PlanID, "Router", systemPrompt+"\nUsers Input: "+input, resp)
-	}
-
 	// Simple cleanup if LLM adds markdown blocks
 	// resp = strings.TrimPrefix(resp, "```json")
 	// resp = strings.TrimSuffix(resp, "```")

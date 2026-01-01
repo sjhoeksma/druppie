@@ -142,10 +142,10 @@ func (s *FileStore) LogInteraction(planID string, tag string, input string, outp
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	filename := "interaction.log"
-	if planID != "" {
-		filename = planID + ".log"
+	if planID == "" {
+		return nil
 	}
+	filename := planID + ".log"
 
 	path := filepath.Join(s.baseDir, "logs", filename)
 	// Create dir if missing (just in case)
@@ -167,10 +167,10 @@ func (s *FileStore) AppendRawLog(planID string, message string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	filename := "interaction.log"
-	if planID != "" {
-		filename = planID + ".log"
+	if planID == "" {
+		return fmt.Errorf("planID is empty")
 	}
+	filename := planID + ".log"
 
 	path := filepath.Join(s.baseDir, "logs", filename)
 	// Create dir if missing
