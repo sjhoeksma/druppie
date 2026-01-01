@@ -434,7 +434,8 @@ func (w *VideoCreationWorkflow) draftScript(wc *WorkflowContext, intent ProjectI
 Structure: {"av_script": [{"scene_id": 1, "audio_text": "...", "visual_prompt": "...", "duration": 5}]}
 Key Rules:
 - Audio Text in ` + intent.Language + `.
-`
+- IF the Request contains "Fix:" and "Prev:", you MUST Modify the "Prev" script according to the "Fix" instructions. Apply the changes requested in "Fix" to the content in "Prev".`
+
 		resp, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
 		if err != nil {
 			// Mark failed if LLM fails
@@ -487,6 +488,9 @@ Key Rules:
 				})
 				return script, nil
 			}
+			// Log the feedback
+			wc.OutputChan <- fmt.Sprintf("🔄 [Script] Feedback received: '%s'. Refining script...", input)
+
 			wc.AppendStep(model.Step{
 				ID:      stepID,
 				AgentID: "video-content-creator",
