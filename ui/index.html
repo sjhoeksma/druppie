@@ -63,6 +63,10 @@
             display: flex;
             flex-direction: column;
             z-index: 10;
+            overflow: hidden;
+            /* Force container constraint */
+            min-height: 0;
+            /* Allow shrinking in Grid */
         }
 
         #main-view {
@@ -75,7 +79,7 @@
 
         /* Sidebar / Chat Area */
         .sidebar-header {
-            padding: 1.5rem;
+            padding: 0.5rem 0.5rem 0.5rem 0.5rem;
             border-bottom: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
@@ -334,7 +338,7 @@
         }
 
         .tab-strip {
-            padding: 0 1.5rem;
+            padding: 0rem 0rem 0rem 0rem;
             background: rgba(255, 255, 255, 0.02);
             display: flex;
             gap: 2rem;
@@ -562,6 +566,16 @@
 
         /* Old modal-close removed/ignored */
 
+        #kanban-container {
+            flex: 1;
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem;
+            /* Reduce padding to use more space */
+            overflow-x: auto;
+            align-items: flex-start;
+        }
+
         .modal-body {
             display: flex;
             flex-direction: column;
@@ -692,7 +706,8 @@
             #main-view {
                 order: 2;
                 /* 2. Kanban Middle */
-                height: 35vh;
+                height: 25vh;
+                /* Reduced height to save space */
                 flex: none;
                 width: 100%;
                 border-bottom: 1px solid var(--glass-border);
@@ -721,21 +736,21 @@
 
             /* 5. System Console (Bottom) */
             #bottom-panel {
-                order: 10;
-                margin-top: auto;
-                grid-area: console;
+                order: 5;
                 position: relative !important;
                 width: 100%;
                 bottom: auto;
                 flex: none;
                 z-index: 50;
-                max-height: 60vh;
-                /* More space for log on mobile */
+                max-height: 35vh;
+                /* Compact console */
+                overflow: hidden;
+                /* Ensure content stays inside */
             }
 
             /* Adjust Tab Strip for Mobile */
             .tab-strip {
-                padding: 0 0.5rem;
+                padding: 0 0.5rem 0 0;
                 /* Push icon to right */
                 align-items: center;
             }
@@ -766,7 +781,8 @@
 
             .col-cards {
                 overflow-y: auto;
-                max-height: calc(35vh - 3rem);
+                max-height: calc(25vh - 3rem);
+                /* Match main-view height */
             }
 
             .modal-content {
@@ -1015,37 +1031,39 @@
             </div>
         </div>
 
-        <div id="bottom-panel" class="collapsed">
-            <div class="tab-strip">
-                <div id="tab-btn-system" class="tab-btn active" onclick="switchTab('system')">
-                    <i data-lucide="terminal" size="14"></i>
-                    System Console
-                </div>
-                <div id="tab-btn-process" class="tab-btn" onclick="switchTab('process')">
-                    <i data-lucide="activity" size="14"></i>
-                    Planner - Agents
-                </div>
-                <div style="flex: 1;"></div>
-                <button id="toggle-console-btn" onclick="toggleConsole()"
-                    style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 1rem; display: flex; align-items: center;"
-                    title="Toggle Console">
-                    <i data-lucide="chevron-up" size="16"></i>
-                </button>
-            </div>
+    </main>
 
-            <div id="system-tab" class="tab-content active">
-                <div id="log-content">
-                    <div class="log-entry info">Verbinding actief. Wacht op taken...</div>
-                </div>
+    <div id="bottom-panel" class="collapsed">
+        <div class="tab-strip">
+            <div id="tab-btn-system" class="tab-btn active" onclick="switchTab('system')">
+                <i data-lucide="terminal" size="14"></i>
+                System Console
             </div>
+            <div id="tab-btn-process" class="tab-btn" onclick="switchTab('process')">
+                <i data-lucide="activity" size="14"></i>
+                Planner - Agents
+            </div>
+            <div style="flex: 1;"></div>
+            <button id="toggle-console-btn" onclick="toggleConsole()"
+                style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 1rem; display: flex; align-items: center;"
+                title="Toggle Console">
+                <i data-lucide="chevron-up" size="16"></i>
+            </button>
+        </div>
 
-            <div id="process-tab" class="tab-content">
-                <div id="step-log">
-                    <div class="message">Geen actief plan.</div>
-                </div>
+        <div id="system-tab" class="tab-content active">
+            <div id="log-content">
+                <div class="log-entry info">Verbinding actief. Wacht op taken...</div>
             </div>
         </div>
-    </main>
+
+        <div id="process-tab" class="tab-content">
+            <div id="step-log">
+                <div class="message">Geen actief plan.</div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Step Detail Modal -->
     <div id="step-modal">
