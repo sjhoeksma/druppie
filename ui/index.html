@@ -363,7 +363,8 @@
 
         .tab-content {
             flex: 1;
-            padding: 1rem 1.5rem;
+            padding: 1rem 1.5rem 3rem 1.5rem;
+            /* Extra bottom padding for scroll */
             overflow-y: auto;
             display: none;
         }
@@ -491,7 +492,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: 1rem;
         }
 
         #step-modal.active {
@@ -720,12 +721,16 @@
 
             /* 5. System Console (Bottom) */
             #bottom-panel {
-                order: 5;
+                order: 10;
+                margin-top: auto;
+                grid-area: console;
                 position: relative !important;
                 width: 100%;
                 bottom: auto;
                 flex: none;
                 z-index: 50;
+                max-height: 60vh;
+                /* More space for log on mobile */
             }
 
             /* Adjust Tab Strip for Mobile */
@@ -766,7 +771,10 @@
 
             .modal-content {
                 width: 95%;
-                max-height: 80vh;
+                /* Maximize width */
+                max-height: 95vh;
+                border-radius: 1rem 1rem 1rem 1rem;
+                /* Bottom sheet style */
             }
 
             .modal-footer {
