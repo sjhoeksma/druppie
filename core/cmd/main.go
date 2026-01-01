@@ -826,6 +826,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				port = "8080"
 			}
 			fmt.Printf("Starting server on port %s...\n", port)
+			// Binds to 0.0.0.0 (all interfaces)
 			if err := http.ListenAndServe(":"+port, r); err != nil {
 				fmt.Printf("Server failed: %v\n", err)
 				os.Exit(1)

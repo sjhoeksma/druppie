@@ -3,9 +3,16 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Druppie">
+    <meta name="theme-color" content="#0f172a">
     <title>Druppie Command Center</title>
     <link rel="icon" type="image/svg+xml" href="../druppie_logo.svg">
+    <link rel="apple-touch-icon" href="../druppie_logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -338,7 +345,7 @@
         }
 
         .tab-strip {
-            padding: 0rem 0rem 0rem 0rem;
+            padding: 0rem 0rem 0rem 0.5rem;
             background: rgba(255, 255, 255, 0.02);
             display: flex;
             gap: 2rem;
@@ -684,8 +691,10 @@
             /* Unwrap Sidebar to reorder children independently */
             #sidebar {
                 display: contents;
+                /* This makes children direct children of body */
             }
 
+            /* Specific styles for sidebar content when unwrapped */
             .sidebar-header {
                 order: 1;
                 /* 1. Header Top */
@@ -701,6 +710,14 @@
                 align-items: center;
                 flex-wrap: wrap;
                 /* Allow wrapping if needed */
+                position: sticky;
+                /* Keep header visible */
+                top: 0;
+                z-index: 100;
+                padding-top: env(safe-area-inset-top);
+                /* Handle Notch */
+                background: var(--bg-deep);
+                /* Ensure opacity over content */
             }
 
             #main-view {
@@ -746,11 +763,13 @@
                 /* Compact console */
                 overflow: hidden;
                 /* Ensure content stays inside */
+                padding-bottom: env(safe-area-inset-bottom);
+                /* Handle Home Indicator */
             }
 
             /* Adjust Tab Strip for Mobile */
             .tab-strip {
-                padding: 0 0.5rem 0 0;
+                padding: 0 0 0 0.5rem;
                 /* Push icon to right */
                 align-items: center;
             }
