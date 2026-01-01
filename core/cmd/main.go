@@ -42,31 +42,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 	// Register commands
 	rootCmd.AddCommand(newGenerateCmd())
-
-	// Helper to find project root
-	findProjectRoot := func() (string, error) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-
-		// Traverse up until we find .druppie or blocks
-		for {
-			if _, err := os.Stat(filepath.Join(cwd, ".druppie")); err == nil {
-				return cwd, nil
-			}
-			if _, err := os.Stat(filepath.Join(cwd, "blocks")); err == nil {
-				return cwd, nil
-			}
-
-			parent := filepath.Dir(cwd)
-			if parent == cwd {
-				// Reached root without finding
-				return "", fmt.Errorf("project root not found (missing .druppie or blocks)")
-			}
-			cwd = parent
-		}
-	}
+	rootCmd.AddCommand(newCliCmd())
 
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine

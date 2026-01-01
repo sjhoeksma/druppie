@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -35,36 +34,11 @@ type IndexItem struct {
 func generateSearchIndex() error {
 	fmt.Println("Building search index...")
 
-	// Detect Project Root by looking for doc_registry.js
+	if err := ensureProjectRoot(); err != nil {
+		fmt.Printf("Warning: %v. Using current directory.\n", err)
+	}
+
 	cwd, _ := os.Getwd()
-	originalCwd := cwd
-	found := false
-
-	for {
-		if _, err := os.Stat(filepath.Join(cwd, "doc_registry.js")); err == nil {
-			found = true
-			break
-		}
-		parent := filepath.Dir(cwd)
-		if parent == cwd {
-			break
-		}
-		cwd = parent
-	}
-
-	if found {
-		if cwd != originalCwd {
-			fmt.Printf("Found project root at: %s (switched from %s)\n", cwd, originalCwd)
-			if err := os.Chdir(cwd); err != nil {
-				return fmt.Errorf("failed to change directory to project root: %w", err)
-			}
-		}
-	} else {
-		// Fallback to original execution directory if not found (e.g. maybe it's missing but we try anyway)
-		fmt.Println("Warning: doc_registry.js not found in hierarchy, using current directory.")
-	}
-
-	cwd, _ = os.Getwd()
 	fmt.Println("Working directory:", cwd)
 
 	// 1. Read doc_registry.js

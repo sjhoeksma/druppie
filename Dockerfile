@@ -41,7 +41,7 @@ COPY --from=builder /app/search_index.json /app/search_index.json
 COPY --from=builder /app/druppie_cli.png /app/druppie_cli.png
 COPY --from=builder /app/druppie_k3d.png /app/druppie_k3d.png
 COPY --from=builder /app/README.md /app/README.md
-COPY --from=builder /app/druppie.sh /app/druppie.sh
+
 
 # Copy Concept Folders
 COPY --from=builder /app/agents /app/agents

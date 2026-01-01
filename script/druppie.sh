@@ -3,7 +3,7 @@
 # Druppie Master CLI
 # Interface voor alle beheer taken binnen het Druppie Platform.
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$BASE_DIR/script"
 
 COLOR_CYAN='\033[0;36m'
@@ -184,7 +184,8 @@ function execute_choice() {
     esac
 }
 
-LOG_DIR="$BASE_DIR/.logs"
+SESSION_ID=$(date +%Y%m%d%H%M%S)
+LOG_DIR="$BASE_DIR/.druppie/cli/$SESSION_ID"
 
 # Function to run a script with logging
 function run_script_logged() {
