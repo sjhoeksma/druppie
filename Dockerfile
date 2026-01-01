@@ -21,6 +21,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/druppie ./cmd
 # Compress binary
 RUN upx --best --lzma /app/druppie
 
+# Generate Search Index
+WORKDIR /app
+RUN /app/druppie generate
+
 # Run Stage
 FROM gcr.io/distroless/static:nonroot
 
@@ -37,7 +41,7 @@ COPY --from=builder /app/search_index.json /app/search_index.json
 COPY --from=builder /app/druppie_cli.png /app/druppie_cli.png
 COPY --from=builder /app/druppie_k3d.png /app/druppie_k3d.png
 COPY --from=builder /app/README.md /app/README.md
-COPY --from=builder /app/druppie.sh /app/druppie.sh
+
 
 # Copy Concept Folders
 COPY --from=builder /app/agents /app/agents

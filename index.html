@@ -3,9 +3,15 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Druppie: Full Cycle Architecture (Interactive)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Druppie">
+    <meta name="theme-color" content="#0f172a">
+    <title>Druppie</title>
     <link rel="icon" type="image/svg+xml" href="druppie_logo.svg">
+    <link rel="apple-touch-icon" href="druppie_logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -21,6 +27,27 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg-deep: #0f172a;
+            --bg-card: #1e293b;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.3);
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+            --success: #22c55e;
+            --running: #f59e0b;
+            --pending: #64748b;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Hide Scrollbars */
+        ::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            background: transparent;
+        }
 
         body {
             font-family: 'Inter', sans-serif;
@@ -432,17 +459,130 @@
             display: flex;
             justify-content: center;
         }
+
+        /* Utility: Hide Scrollbar */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* MOBILE RESPONSIVE TWEAKS */
+        @media (max-width: 768px) {
+
+            /* Kanban Horizontal Scroll */
+            .kanban-container {
+                display: flex;
+                overflow-x: auto;
+                padding-bottom: 8px;
+                scroll-snap-type: x mandatory;
+                /* Hide Scrollbar */
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            .kanban-container::-webkit-scrollbar {
+                display: none;
+            }
+
+            /* Global Scrollbar Hiding for Mobile */
+            *::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            * {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+
+            .kanban-col {
+                min-width: 140px;
+                flex-shrink: 0;
+                scroll-snap-align: start;
+            }
+
+            /* Right Panel becomes Overlay */
+            #right-side-panel {
+                position: absolute !important;
+                inset: 0;
+                width: 100% !important;
+                border-left: none;
+                z-index: 40;
+                background: white;
+                /* Default Hidden state managed by JS/Attribute */
+                display: none;
+            }
+
+            /* When Panel is Active */
+            #right-side-panel[data-mobile-view="inspector"],
+            #right-side-panel[data-mobile-view="chat"],
+            #right-side-panel[data-mobile-view="terminal"] {
+                display: flex !important;
+                flex-direction: column;
+            }
+
+            /* View Visibility Logic */
+            #right-side-panel[data-mobile-view="inspector"] #view-inspector {
+                display: flex !important;
+                height: 100% !important;
+            }
+
+            #right-side-panel[data-mobile-view="inspector"] #view-chat {
+                display: none !important;
+            }
+
+            #right-side-panel[data-mobile-view="inspector"] #view-terminal {
+                display: none !important;
+            }
+
+            #right-side-panel[data-mobile-view="chat"] #view-chat {
+                display: flex !important;
+                height: 100% !important;
+            }
+
+            #right-side-panel[data-mobile-view="chat"] #view-inspector {
+                display: none !important;
+            }
+
+            #right-side-panel[data-mobile-view="chat"] #view-terminal {
+                display: none !important;
+            }
+
+            #right-side-panel[data-mobile-view="terminal"] #view-terminal {
+                display: flex !important;
+                height: 100% !important;
+            }
+
+            #right-side-panel[data-mobile-view="terminal"] #view-inspector {
+                display: none !important;
+            }
+
+            #right-side-panel[data-mobile-view="terminal"] #view-chat {
+                display: none !important;
+            }
+
+            /* Add bottom padding for Tab Bar */
+            /* Add bottom padding for Tab Bar only when visible */
+            body.with-bottom-nav {
+                padding-bottom: 2.5rem;
+            }
+
+            /* h-14 */
+        }
     </style>
 </head>
 
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="h-screen flex flex-col overflow-hidden with-bottom-nav">
 
     <!-- SPECIFICATION -->
     <script>
         const SPEC = {
             "comp-copilot": {
-                "name": "Druppie UI (Copilot)",
-                "description": "De gebruikersinterface (Chat) dit kan Copilot zijn voor simple vragen of een specifieke Druppie Applicatie. Ontvangt vragen en stuurt deze door naar de backend.",
+                "name": "Druppie Chat",
+                "description": "De gebruikersinterface (Chat) dit kan Copilot zijn voor simple vragen of een specifieke Druppie ChatApplicatie. Ontvangt vragen en stuurt deze door naar de backend.",
                 "steps": [
                     "Gebruiker verstuurt prompt.",
                     "Interface rendert chat bubbles.",
@@ -737,32 +877,42 @@
         };
     </script>
     <!-- TOP NAV -->
-    <nav class="bg-slate-900 text-white p-3 flex justify-between items-center shadow-lg z-50 flex-none h-14">
+    <nav class="bg-slate-900 text-white px-3 py-2 flex justify-between items-center shadow-lg z-50 flex-none min-h-14">
         <div class="flex items-center space-x-3">
+            <button onclick="toggleSidebar()"
+                class="md:hidden p-1 mr-2 text-slate-400 hover:text-white focus:outline-none">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
             <img src="druppie_logo.svg" alt="Druppie Logo" class="h-8 w-8 rounded">
             <div>
                 <h1 class="text-sm font-bold">Druppie</h1>
-                <p class="text-[10px] text-slate-400">Spec-Driven AI met Mens-in-de-Loop</p>
+                <p class="text-[10px] text-slate-400">Spec-Driven AI<br /> met Mens-in-de-Loop</p>
             </div>
         </div>
-        <div class="flex space-x-3" id="top-nav-actions">
+        <div class="flex flex-col md:flex-row space-y-1 md:space-y-0 md:space-x-3 items-end md:items-center"
+            id="top-nav-actions">
+            <!-- Scenario 1 Button -->
             <!-- Scenario 1 Button -->
             <button onclick="runScenario('response')"
-                class="group px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition flex items-center space-x-2">
-                <div class="w-2 h-2 rounded-full bg-green-400 group-hover:animate-ping"></div>
+                class="group px-2 py-1 md:px-3 md:py-1.5 w-24 md:w-auto bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
+                <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-400 group-hover:animate-ping"></div>
                 <div class="text-left">
-                    <div class="text-[9px] text-slate-400 uppercase font-bold">Scenario 1</div>
-                    <div class="text-xs font-bold">Vraag & Antwoord</div>
+                    <div class="text-[8px] md:text-[9px] text-slate-400 uppercase font-bold leading-tight">Scenario 1
+                    </div>
+                    <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Vraag & Antwoord</div>
                 </div>
             </button>
 
             <!-- Scenario 2 Button -->
             <button onclick="runScenario('build')"
-                class="group px-3 py-1.5 bg-indigo-900 hover:bg-indigo-800 rounded border border-indigo-700 transition flex items-center space-x-2">
-                <div class="w-2 h-2 rounded-full bg-orange-400 group-hover:animate-ping"></div>
+                class="group px-2 py-1 md:px-3 md:py-1.5 w-24 md:w-auto bg-indigo-900 hover:bg-indigo-800 rounded border border-indigo-700 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
+                <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400 group-hover:animate-ping"></div>
                 <div class="text-left">
-                    <div class="text-[9px] text-indigo-300 uppercase font-bold">Scenario 2 (HITL)</div>
-                    <div class="text-xs font-bold">Bouwen & Goedkeuring</div>
+                    <div class="text-[8px] md:text-[9px] text-indigo-300 uppercase font-bold leading-tight">Scenario 2
+                        <span class="hidden md:inline">(HITL)</span>
+                    </div>
+                    <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Bouwen & Goedkeuring
+                    </div>
                 </div>
             </button>
 
@@ -774,8 +924,13 @@
 
         <div class="flex flex-grow overflow-hidden relative">
 
+            <!-- OVERLAY (Mobile) -->
+            <div id="sidebarOverlay" onclick="toggleSidebar()"
+                class="fixed inset-0 bg-black/50 z-40 hidden transition-opacity duration-300 md:hidden backdrop-blur-sm">
+            </div>
+
             <!-- SIDEBAR -->
-            <div class="w-64 bg-slate-800 text-white flex flex-col flex-none shadow-xl z-50 transition-all duration-300 transform"
+            <div class="absolute md:relative inset-y-0 left-0 w-64 bg-slate-800 text-white flex flex-col flex-none shadow-xl z-50 transition-transform duration-300 transform -translate-x-full md:translate-x-0"
                 id="sidebar">
                 <!-- Search Input -->
                 <div class="px-3 py-2 border-b border-slate-700 relative">
@@ -870,7 +1025,7 @@
                             <!-- Chat (Conditional) -->
                             <button id="menu-chat" onclick="window.open('ui/index.html', '_self')"
                                 class="hidden w-full text-left px-3 py-2 rounded text-sm font-medium hover:bg-slate-700 text-slate-300 transition-colors">
-                                <i data-lucide="message-square" class="inline-block w-4 h-4 mr-2"></i> Druppie UI
+                                <i data-lucide="message-square" class="inline-block w-4 h-4 mr-2"></i> Druppie Chat
                             </button>
 
                     </nav>
@@ -903,7 +1058,7 @@
                 <div id="view-arch" class="flex flex-col h-full overflow-hidden">
 
                     <!-- KANBAN BOARD -->
-                    <div class="p-4 border-b border-slate-200">
+                    <div class="p-1 md:p-4 border-b border-slate-200">
                         <div class="kanban-container">
                             <div class="kanban-col" id="col-backlog">
                                 <div class="kanban-header">1. Aanvraag</div>
@@ -961,7 +1116,7 @@
                                     <div id="comp-copilot" onclick="inspect('comp-copilot')"
                                         class="arch-card w-1/3 text-center border-t-4 border-t-blue-500 shadow-sm">
                                         <div class="text-3xl mb-1">👤</div>
-                                        <div class="font-bold text-sm">Druppie APP<BR>Copilot APP</div>
+                                        <div class="font-bold text-sm">Druppie APP</div>
                                         <div class="text-[10px] text-slate-400">Gebruiker Interface</div>
                                     </div>
                                 </div>
@@ -1092,10 +1247,12 @@
                         </div>
 
                         <!-- RIGHT: ENHANCED SIDEBAR (Split View) -->
-                        <div class="w-96 bg-white border-l border-slate-200 flex flex-col shadow-2xl z-40 flex-none">
+                        <div id="right-side-panel"
+                            class="w-96 bg-white border-l border-slate-200 flex flex-col shadow-2xl z-40 flex-none"
+                            data-mobile-view="none">
 
                             <!-- 1. COMPONENT INSPECTOR -->
-                            <div class="h-1/3 border-b border-slate-200 bg-slate-50 flex flex-col">
+                            <div id="view-inspector" class="h-1/3 border-b border-slate-200 bg-slate-50 flex flex-col">
                                 <div class="p-3 border-b border-slate-200 bg-white flex justify-between items-center">
                                     <span
                                         class="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -1143,7 +1300,8 @@
                             </div>
 
                             <!-- 2. CHAT INTERFACE -->
-                            <div class="flex-1 flex flex-col min-h-0 border-b border-slate-200 bg-white relative">
+                            <div id="view-chat"
+                                class="flex-1 flex flex-col min-h-0 border-b border-slate-200 bg-white relative">
                                 <div
                                     class="p-2 border-b border-slate-100 flex justify-between items-center bg-white z-10">
                                     <span
@@ -1163,7 +1321,7 @@
                             </div>
 
                             <!-- 3. BUILD TERMINAL -->
-                            <div class="h-48 bg-slate-900 flex flex-col">
+                            <div id="view-terminal" class="h-48 bg-slate-900 flex flex-col">
                                 <div
                                     class="h-7 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-3">
                                     <span class="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-2">
@@ -1684,10 +1842,11 @@
 
 
             <!-- VIEW: MARKDOWN READER (Split View) -->
-            <div id="view-markdown" class="hidden flex-row h-full overflow-hidden absolute inset-0 bg-white z-30 ml-64">
+            <div id="view-markdown"
+                class="hidden flex-row h-full overflow-hidden absolute inset-0 bg-white z-30 md:ml-64">
 
                 <!-- LEFT: FILE LIST -->
-                <div class="w-56 bg-slate-50 border-r border-slate-200 flex flex-col flex-none">
+                <div class="w-56 bg-slate-50 border-r border-slate-200 flex-col flex-none hidden md:flex">
                     <div class="p-3 border-b border-slate-200 flex justify-between items-center bg-white">
                         <h2 id="md-category-title" class="text-xs font-bold text-slate-500 uppercase tracking-wider">...
                         </h2>
@@ -1705,12 +1864,24 @@
 
                 <!-- RIGHT: CONTENT -->
                 <div class="flex-1 flex flex-col overflow-hidden bg-white min-w-0">
-                    <!-- Toolbar -->
-                    <div class="border-b border-slate-200 bg-white p-3 flex justify-between items-center shadow-sm">
-                        <h2 id="md-title" class="text-sm font-bold text-slate-800 truncate mr-4">Selecteer een
-                            bestand...</h2>
-                        <div class="space-x-2 flex-none flex items-center">
+                    <!-- Toolbar (Enhanced for Mobile Dropdown) -->
+                    <div class="border-b border-slate-200 bg-white p-3 flex flex-col relative shadow-sm z-20">
+                        <div class="flex justify-between items-center w-full">
+                            <button onclick="toggleDocMenu()"
+                                class="flex items-center gap-2 text-sm font-bold text-slate-800 truncate mr-4 hover:text-blue-600 transition min-w-0 text-left">
+                                <span class="uppercase text-[10px] text-slate-400 font-bold mr-1 hidden md:inline"
+                                    id="md-breadcrumb-cat">DOCS</span>
+                                <span id="md-title" class="truncate">Selecteer een bestand...</span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 md:hidden text-slate-400"></i>
+                            </button>
+                            <div class="space-x-2 flex-none flex items-center">
+                            </div>
+                        </div>
 
+                        <!-- Mobile Dropdown Menu -->
+                        <div id="mobile-doc-menu"
+                            class="hidden md:hidden absolute top-full left-0 w-full bg-white border-b border-slate-200 shadow-xl max-h-[60vh] overflow-y-auto z-50">
+                            <!-- List injected here -->
                         </div>
                     </div>
 
@@ -1867,13 +2038,51 @@
 
                 item.innerHTML = `
                     <div class="flex items-center gap-2 overflow-hidden">
-                        <i data-lucide="file-text" class="w-3 h-3 flex-none"></i>
                         <span class="truncate">${doc.name}</span>
                     </div>
                 `;
                 listContainer.appendChild(item);
             });
+
+            // Populate Mobile Dropdown
+            const mobileMenu = document.getElementById('mobile-doc-menu');
+            if (mobileMenu) {
+                mobileMenu.innerHTML = '';
+                // Add Headers/Back?
+                const header = document.createElement('div');
+                header.className = "px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-100 sticky top-0";
+                header.innerText = category;
+                mobileMenu.appendChild(header);
+
+                DOC_REGISTRY[category].forEach((doc, index) => {
+                    const item = document.createElement('div');
+                    item.className = `px-4 py-3 text-sm cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 ${index === currentDocIndex ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700'}`;
+                    item.onclick = () => {
+                        selectDoc(index);
+                        toggleDocMenu(); // Close on select
+                    };
+                    item.innerHTML = `<div class="flex items-center gap-3"><i data-lucide="file-text" class="w-4 h-4 flex-none text-slate-400"></i> ${doc.name}</div>`;
+                    mobileMenu.appendChild(item);
+                });
+            }
+
+            // Update Breadcrumb
+            const bread = document.getElementById('md-breadcrumb-cat');
+            if (bread) bread.innerText = category;
+
             lucide.createIcons();
+        }
+
+        function toggleDocMenu() {
+            // Only on mobile
+            if (window.innerWidth >= 768) return;
+
+            const menu = document.getElementById('mobile-doc-menu');
+            if (menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+            } else {
+                menu.classList.add('hidden');
+            }
         }
 
         // Select a Document
@@ -1892,6 +2101,15 @@
         let currentPath = '';
 
         function navTo(view, path = null) {
+            // Mobile: Close Sidebar on switch
+            if (window.innerWidth < 768) {
+                const sb = document.getElementById('sidebar');
+                // If sidebar has no negative translate (i.e., is showing), toggle it closed
+                if (sb && !sb.classList.contains('-translate-x-full')) {
+                    toggleSidebar();
+                }
+            }
+
             const btnContainer = document.getElementById('top-nav-actions');
             const vArch = document.getElementById('view-arch');
             const vMd = document.getElementById('view-markdown');
@@ -1928,6 +2146,22 @@
                 }
 
                 if (btnContainer) btnContainer.classList.add('hidden');
+            }
+
+            // Mobile: Toggle Bottom Bar based on View
+            if (window.innerWidth < 768) {
+                const bottomBar = document.getElementById('bottom-tab-bar');
+                if (bottomBar) {
+                    if (view === 'arch') {
+                        bottomBar.classList.remove('hidden');
+                        bottomBar.style.display = 'flex';
+                        document.body.classList.add('with-bottom-nav');
+                    } else {
+                        bottomBar.classList.add('hidden');
+                        bottomBar.style.display = 'none';
+                        document.body.classList.remove('with-bottom-nav');
+                    }
+                }
             }
         }
 
@@ -2414,6 +2648,69 @@
             }
         }
         checkCoreConnection();
+
+        // Responsive Sidebar Logic
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            const ov = document.getElementById('sidebarOverlay');
+
+            // Toggle translate (Hidden <-> Visible)
+            sb.classList.toggle('-translate-x-full');
+
+            // Toggle Overlay
+            ov.classList.toggle('hidden');
+        }
+
+        // --- MOBILE TABS LOGIC ---
+        function switchTab(view) {
+            const panel = document.getElementById('right-side-panel');
+            // Set Attribute triggers CSS logic
+            panel.setAttribute('data-mobile-view', view);
+
+            // Highlight Tab Button
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.dataset.tab === view) {
+                    btn.classList.add('text-blue-400');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('text-blue-400');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+        }
+
+        // Auto-switch to Inspector if inspect() called on mobile
+        const origInspect = inspect;
+        inspect = function (id) {
+            origInspect(id);
+            if (window.innerWidth < 768) {
+                switchTab('inspector');
+            }
+        }
+    </script>
+
+    <!-- BOTTOM TAB BAR (Mobile Only) -->
+    <div id="bottom-tab-bar"
+        class="md:hidden fixed bottom-0 inset-x-0 h-10 bg-slate-900 border-t border-slate-800 flex justify-around items-center z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+        <button onclick="switchTab('none')" data-tab="none" title="Home"
+            class="tab-btn flex flex-col items-center justify-center w-full h-full text-blue-400 hover:bg-slate-800 transition">
+            <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+        </button>
+        <button onclick="switchTab('inspector')" data-tab="inspector" title="Inspecteur"
+            class="tab-btn flex flex-col items-center justify-center w-full h-full text-slate-400 hover:bg-slate-800 transition">
+            <i data-lucide="mouse-pointer-2" class="w-6 h-6"></i>
+        </button>
+        <button onclick="switchTab('chat')" data-tab="chat" title="Conversatie"
+            class="tab-btn flex flex-col items-center justify-center w-full h-full text-slate-400 hover:bg-slate-800 transition">
+            <i data-lucide="message-square" class="w-6 h-6"></i>
+        </button>
+        <button onclick="switchTab('terminal')" data-tab="terminal" title="Terminal"
+            class="tab-btn flex flex-col items-center justify-center w-full h-full text-slate-400 hover:bg-slate-800 transition">
+            <i data-lucide="terminal" class="w-6 h-6"></i>
+        </button>
+    </div>
+    <script>
+        lucide.createIcons();
     </script>
 </body>
 
