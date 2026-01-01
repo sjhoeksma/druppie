@@ -40,6 +40,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	var debug bool
 	var planID string
 
+	// Register commands
+	rootCmd.AddCommand(newGenerateCmd())
+
 	// Helper to find project root
 	findProjectRoot := func() (string, error) {
 		cwd, err := os.Getwd()

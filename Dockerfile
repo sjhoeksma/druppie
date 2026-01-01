@@ -21,6 +21,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/druppie ./cmd
 # Compress binary
 RUN upx --best --lzma /app/druppie
 
+# Generate Search Index
+WORKDIR /app
+RUN /app/druppie generate
+
 # Run Stage
 FROM gcr.io/distroless/static:nonroot
 
