@@ -33,18 +33,31 @@
             box-sizing: border-box;
         }
 
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+        }
+
         body {
             font-family: 'Outfit', sans-serif;
             background-color: var(--bg-deep);
             color: var(--text-main);
             height: 100vh;
-            display: flex;
             overflow: hidden;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            grid-template-rows: 1fr max-content;
+            grid-template-areas:
+                "sidebar main"
+                "console console";
         }
 
         /* Layout */
         #sidebar {
-            width: 380px;
+            grid-area: sidebar;
+            width: 100%;
+            /* Fill grid column */
             background: var(--bg-card);
             border-right: 1px solid var(--glass-border);
             display: flex;
@@ -53,10 +66,11 @@
         }
 
         #main-view {
-            flex: 1;
+            grid-area: main;
             display: flex;
             flex-direction: column;
             position: relative;
+            overflow: hidden;
         }
 
         /* Sidebar / Chat Area */
@@ -300,6 +314,10 @@
 
         /* Log Panel & Tabs */
         #bottom-panel {
+            grid-area: console;
+            position: relative;
+            width: 100%;
+            z-index: 50;
             max-height: 40vh;
             background: #0a0f1d;
             border-top: 1px solid var(--glass-border);
@@ -615,6 +633,118 @@
 
         .modal-btn:hover {
             background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Mobile Responsive */
+        /* Mobile Responsive - Reordered Layout */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                display: flex;
+            }
+
+            /* Unwrap Sidebar to reorder children independently */
+            #sidebar {
+                display: contents;
+            }
+
+            .sidebar-header {
+                order: 1;
+                /* 1. Header Top */
+                width: 100%;
+                background: var(--bg-card);
+                border-bottom: 1px solid var(--glass-border);
+                padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+                /* More space at bottom */
+                height: auto;
+                /* Allow growth */
+                min-height: 60px;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                /* Allow wrapping if needed */
+            }
+
+            #main-view {
+                order: 2;
+                /* 2. Kanban Middle */
+                height: 35vh;
+                flex: none;
+                width: 100%;
+                border-bottom: 1px solid var(--glass-border);
+                background: var(--bg-deep);
+            }
+
+            #chat-messages {
+                order: 3;
+                /* 3. Chat Area */
+                flex: 1;
+                width: 100%;
+                overflow-y: auto;
+                background: var(--bg-card);
+                padding: 1rem;
+            }
+
+            .chat-input-wrapper {
+                order: 4;
+                /* 4. Input Area */
+                width: 100%;
+                background: var(--bg-card);
+                padding: 0.5rem 0.5rem 0 0.5rem;
+                /* Minimal padding, bottom 0 */
+                border-top: 1px solid var(--glass-border);
+            }
+
+            /* 5. System Console (Bottom) */
+            #bottom-panel {
+                order: 5;
+                position: relative !important;
+                width: 100%;
+                bottom: auto;
+                flex: none;
+                z-index: 50;
+            }
+
+            /* Adjust Tab Strip for Mobile */
+            .tab-strip {
+                padding: 0 0.5rem;
+                /* Push icon to right */
+                align-items: center;
+            }
+
+            /* Kanban Horizontal Strip */
+            #kanban-container {
+                flex-direction: row;
+                padding: 0.5rem;
+                overflow-x: auto;
+                overflow-y: hidden;
+                gap: 0.5rem;
+                scroll-snap-type: x mandatory;
+            }
+
+            .kanban-col {
+                min-width: 85vw;
+                scroll-snap-align: center;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.02);
+                border-radius: 0.75rem;
+                padding: 0.25rem 0.5rem;
+            }
+
+            .col-header {
+                padding: 0.25rem 0;
+                /* Minimal spacing for label */
+            }
+
+            .col-cards {
+                overflow-y: auto;
+                max-height: calc(35vh - 3rem);
+            }
+
+            .modal-content {
+                width: 95%;
+                max-height: 80vh;
+            }
         }
 
         .modal-btn.primary {
