@@ -323,10 +323,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						// Mark user_query as completed (since plan is now generated)
 						// This ensures it is preserved by task_manager's cleanup logic,
 						// fixing the issue where "pending" steps were being deleted.
-						if currentPlan.Steps[0].Action == "user_query" && currentPlan.Steps[0].Status == "running" {
-							currentPlan.Steps[0].Status = "completed"
-							currentPlan.Status = "running"
-							_ = plannerService.Store.SavePlan(currentPlan)
+						for i, s := range currentPlan.Steps {
+							if s.Action == "user_query" && s.Status == "running" {
+								currentPlan.Steps[i].Status = "completed"
+								///currentPlan.Status = "running" //We are now running
+								_ = plannerService.Store.SavePlan(currentPlan)
+							}
 						}
 
 						// 3. Execution

@@ -1099,7 +1099,7 @@
                         if (data.plan.steps && data.plan.steps.length > 0) {
                             const lastStep = data.plan.steps[data.plan.steps.length - 1];
                             if (lastStep.action === 'user_query') {
-                                state.lastShownStepId = lastStep.id;
+                                state.lastShownStepId = lastStep.step_id;
                             }
                         }
                     }
@@ -1338,15 +1338,17 @@
                     const isInitialLoad = (state.lastShownStepId === 0);
 
                     completedSteps.forEach(s => {
-                        if (s.id > state.lastShownStepId) {
-                            if (s.action === 'general_chat' && s.result) {
+                        if (s.step_id > state.lastShownStepId) {
+                            if ((s.action === 'general_chat' || s.agent_id === 'router') && s.result) {
                                 addChatMessage('ai', s.result);
-                            } else if (s.action === 'user_query' && s.result && isInitialLoad) {
-                                // Only show user query during initial history load
-                                // during live chat, it's added optimistically
-                                addChatMessage('user', s.result);
+                            } else if (s.action === 'user_query' && s.result) {
+                                // Only show user query if we are loading history
+                                // We detect this if current lastShownStepId is 0 or significantly behind
+                                if (isInitialLoad) {
+                                    addChatMessage('user', s.result);
+                                }
                             }
-                            state.lastShownStepId = s.id;
+                            state.lastShownStepId = s.step_id;
                         }
                     });
                 }
