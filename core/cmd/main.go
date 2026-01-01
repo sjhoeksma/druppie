@@ -238,7 +238,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								InitialPrompt: req.Prompt,
 								Prompt:        req.Prompt,
 							},
-							Status: "pending",
+							Status: "completed",
 							Steps:  []model.Step{},
 						}
 					} else {
@@ -255,9 +255,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						ID:      newStepID,
 						AgentID: "user",
 						Action:  "user_query",
-						Status:  "pending",
+						Status:  "running",
 						Result:  req.Prompt,
 					})
+					currentPlan.Status = "running"
 
 					// Save plan state (create or update timestamp/status)
 					if err := plannerService.Store.SavePlan(currentPlan); err != nil {
@@ -312,6 +313,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						tm.OutputChan <- fmt.Sprintf("[%s] Intent: %s", planID, intent.Action)
+
+						// Update currentPlan with the analyzed intent
+						currentPlan.Intent.Action = intent.Action
+						currentPlan.Intent.Category = intent.Category
+						currentPlan.Intent.Language = intent.Language
+						currentPlan.Intent.ContentType = intent.ContentType
+
+						// Mark user_query as completed (since plan is now generated)
+						// This ensures it is preserved by task_manager's cleanup logic,
+						// fixing the issue where "pending" steps were being deleted.
+						if currentPlan.Steps[0].Action == "user_query" && currentPlan.Steps[0].Status == "running" {
+							currentPlan.Steps[0].Status = "completed"
+							currentPlan.Status = "running"
+							_ = plannerService.Store.SavePlan(currentPlan)
+						}
 
 						// 3. Execution
 						if intent.Action == "create_project" {
@@ -373,15 +389,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							// Mark generate_plan as completed
 							currentPlan.Steps[len(currentPlan.Steps)-1].Status = "completed"
 							currentPlan.Steps[len(currentPlan.Steps)-1].Result = "Plan generated."
-
-							// Mark user_query as completed (since plan is now generated)
-							// This ensures it is preserved by task_manager's cleanup logic,
-							// fixing the issue where "pending" steps were being deleted.
-							for i := range currentPlan.Steps {
-								if currentPlan.Steps[i].Action == "user_query" {
-									currentPlan.Steps[i].Status = "completed"
-								}
-							}
 
 							// MERGE new steps into current plan
 							nextID := currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
@@ -529,9 +536,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							}
 						} else {
 							// No active task - mark as stopped if it claims to be running
-							if plans[i].Status == "running" || plans[i].Status == "waiting_input" {
-								plans[i].Status = "stopped"
-							}
+							// Commented out to prevent UI flickering "Stopped" during short transitions or if task is running in background but not in memory list yet?
+							// Actually, if task is NOT in memory, it IS stopped effectively.
+							// BUT during `CreatePlan`, we StopTask provided we manually set status="running".
+							// So if we trust Disk, we should NOT override here.
+							// if plans[i].Status == "running" || plans[i].Status == "waiting_input" {
+							// 	plans[i].Status = "stopped"
+							// }
 						}
 					}
 					tm.mu.Unlock()
@@ -1052,8 +1063,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					newStepID = currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
 				}
 				currentPlan.Steps = append(currentPlan.Steps, model.Step{
-					ID: newStepID, AgentID: "user", Action: "user_query", Status: "completed", Result: prompt,
+					ID: newStepID, AgentID: "user", Action: "user_query", Status: "running", Result: prompt,
 				})
+				currentPlan.Status = "running"
 				_ = planner.Store.SavePlan(currentPlan)
 
 				// 1. Build Context

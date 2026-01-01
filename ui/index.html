@@ -839,11 +839,11 @@
 
         <div id="bottom-panel" class="collapsed">
             <div class="tab-strip">
-                <div class="tab-btn active" onclick="switchTab('system')">
+                <div id="tab-btn-system" class="tab-btn active" onclick="switchTab('system')">
                     <i data-lucide="terminal" size="14"></i>
                     System Console
                 </div>
-                <div class="tab-btn" onclick="switchTab('process')">
+                <div id="tab-btn-process" class="tab-btn" onclick="switchTab('process')">
                     <i data-lucide="activity" size="14"></i>
                     Planner - Agents
                 </div>
@@ -964,15 +964,36 @@
         updatePlanSelector();
 
         function switchTab(name) {
+            const panel = document.getElementById('bottom-panel');
+            const btnId = name === 'system' ? 'tab-btn-system' : 'tab-btn-process';
+            const clickedBtn = document.getElementById(btnId);
+
+            // Robust check for active state
+            const isAlreadyActive = clickedBtn.classList.contains('active');
+
+            if (isAlreadyActive) {
+                // If active, just toggle the panel visibility
+                toggleConsole();
+                return;
+            }
+
+            // If switching to a NEW tab:
+            // 1. Deactivate all buttons
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            // 2. Hide all contents
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
+            // 3. Activate specific button and content
+            clickedBtn.classList.add('active');
             if (name === 'system') {
-                document.querySelector('[onclick="switchTab(\'system\')"]').classList.add('active');
                 document.getElementById('system-tab').classList.add('active');
             } else {
-                document.querySelector('[onclick="switchTab(\'process\')"]').classList.add('active');
                 document.getElementById('process-tab').classList.add('active');
+            }
+
+            // 4. Ensure panel is OPEN (remove collapsed) if it was closed
+            if (panel.classList.contains('collapsed')) {
+                toggleConsole();
             }
         }
 
