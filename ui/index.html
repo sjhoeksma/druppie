@@ -1334,7 +1334,8 @@
                 // Show General Chat Result Logic using Step IDs
                 // Always check for new completed steps regardless of plan status
                 if (true) {
-                    const completedSteps = steps.filter(s => s.status === 'completed');
+                    const completedSteps = steps.filter(s => s.status === 'completed')
+                        .sort((a, b) => a.step_id - b.step_id);
                     const isInitialLoad = (state.lastShownStepId === 0);
 
                     completedSteps.forEach(s => {
