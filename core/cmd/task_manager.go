@@ -66,7 +66,7 @@ func (tm *TaskManager) StartTask(ctx context.Context, plan model.ExecutionPlan) 
 		ID:        plan.ID,
 		Plan:      &plan,
 		Status:    TaskStatusPending,
-		InputChan: make(chan string), // Unbuffered, wait for receiver
+		InputChan: make(chan string, 100), // Buffered to allow "type-ahead" or resume-with-input
 		Ctx:       ctx,
 		Cancel:    cancel,
 	}
@@ -124,14 +124,6 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 	}()
 
 	task.Status = TaskStatusRunning
-
-	// Update Store to reflect Running state immediately
-	tm.mu.Lock()
-	if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
-		p.Status = "running"
-		_ = tm.planner.Store.SavePlan(p)
-	}
-	tm.mu.Unlock()
 
 	// Prune unfinished trailing steps to allow clean restart/resume
 	// (e.g. if we were waiting for input, remove that step so it is regenerated/re-executed fresh)

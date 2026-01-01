@@ -759,26 +759,44 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					tm.mu.Unlock()
 
 					if !ok {
-						// Task not started yet - handle stop command directly
-						if req.Input == "/stop" {
-							plan, err := plannerService.Store.GetPlan(id)
-							if err == nil {
-								plan.Status = "stopped"
-								_ = plannerService.Store.SavePlan(plan)
-								w.WriteHeader(http.StatusOK)
-								return
+						// Task not active in memory. Try to resume from store if plan exists.
+						plan, err := plannerService.Store.GetPlan(id)
+						if err == nil {
+							// Plan exists! Resume it.
+							tm.OutputChan <- fmt.Sprintf("[%s] Resuming inactive plan from store on input received...", id)
+
+							// Force status update to valid running state before starting
+							plan.Status = "running"
+							_ = plannerService.Store.SavePlan(plan)
+
+							// Start the task
+							task = tm.StartTask(context.Background(), plan)
+
+							// Proceed to use 'task' for input
+						} else {
+							// Task not in memory AND Plan not found in store
+
+							// Task not started yet - handle stop command directly
+							if req.Input == "/stop" {
+								plan, err := plannerService.Store.GetPlan(id)
+								if err == nil {
+									plan.Status = "stopped"
+									_ = plannerService.Store.SavePlan(plan)
+									w.WriteHeader(http.StatusOK)
+									return
+								}
 							}
+							http.Error(w, "Task not found", http.StatusNotFound)
+							return
 						}
-						http.Error(w, "Task not found", http.StatusNotFound)
-						return
 					}
 
-					// Send to task
+					// Send to task (Buffered channel allows immediate return)
 					select {
 					case task.InputChan <- req.Input:
 						w.WriteHeader(http.StatusOK)
-					case <-time.After(2 * time.Second):
-						http.Error(w, "Task is not waiting for input", http.StatusConflict)
+					default:
+						http.Error(w, "Task input buffer full", http.StatusServiceUnavailable)
 					}
 				})
 			})
