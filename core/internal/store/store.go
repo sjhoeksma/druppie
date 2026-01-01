@@ -131,6 +131,10 @@ func (s *FileStore) DeletePlan(id string) error {
 	logFile := filepath.Join(s.baseDir, "logs", id+".log")
 	_ = os.Remove(logFile) // Ignore error if log doesn't exist
 
+	// Delete files directory if exists
+	filesDir := filepath.Join(s.baseDir, "files", id)
+	_ = os.RemoveAll(filesDir)
+
 	return nil
 }
 

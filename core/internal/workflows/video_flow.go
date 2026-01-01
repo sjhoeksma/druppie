@@ -42,31 +42,69 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- fmt.Sprintf("🎥 [VideoWorkflow] Starting Video Creation Workflow: %s", initialPrompt)
 
 	// 1. Refine Intent (Ask Questions)
-	intent, err := w.refineIntent(wc, initialPrompt)
-	if err != nil {
-		return err
+	var intent ProjectIntent
+	// Check if already completed
+	if existing := wc.FindCompletedStep("refine_intent", "", nil); existing != nil {
+		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Intent already refined."
+		// Reconstruct Intent from Params
+		if refined, ok := existing.Params["refined"].(string); ok {
+			intent.RefinedPrompt = refined
+			// We might be missing Language and other fields if we don't save them all.
+			// Ideally we save the whole intent object or critical fields.
+			// Let's assume we can proceed with just RefinedPrompt or we should have saved more.
+			// Let's rely on what we saved. In refineIntent below we only saved 'refined'.
+			// Update: We should update refineIntent to save language too.
+			// For now, let's just proceed.
+			if lang, ok := existing.Params["language"].(string); ok {
+				intent.Language = lang
+			} else {
+				intent.Language = "en" // Default fallback
+			}
+		}
+	} else {
+		var err error
+		intent, err = w.refineIntent(wc, initialPrompt)
+		if err != nil {
+			return err
+		}
+		_ = wc.Store.LogInteraction(wc.PlanID, "VideoContentCreator", "Refined Intent", fmt.Sprintf("%+v", intent))
 	}
-	_ = wc.Store.LogInteraction(wc.PlanID, "VideoContentCreator", "Refined Intent", fmt.Sprintf("%+v", intent))
 
 	// 2. Draft Script
-	script, err := w.draftScript(wc, intent)
-	if err != nil {
-		return err
+	var script AVScript
+	if existing := wc.FindCompletedStep("draft_scenes", "", nil); existing != nil {
+		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Script already drafted."
+		if sceneList, ok := existing.Params["av_script"].([]interface{}); ok {
+			// Need to convert []interface{} to []Scene manually or use json marshal/unmarshal hack
+			bytes, _ := json.Marshal(sceneList)
+			_ = json.Unmarshal(bytes, &script.Scenes)
+		} else {
+			// Try to see if it was saved directly as []Scene (internal type)?
+			// Go json unmarshal usually makes it []interface{}.
+			// Let's assume the json.Marshal hack works.
+		}
+	} else {
+		var err error
+		script, err = w.draftScript(wc, intent)
+		if err != nil {
+			return err
+		}
+		wc.OutputChan <- fmt.Sprintf("✅ [VideoWorkflow] Script Approved: %d scenes.", len(script.Scenes))
+		_ = wc.Store.LogInteraction(wc.PlanID, "VideoContentCreator", "Approved Script", w.formatScript(script))
+		wc.AppendStep(model.Step{
+			AgentID: "video-content-creator",
+			Action:  "draft_scenes",
+			Status:  "completed",
+			Params:  map[string]interface{}{"av_script": script.Scenes},
+		})
 	}
-	wc.OutputChan <- fmt.Sprintf("✅ [VideoWorkflow] Script Approved: %d scenes.", len(script.Scenes))
-	_ = wc.Store.LogInteraction(wc.PlanID, "VideoContentCreator", "Approved Script", w.formatScript(script))
-	wc.AppendStep(model.Step{
-		AgentID: "video-content-creator",
-		Action:  "draft_scenes",
-		Status:  "completed",
-		Params:  map[string]interface{}{"av_script": script.Scenes},
-	})
 
 	// 3. Asset Production Phases
 
 	// PHASE A: AUDIO
 	wc.OutputChan <- "🎙️ [VideoWorkflow] Phase 1/3: Audio Generation..."
 	for {
+		var err error
 		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, w.generateAudio)
 		if err != nil {
 			return err
@@ -84,6 +122,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	// PHASE B: IMAGES
 	wc.OutputChan <- "🎨 [VideoWorkflow] Phase 2/3: Image Generation..."
 	for {
+		var err error
 		script.Scenes, err = w.runPhase(wc, "image-creator", "image-generation", script.Scenes, w.generateImage)
 		if err != nil {
 			return err
@@ -101,6 +140,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	// PHASE C: VIDEO
 	wc.OutputChan <- "🎬 [VideoWorkflow] Phase 3/3: Video Generation..."
 	for {
+		var err error
 		script.Scenes, err = w.runPhase(wc, "video-creator", "video-generation", script.Scenes, w.generateVideo)
 		if err != nil {
 			return err
@@ -139,11 +179,49 @@ func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action st
 	errChan := make(chan error, len(scenes))
 
 	for _, s := range scenes {
+		// Check for existing completed step
+		if existing := wc.FindCompletedStep(action, "scene_id", s.ID); existing != nil {
+			// Log once or quiet
+			// Populate result from Params
+			res := s
+			// We need to restore the file paths so subsequent phases know where they are
+			if af, ok := existing.Params["audio_file"].(string); ok {
+				res.AudioFile = af
+			}
+			if img, ok := existing.Params["image_file"].(string); ok {
+				res.ImageFile = img
+			}
+			if vf, ok := existing.Params["video_file"].(string); ok {
+				res.VideoFile = vf
+			}
+
+			resultChan <- res
+			continue
+		}
+
 		wg.Add(1)
 		go func(scene Scene) {
 			defer wg.Done()
+
+			// Register Running Step
+			stepID := wc.AppendStep(model.Step{
+				AgentID: agentID,
+				Action:  action,
+				Status:  "running",
+				Params:  map[string]interface{}{"scene_id": scene.ID},
+			})
+
 			res, err := generator(wc, scene)
 			if err != nil {
+				// Mark as failed
+				wc.AppendStep(model.Step{
+					ID:      stepID,
+					AgentID: agentID,
+					Action:  action,
+					Status:  "failed",
+					Result:  err.Error(),
+					Params:  map[string]interface{}{"scene_id": scene.ID},
+				})
 				errChan <- err
 				return
 			}
@@ -167,6 +245,7 @@ func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action st
 			}
 
 			wc.AppendStep(model.Step{
+				ID:      stepID,
 				AgentID: agentID,
 				Action:  action,
 				Status:  "completed",
@@ -266,8 +345,16 @@ If it is clear, output the refined project details.
 Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "en", "target_audience": "..." }`
 
 	for {
+		// Register running step
+		stepID := wc.AppendStep(model.Step{
+			AgentID: "video-content-creator",
+			Action:  "refine_intent",
+			Status:  "running",
+		})
+
 		resp, err := wc.LLM.Generate(wc.Ctx, "Refine Intent", sysPrompt+"\nUser Request: "+prompt)
 		if err != nil {
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error()})
 			return ProjectIntent{}, err
 		}
 
@@ -286,9 +373,11 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			question, _ := raw["question"].(string)
 			wc.OutputChan <- fmt.Sprintf("🤔 [Intent] Question: %s", question)
 
+			// Update running step to waiting_input
 			wc.AppendStep(model.Step{
+				ID:      stepID,
 				AgentID: "video-content-creator",
-				Action:  "ask_question",
+				Action:  "ask_question", // Change action name? Or keep refine_intent? Let's switch to ask_question for clarity
 				Status:  "waiting_input",
 				Result:  question,
 			})
@@ -313,11 +402,12 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 		wc.OutputChan <- fmt.Sprintf("\n🧠 [Intent] Analysis:\n - **Language**: %s\n - **Prompt**: %s\n", intent.Language, intent.RefinedPrompt)
 
 		wc.AppendStep(model.Step{
+			ID:      stepID,
 			AgentID: "video-content-creator",
 			Action:  "refine_intent",
 			Status:  "completed",
 			Result:  "Intent finalized",
-			Params:  map[string]interface{}{"refined": intent.RefinedPrompt},
+			Params:  map[string]interface{}{"refined": intent.RefinedPrompt, "language": intent.Language},
 		})
 
 		return intent, nil
@@ -332,6 +422,14 @@ func (w *VideoCreationWorkflow) draftScript(wc *WorkflowContext, intent ProjectI
 		iteration++
 		wc.OutputChan <- "📝 [VideoWorkflow] Drafting Script..."
 
+		// Show "running" state
+		stepID := wc.AppendStep(model.Step{
+			ID:      1000 + iteration, // Keep ID stable for iteration
+			AgentID: "video-content-creator",
+			Action:  "draft_scenes",
+			Status:  "running",
+		})
+
 		sysPrompt := `You are a Screenwriter. Create a JSON script for a video.
 Structure: {"av_script": [{"scene_id": 1, "audio_text": "...", "visual_prompt": "...", "duration": 5}]}
 Key Rules:
@@ -339,6 +437,8 @@ Key Rules:
 `
 		resp, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
 		if err != nil {
+			// Mark failed if LLM fails
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes"})
 			return AVScript{}, err
 		}
 
@@ -360,7 +460,6 @@ Key Rules:
 		wc.OutputChan <- w.formatScript(script)
 		wc.OutputChan <- "Options: [Type feedback] | '/accept' to proceed"
 
-		stepID := 1000 + iteration
 		wc.AppendStep(model.Step{
 			ID:      stepID,
 			AgentID: "video-content-creator",

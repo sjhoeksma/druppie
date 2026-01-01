@@ -115,7 +115,7 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 	return selected
 }
 
-func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.ExecutionPlan, error) {
+func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID string) (model.ExecutionPlan, error) {
 	// 1. Gather Context from Registry
 	blocks := p.registry.ListBuildingBlocks()
 	blockNames := make([]string, 0, len(blocks))
@@ -298,8 +298,13 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent) (model.Ex
 	}
 
 	// 4. Construct Plan
+	if planID == "" {
+		planID = fmt.Sprintf("plan-%d", time.Now().Unix())
+	}
 	plan := model.ExecutionPlan{
-		ID:             fmt.Sprintf("plan-%d", time.Now().Unix()),
+		// Use a UUID or timestamp.
+		// Note: The Caller (main.go) dictates the ID in the async flow, but for synchronous creation we generate one.
+		ID:             planID,
 		Intent:         intent,
 		Status:         "created",
 		Steps:          steps,
@@ -468,6 +473,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	taskPrompt := fmt.Sprintf(
 		"--- HISTORY & PROGRESS ---\n"+
 			"Current Steps (with results): %s\n"+
+			"Uploaded Files: %v\n"+
 			"Latest User Input: %s\n\n"+
 			"--- TASK ---\n"+
 			"1. REPLAN: Review 'Objective' and 'Current Steps'. If a step has a 'result', that info is now known.\n"+
@@ -475,6 +481,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			"3. GENERATE: Provide NEXT steps (starting from id %d). Follow the Strategies defined above.\n"+
 			"4. OUTPUT: Return a JSON array of Step objects.",
 		string(stepsJSON),
+		plan.Files,
 		feedback,
 		startID+1, // Start ID for new steps
 	)

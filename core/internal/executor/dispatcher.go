@@ -15,6 +15,7 @@ func NewDispatcher() *Dispatcher {
 			&AudioCreatorExecutor{},
 			&VideoCreatorExecutor{},
 			&ImageCreatorExecutor{}, // Start valid Image Executor
+			&FileReaderExecutor{},   // File Reader
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},

@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -43,11 +44,12 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 
 	outputChan <- fmt.Sprintf("   📝 Logic: Generating speech for \"%s\" (Voice: %s)", text, voice)
 
-	// Simulate Latency
+	// Simulate Latency (1-5s)
+	delay := time.Duration(1000+rand.Intn(4000)) * time.Millisecond
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(1500 * time.Millisecond):
+	case <-time.After(delay):
 	}
 
 	// Calculate fake duration based on text length (rough calc: 15 chars ~ 1 sec)

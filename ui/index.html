@@ -155,8 +155,8 @@
         #send-btn {
             background: var(--accent);
             border: none;
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 0.75rem;
             cursor: pointer;
             display: flex;
@@ -172,7 +172,7 @@
         /* Kanban Board */
         #kanban-container {
             flex: 1;
-            padding: 2rem;
+            padding: 0rem 2rem 0rem 2rem;
             overflow-x: auto;
             display: flex;
             gap: 2rem;
@@ -197,7 +197,8 @@
         }
 
         .kanban-col {
-            flex: 0 0 320px;
+            flex: 1;
+            min-width: 200px;
             display: flex;
             flex-direction: column;
             gap: 0;
@@ -648,7 +649,26 @@
         <header class="sidebar-header">
             <img src="../druppie_logo.svg" alt="Druppie" style="width: 48px; height: 48px;">
             <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
-                <h1>Druppie UI</h1>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <h1>Druppie UI</h1>
+                    <button onclick="createNewPlan()" title="New plan" style="
+                        background: transparent;
+                        border: 1px solid var(--glass-border);
+                        border-radius: 0.5rem;
+                        padding: 0.25rem;
+                        color: var(--text-dim);
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 28px;
+                        height: 28px;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.color='white'; this.style.borderColor='var(--accent)'"
+                        onmouseout="this.style.color='var(--text-dim)'; this.style.borderColor='var(--glass-border)'">
+                        <i data-lucide="plus" size="16"></i>
+                    </button>
+                </div>
                 <select id="plan-selector" style="
                     background: var(--bg-deep);
                     border: 1px solid var(--glass-border);
@@ -660,7 +680,7 @@
                     outline: none;
                     cursor: pointer;
                 ">
-                    <option value="">No active plan</option>
+                    <option value="">Geen actief plan</option>
                 </select>
             </div>
         </header>
@@ -668,20 +688,50 @@
 
         <div id="chat-messages">
             <div class="message ai">
-                Hello! I am the Druppie Orchestrator. What would you like to build today?
+                Hallo! Ik ben Druppie, de AI-Orchestrator. Wat kan ik voor je doen ?
             </div>
         </div>
 
         <div class="chat-input-wrapper">
             <div class="chat-input-container">
-                <input type="text" id="prompt-input" placeholder="Type your request here...">
+                <input type="text" id="prompt-input" placeholder="Type je vraag of opdracht hier...">
+                <button id="send-btn" style="
+                    background: var(--accent);
+                    border: none;
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.75rem;
+                    color: white;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.25rem;
+                ">
+                    <i data-lucide="send" size="16"></i>
+                </button>
             </div>
-            <div style="display: flex; gap: 0.5rem; padding: 0.5rem 0; flex-wrap: wrap; align-items: center;">
+            <div
+                style="display: flex; gap: 0.25rem; padding: 0.5rem 0; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+                <input type="file" id="file-input" style="display: none;" onchange="handleFileUpload(this)">
+                <button onclick="document.getElementById('file-input').click()" title="Attach File" style="
+                    background: var(--glass-bg);
+                    border: 1px solid var(--glass-border);
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.5rem;
+                    color: var(--text-dim);
+                    font-size: 0.75rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                ">
+                    <i data-lucide="file-plus" size="14"></i>
+                </button>
                 <button onclick="handleCommand('/list')" title="List Plans (/list)" style="
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -695,7 +745,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -709,7 +759,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -723,7 +773,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -737,7 +787,7 @@
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
-                    padding: 0.25rem 0.75rem;
+                    padding: 0.25rem 0.5rem;
                     color: var(--text-dim);
                     font-size: 0.75rem;
                     cursor: pointer;
@@ -747,19 +797,7 @@
                 ">
                     <i data-lucide="book" size="14"></i>
                 </button>
-                <button id="send-btn" style="
-                    background: var(--accent);
-                    border: none;
-                    border-radius: 0.5rem;
-                    padding: 0.35rem 0.75rem;
-                    color: white;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                ">
-                    <i data-lucide="send" size="16"></i>
-                </button>
+
             </div>
         </div>
     </aside>
@@ -768,7 +806,15 @@
         <div id="kanban-container">
             <div class="kanban-col" id="col-pending">
                 <div class="col-header">
-                    <h3>Pending</h3>
+                    <h3>Wachtend</h3>
+                    <span class="task-count">0</span>
+                </div>
+                <div class="col-cards"></div>
+            </div>
+
+            <div class="kanban-col" id="col-interaction">
+                <div class="col-header">
+                    <h3>Interactie</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
@@ -776,7 +822,7 @@
 
             <div class="kanban-col" id="col-running">
                 <div class="col-header">
-                    <h3>In Progress</h3>
+                    <h3>Bezig</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
@@ -784,14 +830,14 @@
 
             <div class="kanban-col" id="col-completed">
                 <div class="col-header">
-                    <h3>Completed</h3>
+                    <h3>Voltooid</h3>
                     <span class="task-count">0</span>
                 </div>
                 <div class="col-cards"></div>
             </div>
         </div>
 
-        <div id="bottom-panel">
+        <div id="bottom-panel" class="collapsed">
             <div class="tab-strip">
                 <div class="tab-btn active" onclick="switchTab('system')">
                     <i data-lucide="terminal" size="14"></i>
@@ -805,19 +851,19 @@
                 <button id="toggle-console-btn" onclick="toggleConsole()"
                     style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0 1rem; display: flex; align-items: center;"
                     title="Toggle Console">
-                    <i data-lucide="chevron-down" size="16"></i>
+                    <i data-lucide="chevron-up" size="16"></i>
                 </button>
             </div>
 
             <div id="system-tab" class="tab-content active">
                 <div id="log-content">
-                    <div class="log-entry info">Bridge active. Waiting for task...</div>
+                    <div class="log-entry info">Verbinding actief. Wacht op taken...</div>
                 </div>
             </div>
 
             <div id="process-tab" class="tab-content">
                 <div id="step-log">
-                    <div class="message">No active plan.</div>
+                    <div class="message">Geen actief plan.</div>
                 </div>
             </div>
         </div>
@@ -846,7 +892,8 @@
             currentPlanId: null,
             lastLogIndex: 0,
             pollingInterval: null,
-            isWaitingForInput: false
+            isWaitingForInput: false,
+            lastShownStepId: 0
         };
 
         const elements = {
@@ -858,6 +905,7 @@
             planSelector: document.getElementById('plan-selector'),
             cols: {
                 pending: document.getElementById('col-pending'),
+                interaction: document.getElementById('col-interaction'),
                 running: document.getElementById('col-running'),
                 completed: document.getElementById('col-completed')
             }
@@ -870,10 +918,12 @@
 
             state.currentPlanId = selectedPlanId;
             state.lastLogIndex = 0;
+            state.lastShownStepId = 0;
             elements.systemLogs.innerHTML = '';
             elements.stepLogs.innerHTML = '';
+            elements.chat.innerHTML = '';
 
-            addChatMessage('ai', `🔄 Switched to plan: ${selectedPlanId}`);
+            addChatMessage('ai', `🔄 Wissel naar plan: ${selectedPlanId}`);
             startMonitoring();
         };
 
@@ -884,7 +934,7 @@
                 const plans = await resp.json();
 
                 const currentValue = elements.planSelector.value;
-                elements.planSelector.innerHTML = '<option value="">Select a plan...</option>';
+                elements.planSelector.innerHTML = '<option value="">Selecteer of Maak een plan...</option>';
 
                 plans.forEach(plan => {
                     const option = document.createElement('option');
@@ -905,7 +955,7 @@
                     elements.planSelector.appendChild(option);
                 });
             } catch (e) {
-                console.error('Failed to update plan selector:', e);
+                console.error('Fout bij het selecteren van het plan:', e);
             }
         }
 
@@ -941,6 +991,41 @@
             lucide.createIcons();
         }
 
+        async function handleFileUpload(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+
+            if (!state.currentPlanId) {
+                addChatMessage('ai', '⚠️ Geen actief plan. Selecteer of maak eerst een plan voordat je bestanden uploadt.');
+                input.value = ''; // Reset input
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const msg = addChatMessage('ai', `📁 Uploaden van bestand: ${file.name}...`);
+
+            try {
+                const resp = await fetch(`/v1/plans/${state.currentPlanId}/files`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (resp.ok) {
+                    msg.textContent = `✅ Bestand geupload: ${file.name}`;
+                    // Optionally notify planner if waiting for input?
+                    // For now, just logging it to chat is fine, the planner will see it in context next turn.
+                } else {
+                    const err = await resp.text();
+                    msg.textContent = `❌ Fout bij uploaden: ${err}`;
+                }
+            } catch (e) {
+                msg.textContent = `❌ Netwerk fout: ${e.message}`;
+            }
+            input.value = ''; // Reset input to allow re-uploading same file
+        }
+
         async function sendMessage() {
             const prompt = elements.prompt.value.trim();
             if (!prompt) return;
@@ -960,13 +1045,16 @@
             }
 
             // Optimistic UI: Show immediate feedback
-            const thinkingMsg = addChatMessage('ai', '🤔 Analyzing your request...');
+            const thinkingMsg = addChatMessage('ai', '🤔 Analyseren van je verzoek...');
 
             try {
                 const resp = await fetch('/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt })
+                    body: JSON.stringify({
+                        prompt,
+                        plan_id: state.currentPlanId
+                    })
                 });
                 const data = await resp.json();
 
@@ -974,12 +1062,30 @@
                 thinkingMsg.remove();
 
                 if (data.plan) {
-                    state.currentPlanId = data.plan.plan_id;
-                    state.lastLogIndex = 0;
-                    elements.systemLogs.innerHTML = '';
-                    elements.stepLogs.innerHTML = '';
+                    // Reset state if we are switching to a new/different plan
+                    if (state.currentPlanId !== data.plan.plan_id) {
+                        state.lastShownStepId = 0;
+                        state.lastLogIndex = 0;
+                        elements.systemLogs.innerHTML = '';
+                        elements.stepLogs.innerHTML = '';
+                        // Clear chat history so we can rebuild it from the new plan correctly
+                        // Note: This temporarily removes the optimistic user bubble, but strict consistency restores it
+                        elements.chat.innerHTML = '';
+                        // Restore the user prompt immediately
+                        addChatMessage('user', prompt);
 
-                    addChatMessage('ai', `✅ Plan created: ${state.currentPlanId}\nStarting orchestration...`);
+                        // Prevent duplication in updatePlan by fast-forwarding the shown ID
+                        if (data.plan.steps && data.plan.steps.length > 0) {
+                            const lastStep = data.plan.steps[data.plan.steps.length - 1];
+                            if (lastStep.action === 'user_query') {
+                                state.lastShownStepId = lastStep.id;
+                            }
+                        }
+                    }
+                    state.currentPlanId = data.plan.plan_id;
+                    state.lastShownStepId = state.lastShownStepId || 0;
+
+                    // addChatMessage('ai', `✅ Plan gemaakt: ${state.currentPlanId}\nOrchestration gestart...`);
 
                     // Update plan selector to show new plan
                     updatePlanSelector();
@@ -987,7 +1093,11 @@
                     // Start monitoring immediately to show the pending plan
                     startMonitoring();
                 } else if (data.intent) {
-                    addChatMessage('ai', `Analysis: ${data.intent.action}.`);
+                    if (data.intent.answer) {
+                        addChatMessage('ai', data.intent.answer);
+                    } else {
+                        addChatMessage('ai', `Analyse: ${data.intent.action}.`);
+                    }
                 }
             } catch (err) {
                 thinkingMsg.remove();
@@ -1009,7 +1119,7 @@
                 <div class="task-action">${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}</div>
                 <div class="task-meta">
                      <i data-lucide="loader-2" size="12" class="lucide-spin"></i>
-                     initializing
+                     initialiseren
                 </div>
             `;
 
@@ -1042,12 +1152,12 @@
                         const plans = await resp.json();
                         if (plans && plans.length > 0) {
                             const list = plans.map(p => `• ${p.plan_id} - ${p.status}`).join('\n');
-                            addChatMessage('ai', `📋 Active Plans:\n${list}`);
+                            addChatMessage('ai', `📋 Actief Plan:\n${list}`);
                         } else {
-                            addChatMessage('ai', '📋 No active plans.');
+                            addChatMessage('ai', '📋 Geen actief plan.');
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Failed to list plans: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het weergeven van de actieve plannen: ${e.message}`);
                     }
                     break;
 
@@ -1056,15 +1166,15 @@
                         try {
                             const resp = await fetch(`/v1/plans/${state.currentPlanId}/stop`, { method: 'POST' });
                             if (resp.ok) {
-                                addChatMessage('ai', '🛑 Stop signal sent.');
+                                addChatMessage('ai', '🛑 Stop signaal verstuurd.');
                             } else {
-                                addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                                addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${await resp.text()}`);
                             }
                         } catch (e) {
-                            addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                            addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${e.message}`);
                         }
                     } else {
-                        addChatMessage('ai', '⚠️ No active plan to stop.');
+                        addChatMessage('ai', '⚠️ Geen actief plan om te stoppen.');
                     }
                     break;
 
@@ -1074,10 +1184,10 @@
                         state.lastLogIndex = 0;
                         elements.systemLogs.innerHTML = '';
                         elements.stepLogs.innerHTML = '';
-                        addChatMessage('ai', `🔄 Switched to plan: ${parts[1]}`);
+                        addChatMessage('ai', `🔄 Actief plan veranderd naar: ${parts[1]}`);
                         startMonitoring();
                     } else {
-                        addChatMessage('ai', '⚠️ Usage: /switch <plan-id>');
+                        addChatMessage('ai', '⚠️ Gebruik: /switch <plan-id>');
                     }
                     break;
 
@@ -1085,13 +1195,13 @@
                 case '/delete':
                     const delPlanId = parts[1] || state.currentPlanId;
                     if (!delPlanId) {
-                        addChatMessage('ai', '⚠️ No plan to delete. Usage: /del <plan-id>');
+                        addChatMessage('ai', '⚠️ Geen plan om te verwijderen. Gebruik: /del <plan-id>');
                         break;
                     }
                     try {
                         const resp = await fetch(`/v1/plans/${delPlanId}`, { method: 'DELETE' });
                         if (resp.ok) {
-                            addChatMessage('ai', `🗑️ Deleted plan: ${delPlanId}`);
+                            addChatMessage('ai', `🗑️ Plan verwijderd: ${delPlanId}`);
                             if (state.currentPlanId === delPlanId) {
                                 state.currentPlanId = null;
                                 elements.systemLogs.innerHTML = '';
@@ -1111,34 +1221,34 @@
                             }
                             updatePlanSelector();
                         } else {
-                            addChatMessage('ai', `❌ Failed to delete plan: ${await resp.text()}`);
+                            addChatMessage('ai', `❌ Fout bij het verwijderen van het plan: ${await resp.text()}`);
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Error deleting plan: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het verwijderen van het plan: ${e.message}`);
                     }
                     break;
 
                 case '/resume':
                     const resumePlanId = parts[1] || state.currentPlanId;
                     if (!resumePlanId) {
-                        addChatMessage('ai', '⚠️ No plan to resume. Usage: /resume <plan-id>');
+                        addChatMessage('ai', '⚠️ Geen plan om te hervatten. Gebruik: /resume <plan-id>');
                         break;
                     }
                     try {
                         const resp = await fetch(`/v1/plans/${resumePlanId}/resume`, { method: 'POST' });
                         if (resp.ok) {
-                            addChatMessage('ai', `▶️ Resumed plan: ${resumePlanId}`);
+                            addChatMessage('ai', `▶️ Plan hervat: ${resumePlanId}`);
                             updatePlanSelector();
                         } else {
-                            addChatMessage('ai', `❌ Failed to resume plan: ${await resp.text()}`);
+                            addChatMessage('ai', `❌ Fout bij het hervatten van het plan: ${await resp.text()}`);
                         }
                     } catch (e) {
-                        addChatMessage('ai', `❌ Error resuming plan: ${e.message}`);
+                        addChatMessage('ai', `❌ Fout bij het hervatten van het plan: ${e.message}`);
                     }
                     break;
 
                 default:
-                    addChatMessage('ai', `❓ Unknown command: ${command}\n\nAvailable commands:\n• /list - Show all plans\n• /stop - Stop current plan\n• /switch <plan-id> - Switch to a different plan\n• /del <plan-id> - Delete a plan\n• /resume <plan-id> - Resume a stopped plan`);
+                    addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan`);
             }
         }
 
@@ -1151,7 +1261,7 @@
                 });
                 if (resp.ok) {
                     state.isWaitingForInput = false;
-                    addChatMessage('ai', `Input sent. Resuming execution...`);
+                    addChatMessage('user', `Input verstuurd: ${text.length > 50 ? text.substring(0, 50) + '...' : text}`);
                 } else {
                     const err = await resp.text();
                     addChatMessage('ai', `Failed: ${err}`);
@@ -1197,6 +1307,29 @@
                     state.isWaitingForInput = false;
                 }
 
+                // Ensure steps exist
+                const steps = plan.steps || [];
+
+                // Show General Chat Result Logic using Step IDs
+                // Always check for new completed steps regardless of plan status
+                if (true) {
+                    const completedSteps = steps.filter(s => s.status === 'completed');
+                    const isInitialLoad = (state.lastShownStepId === 0);
+
+                    completedSteps.forEach(s => {
+                        if (s.id > state.lastShownStepId) {
+                            if (s.action === 'general_chat' && s.result) {
+                                addChatMessage('ai', s.result);
+                            } else if (s.action === 'user_query' && s.result && isInitialLoad) {
+                                // Only show user query during initial history load
+                                // during live chat, it's added optimistically
+                                addChatMessage('user', s.result);
+                            }
+                            state.lastShownStepId = s.id;
+                        }
+                    });
+                }
+
                 renderPlan(plan);
                 renderStepList(plan);
             } catch (e) { }
@@ -1233,6 +1366,7 @@
         }
 
         function renderPlan(plan) {
+            plan.steps = plan.steps || [];
             // Update Kanban background based on plan state
             const kanbanContainer = document.getElementById('kanban-container');
             kanbanContainer.className = `state-${plan.status}`;
@@ -1246,38 +1380,49 @@
 
             const counts = { pending: 0, running: 0, completed: 0 };
 
-            // If plan has no steps yet (pending state), show a placeholder
-            if (plan.steps.length === 0 && plan.status === 'pending') {
-                const card = document.createElement('div');
-                card.className = 'task-card status-pending';
-                card.onclick = () => openStepModal({
-                    step_id: 0,
-                    agent_id: 'orchestrator',
-                    action: 'Initializing plan...',
-                    status: 'pending',
-                    result: plan.intent.prompt || plan.intent.initial_prompt
-                }, plan);
+            // If plan has no steps yet, show a placeholder
+            if (plan.steps.length === 0) {
+                if (plan.status === 'pending' || plan.status === 'running') {
+                    const isRunning = plan.status === 'running';
+                    const card = document.createElement('div');
+                    card.className = `task-card status-${plan.status}`;
+                    card.onclick = () => openStepModal({
+                        step_id: 0,
+                        agent_id: 'orchestrator',
+                        action: isRunning ? 'Creating plan...' : 'Initializing plan...',
+                        status: plan.status,
+                        result: plan.intent.prompt || plan.intent.initial_prompt
+                    }, plan);
 
-                card.innerHTML = `
-                    <div class="task-header">
-                        <span class="task-agent">orchestrator</span>
-                        <span class="task-id">${plan.plan_id}</span>
-                    </div>
-                    <div class="task-action">Analyzing request...</div>
-                    <div class="task-meta">
-                         <i data-lucide="loader-2" size="12"></i>
-                         pending
-                    </div>
-                `;
+                    card.innerHTML = `
+                        <div class="task-header">
+                            <span class="task-agent">orchestrator</span>
+                            <span class="task-id">${plan.plan_id}</span>
+                        </div>
+                        <div class="task-action">${isRunning ? 'Generating Plan...' : 'Analyzing request...'}</div>
+                        <div class="task-meta">
+                            <i data-lucide="loader-2" size="12"></i>
+                            ${plan.status}
+                        </div>
+                    `;
 
-                const pendingCards = elements.cols.pending.querySelector('.col-cards');
-                if (pendingCards) pendingCards.appendChild(card);
-                counts.pending++;
-                lucide.createIcons();
+                    let targetContainer;
+                    if (isRunning) {
+                        targetContainer = elements.cols.running.querySelector('.col-cards');
+                        counts.running++;
+                    } else {
+                        targetContainer = elements.cols.pending.querySelector('.col-cards');
+                        counts.pending++;
+                    }
+
+                    if (targetContainer) targetContainer.appendChild(card);
+                    lucide.createIcons();
+                }
             }
 
             plan.steps.forEach(step => {
                 // Skip planner-generated placeholder steps that haven't been executed
+                // Show all steps including pending
                 if (step.status === 'pending' && !step.result) {
                     return;
                 }
@@ -1310,7 +1455,13 @@
                 `;
 
                 let targetCol;
-                if (step.status === 'running' || step.status === 'waiting_input') {
+                if (step.status === 'waiting_input') {
+                    targetCol = elements.cols.interaction.querySelector('.col-cards');
+                    // We don't track a separate count for interaction in the 'counts' object in the original code, 
+                    // but we should probably add it or reuse 'running'.
+                    // For now, let's assume we want to track it.
+                    // But wait, the original code had counts defined. I should update counts too.
+                } else if (step.status === 'running') {
                     targetCol = elements.cols.running.querySelector('.col-cards');
                     counts.running++;
                 } else if (step.status === 'completed' || step.status === 'failed' || step.status === 'stopped' || step.status === 'error') {
@@ -1325,6 +1476,7 @@
             });
 
             elements.cols.pending.querySelector('.task-count').textContent = counts.pending;
+            elements.cols.interaction.querySelector('.task-count').textContent = plan.steps.filter(s => s.status === 'waiting_input').length;
             elements.cols.running.querySelector('.task-count').textContent = counts.running;
             elements.cols.completed.querySelector('.task-count').textContent = counts.completed;
 
@@ -1354,7 +1506,7 @@
                 elements.stepLogs.appendChild(item);
             });
             if (elements.stepLogs.innerHTML === '') {
-                elements.stepLogs.innerHTML = '<div class="message">Waiting for agents to begin...</div>';
+                elements.stepLogs.innerHTML = '<div class="message">Wacht op agents om te beginnen...</div>';
             }
         }
 
@@ -1449,13 +1601,13 @@
                 bodyHTML += `
                     <div class="feedback-section">
                         <label class="info-label">Your Response:</label>
-                        <textarea id="feedback-input" class="feedback-input" placeholder="Type your feedback or refinement..."></textarea>
+                        <textarea id="feedback-input" class="feedback-input" placeholder="Type je feedback of verbetering..."></textarea>
                         <div class="modal-actions">
                             <button class="modal-btn primary" onclick="submitModalAction('/accept')">
-                                <i data-lucide="check" size="16"></i> Accept
+                                <i data-lucide="check" size="16"></i> Accepteer
                             </button>
                             <button class="modal-btn" onclick="submitModalFeedback()">
-                                <i data-lucide="message-square" size="16"></i> Send Feedback
+                                <i data-lucide="message-square" size="16"></i> Verstuur Feedback
                             </button>
                             <button class="modal-btn danger" onclick="submitModalAction('/stop')">
                                 <i data-lucide="x" size="16"></i> Stop
@@ -1483,12 +1635,12 @@
                 try {
                     const resp = await fetch(`/v1/plans/${currentPlan.plan_id}/stop`, { method: 'POST' });
                     if (resp.ok) {
-                        addChatMessage('ai', '🛑 Stop signal sent from modal.');
+                        addChatMessage('user', '🛑 Stop signaal verstuurd vanuit modal.');
                     } else {
-                        addChatMessage('ai', `❌ Failed to stop plan: ${await resp.text()}`);
+                        addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${await resp.text()}`);
                     }
                 } catch (e) {
-                    addChatMessage('ai', `❌ Error stopping plan: ${e.message}`);
+                    addChatMessage('ai', `❌ Fout bij het stoppen van het plan: ${e.message}`);
                 }
             } else {
                 await sendTaskInput(currentPlan.plan_id, action);
@@ -1509,6 +1661,30 @@
         document.getElementById('step-modal').onclick = (e) => {
             if (e.target.id === 'step-modal') closeStepModal();
         };
+
+        function createNewPlan() {
+            if (state.pollingInterval) clearInterval(state.pollingInterval);
+            state.pollingInterval = null;
+            state.currentPlanId = null;
+            state.lastShownStepId = 0;
+            state.lastLogIndex = 0;
+
+            elements.planSelector.value = "";
+            elements.chat.innerHTML = '';
+            elements.systemLogs.innerHTML = '';
+            elements.stepLogs.innerHTML = '';
+
+            // Clear Kanban board
+            Object.values(elements.cols).forEach(col => {
+                const cardsContainer = col.querySelector('.col-cards');
+                if (cardsContainer) cardsContainer.innerHTML = '';
+                col.querySelector('.task-count').textContent = '0';
+            });
+            // Reset Kanban background
+            document.getElementById('kanban-container').className = '';
+
+            addChatMessage('ai', 'Nieuw plan gestart. Hoe kan ik je helpen?');
+        }
 
         elements.send.onclick = sendMessage;
         elements.prompt.onkeydown = (e) => {

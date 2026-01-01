@@ -18,7 +18,11 @@
 - [ ] Add authentication groups
 - [ ] Add K3D support intel based macs
 - [ ] Configure the total solution as one working piece 
+- [ ] Convert generate_search_index to a druppie command and run it in docker file
 
 
 
-    
+- [ ] Testing
+    - [ ] maak een kinder film over het zuiveren van afval water, 1 min, youtube
+    - [ ] Kan je mij een verhaal vertellen over druppie
+    - [ ] Vertel meer over het Druppie-platform.

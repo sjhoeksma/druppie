@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -65,12 +66,13 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		outputChan <- "   ⚠️ No Audio ID provided, using default pacing."
 	}
 
-	// Simulate ComfyUI Generation
 	outputChan <- "   ⚙️ sending to ai-video-comfyui..."
+	// Simulate Latency (1-5s)
+	delay := time.Duration(1000+rand.Intn(4000)) * time.Millisecond
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(2 * time.Second):
+	case <-time.After(delay):
 	}
 
 	filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)

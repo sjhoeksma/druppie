@@ -40,6 +40,7 @@ type Intent struct {
 	Category      string `json:"category"`
 	ContentType   string `json:"content_type,omitempty"` // If category is 'create content', specify what (video, blog, code, etc.)
 	Language      string `json:"language"`               // User's language
+	Answer        string `json:"answer,omitempty"`       // Direct answer if action is general_chat
 }
 
 // Step represents a single unit of work in a plan
@@ -60,6 +61,7 @@ type ExecutionPlan struct {
 	Status         string   `json:"status"`
 	Steps          []Step   `json:"steps"`
 	SelectedAgents []string `json:"selected_agents"`
+	Files          []string `json:"files,omitempty"`
 }
 
 // MCPServer represents an external tool server

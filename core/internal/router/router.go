@@ -30,7 +30,8 @@ You must output a JSON object adhering to this schema:
   "action": "create_project | update_project | query_registry | orchestrate_complex | general_chat",
   "category": "infrastructure | service | search | create content | unknown",
   "content_type": "video | blog | code | image | audio | ... (optional)",
-  "language": "en | nl | fr | de"
+  "language": "en | nl | fr | de",
+  "answer": "If action is general_chat, provide the direct answer to the user's question here. Otherwise null."
 }
 Ensure the "action" is one of the allowed values.
 Use "language" code to detect the user's input language.
@@ -60,6 +61,7 @@ func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, strin
 		Category      string `json:"category"`
 		ContentType   string `json:"content_type"`
 		Language      string `json:"language"`
+		Answer        string `json:"answer"`
 	}
 
 	if err := json.Unmarshal([]byte(resp), &raw); err != nil {
@@ -73,6 +75,7 @@ func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, strin
 		Category:      raw.Category,
 		ContentType:   raw.ContentType,
 		Language:      raw.Language,
+		Answer:        raw.Answer,
 	}
 
 	// Logic fallbacks for transition/reliability
