@@ -9,13 +9,13 @@ Since Druppie Core includes the UI and depends on project root context, you must
 
 ```bash
 cd ..
-docker build -t druppie-core .
+docker build -t druppie .
 ```
 
 ### Local CLI
 To build the CLI tool for local testing:
 ```bash
-go build -o druppie-core ./cmd
+go build -o druppie ./cmd
 ```
 
 or just run :
@@ -49,7 +49,7 @@ Once built, you can run Druppie Core as a standalone server with the integrated 
 ### 1. Simple Run
 To run quickly with ephemeral storage (data lost on restart):
 ```bash
-docker run -p 8080:8080 druppie-core
+docker run -p 8080:80 druppie
 ```
 Access the UI at `http://localhost:8080`.
 
@@ -86,7 +86,7 @@ If you’ve made changes to the code or UI and want to update your running `drup
     (Using the recommended persistent setup)
     ```bash
     docker run -d \
-      -p 8080:8080 \
+      -p 8080:80 \
       -v $(pwd)/.druppie:/app/.druppie \
       --name druppie-server \
       druppie-core
@@ -98,17 +98,17 @@ If you’ve made changes to the code or UI and want to update your running `drup
 
 1.  **Registry Dump**: List all loaded capabilities.
     ```bash
-    ./druppie-core registry
+    ./druppie registry
     ```
 
 2.  **Reactive Chat**: Talk to the mock agents.
     ```bash
-    ./druppie-core chat
+    ./druppie chat
     ```
 
 3.  **Plan Generation**: Generate a plan for a specific intent.
     ```bash
-    ./druppie-core plan "create a new project with golang"
+    ./druppie plan "create a new project with golang"
     ```
     
 
@@ -117,12 +117,12 @@ If you’ve made changes to the code or UI and want to update your running `drup
 ### Local CLI
 To build the WebServer tool for local testing:
 ```bash
-go build -o druppie-server ./cmd
+go build -o druppie ./cmd
 ```
 
 Start the REST API server:
 ```bash
-go run ./cmd
+go run ./cmd serve
 ```
 
 **Testing Config API:**

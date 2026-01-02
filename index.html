@@ -12,6 +12,7 @@
     <title>Druppie</title>
     <link rel="icon" type="image/svg+xml" href="druppie_logo.svg">
     <link rel="apple-touch-icon" href="druppie_logo.png">
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -51,7 +52,7 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8;
+            background-color: #0f172a;
             color: #0f172a;
         }
 
@@ -877,16 +878,16 @@
         };
     </script>
     <!-- TOP NAV -->
-    <nav class="bg-slate-900 text-white px-3 py-2 flex justify-between items-center shadow-lg z-50 flex-none min-h-14">
-        <div class="flex items-center space-x-3">
-            <button onclick="toggleSidebar()"
-                class="md:hidden p-1 mr-2 text-slate-400 hover:text-white focus:outline-none">
+    <nav class="bg-slate-900 text-white px-3 flex justify-between items-center z-50 flex-none border-b border-white/10"
+        style="padding-top: env(safe-area-inset-top); min-height: 60px; height: auto;">
+        <div class="flex items-center space-x-2">
+            <button onclick="toggleSidebar()" class="md:hidden p-1 text-slate-400 hover:text-white focus:outline-none">
                 <i data-lucide="menu" class="w-6 h-6"></i>
             </button>
-            <img src="druppie_logo.svg" alt="Druppie Logo" class="h-8 w-8 rounded">
+            <img src="druppie_logo.svg" alt="Druppie Logo" class="h-12 w-12 rounded">
             <div>
-                <h1 class="text-sm font-bold">Druppie</h1>
-                <p class="text-[10px] text-slate-400">Spec-Driven AI<br /> met Mens-in-de-Loop</p>
+                <h1 class="text-xl font-semibold tracking-tight">Druppie</h1>
+                <p class="text-[10px] text-slate-400 hidden md:block">Spec-Driven AI<br /> met Mens-in-de-Loop</p>
             </div>
         </div>
         <div class="flex flex-col md:flex-row space-y-1 md:space-y-0 md:space-x-3 items-end md:items-center"
