@@ -54,7 +54,8 @@ type ProviderConfig struct {
 }
 
 type ServerConfig struct {
-	Port string `yaml:"port" json:"port"`
+	Port        string `yaml:"port" json:"port"`
+	CleanupDays int    `yaml:"cleanup_days" json:"cleanup_days"`
 }
 
 // Manager handles concurrent access to the configuration
@@ -76,7 +77,8 @@ func NewManager(s store.Store) (*Manager, error) {
 				},
 			},
 			Server: ServerConfig{
-				Port: "8080",
+				Port:        "8080",
+				CleanupDays: 7,
 			},
 			Build: BuildConfig{
 				DefaultProvider: "local",
@@ -110,15 +112,6 @@ func NewManager(s store.Store) (*Manager, error) {
 	}
 
 	return mgr, nil
-}
-
-func copyFile(src, dst string) error {
-	// Deprecated with store usage, but kept if needed by cleanup
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0644)
 }
 
 // Load reads the config from store
@@ -218,5 +211,11 @@ func (m *Manager) loadEnv() {
 	}
 	if port := os.Getenv("PORT"); port != "" {
 		m.config.Server.Port = port
+	}
+	if cleanup := os.Getenv("CLEANUP_DAYS"); cleanup != "" {
+		var days int
+		if _, err := fmt.Sscanf(cleanup, "%d", &days); err == nil && days > 0 {
+			m.config.Server.CleanupDays = days
+		}
 	}
 }
