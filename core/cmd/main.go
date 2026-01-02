@@ -232,9 +232,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			r.Use(middleware.Recoverer)
 
 			// UI Route
-			r.Get("/iam", func(w http.ResponseWriter, r *http.Request) {
+			r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
 				root, _ := findProjectRoot()
-				http.ServeFile(w, r, filepath.Join(root, "ui", "iam.html"))
+				http.ServeFile(w, r, filepath.Join(root, "ui", "admin.html"))
 			})
 
 			// API Routes
@@ -510,6 +510,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					json.NewEncoder(w).Encode(agents)
 				})
 
+				// MCP Endpoint
+				r.Get("/mcp", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					list := reg.ListMCPServers()
+					json.NewEncoder(w).Encode(list)
+				})
+
 				// Skill Endpoint
 				r.Get("/skills", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
@@ -521,6 +528,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				r.Get("/config", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(cfgMgr.Get().Sanitize())
+				})
+				r.Put("/config", func(w http.ResponseWriter, r *http.Request) {
+					// We need the raw config struct from the request
+					// Note: validation should happen here
+					var newCfg config.Config
+					if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
+						http.Error(w, "Invalid Config", http.StatusBadRequest)
+						return
+					}
+					// Update via manager
+					if err := cfgMgr.Update(newCfg); err != nil {
+						http.Error(w, fmt.Sprintf("Failed to update config: %v", err), http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
 				})
 
 				// Build Trigger Endpoint
