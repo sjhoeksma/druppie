@@ -323,8 +323,16 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					})
 
 					// Process asynchronously
+					// Capture user from request context before async
+					user, userOk := iam.GetUserFromContext(r.Context())
+
 					// Process asynchronously
 					go func() {
+						// Create background context with user
+						ctx := context.Background()
+						if userOk {
+							ctx = iam.ContextWithUser(ctx, user)
+						}
 						tm.OutputChan <- fmt.Sprintf("[%s] Analyzing request...", planID)
 
 						effectivePrompt := req.Prompt
@@ -352,7 +360,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 2. Analyze Intent
-						intent, rawRouterResp, err := routerService.Analyze(context.Background(), effectivePrompt)
+						intent, rawRouterResp, err := routerService.Analyze(ctx, effectivePrompt)
 						if err != nil {
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
@@ -426,7 +434,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 							tm.OutputChan <- fmt.Sprintf("[%s] Generating Plan...", planID)
 
-							fullPlan, err := plannerService.CreatePlan(context.Background(), intent, planID)
+							fullPlan, err := plannerService.CreatePlan(ctx, intent, planID)
 							if err != nil {
 								tm.OutputChan <- fmt.Sprintf("[%s] Planner failed: %v", planID, err)
 								currentPlan.Status = "stopped"
@@ -467,7 +475,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 
 							// START THE TASK
-							tm.StartTask(context.Background(), currentPlan)
+							tm.StartTask(ctx, currentPlan)
 						} else {
 							tm.OutputChan <- fmt.Sprintf("[%s] Request handled by Router (no plan needed).", planID)
 
@@ -591,6 +599,19 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					if err != nil {
 						http.Error(w, "Failed to list plans", http.StatusInternalServerError)
 						return
+					}
+
+					// Filter plans by creator (if user is authenticated)
+					if user, ok := iam.GetUserFromContext(r.Context()); ok {
+						// Check if user is admin (optional, for now strictly filtering per request)
+						// Iterate and filter
+						var filtered []model.ExecutionPlan
+						for _, p := range plans {
+							if p.CreatorID == user.ID {
+								filtered = append(filtered, p)
+							}
+						}
+						plans = filtered
 					}
 
 					// Update plan statuses based on actual task states

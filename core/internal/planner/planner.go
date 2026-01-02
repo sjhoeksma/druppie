@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
@@ -301,10 +302,17 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if planID == "" {
 		planID = fmt.Sprintf("plan-%d", time.Now().Unix())
 	}
+
+	creatorID := ""
+	if u, ok := iam.GetUserFromContext(ctx); ok {
+		creatorID = u.ID
+	}
+
 	plan := model.ExecutionPlan{
 		// Use a UUID or timestamp.
 		// Note: The Caller (main.go) dictates the ID in the async flow, but for synchronous creation we generate one.
 		ID:             planID,
+		CreatorID:      creatorID,
 		Intent:         intent,
 		Status:         "created",
 		Steps:          steps,
