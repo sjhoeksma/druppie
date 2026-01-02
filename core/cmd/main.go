@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/config"
+	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
@@ -46,7 +47,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine
-	setup := func(_ *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, error) {
+	setup := func(_ *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, iam.Provider, error) {
 		// Check if we are in 'core' and need to move up to project root
 		cwd, _ := os.Getwd()
 		if filepath.Base(cwd) == "core" {
@@ -58,20 +59,20 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		fmt.Printf("Loading registry from: %s\n", rootDir)
 		reg, err := registry.LoadRegistry(rootDir)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
 		druppieStore, err := store.NewFileStore(storeDir)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("store init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("store init error: %w", err)
 		}
 
 		// Load Configuration from Store
 		cfgMgr, err := config.NewManager(druppieStore)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("config load error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("config load error: %w", err)
 		}
 		cfg := cfgMgr.Get()
 
@@ -88,26 +89,31 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		// Initialize Build Engine
 		buildEngine, err := builder.NewEngine(cfg.Build)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("builder init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("builder init error: %w", err)
 		}
 
 		// Initialize LLM with Config
 		llmManager, err := llm.NewManager(context.Background(), cfg.LLM)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
 		}
 
 		r := router.NewRouter(llmManager, druppieStore, debug)
 		p := planner.NewPlanner(llmManager, reg, druppieStore, debug)
 
-		return cfgMgr, reg, r, p, buildEngine, nil
+		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
+		if err != nil {
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("iam init error: %w", err)
+		}
+
+		return cfgMgr, reg, r, p, buildEngine, iamProv, nil
 	}
 
 	var serveCmd = &cobra.Command{
 		Use:   "serve",
 		Short: "Start the Druppie Core API Server",
 		Run: func(cmd *cobra.Command, args []string) {
-			cfgMgr, reg, routerService, plannerService, buildEngine, err := setup(cmd)
+			cfgMgr, reg, routerService, plannerService, buildEngine, iamProvider, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Startup Error: %v\n", err)
 				os.Exit(1)
@@ -225,8 +231,18 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			})
 			r.Use(middleware.Recoverer)
 
+			// UI Route
+			r.Get("/iam", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				http.ServeFile(w, r, filepath.Join(root, "ui", "iam.html"))
+			})
+
 			// API Routes
 			r.Route("/v1", func(r chi.Router) {
+				// Apply IAM Middleware to all v1 routes
+				r.Use(iamProvider.Middleware())
+				iamProvider.RegisterRoutes(r)
+
 				r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("OK"))
 				})
@@ -892,7 +908,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "registry",
 		Short: "Dump the loaded registry",
 		Run: func(cmd *cobra.Command, args []string) {
-			_, reg, _, _, _, err := setup(cmd)
+			_, reg, _, _, _, _, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -934,7 +950,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "chat",
 		Short: "Start interactive chat",
 		Run: func(cmd *cobra.Command, args []string) {
-			cfgMgr, _, router, planner, _, err := setup(cmd)
+			cfgMgr, _, router, planner, _, _, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -1075,7 +1091,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Short: "Generate a plan for a given prompt",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			_, _, router, planner, _, err := setup(cmd)
+			_, _, router, planner, _, _, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)

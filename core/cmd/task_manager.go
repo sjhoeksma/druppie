@@ -368,6 +368,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		var batchIndices []int
 		var activeStep *model.Step
 
+		// 0. Priority: Check for steps already waiting for input (e.g. failed steps or resumed state)
+		for i := range task.Plan.Steps {
+			if task.Plan.Steps[i].Status == "waiting_input" {
+				activeStep = &task.Plan.Steps[i]
+				break
+			}
+		}
+
 		// Helper to check dependency status
 		isReady := func(step model.Step) bool {
 			if len(step.DependsOn) == 0 {
@@ -399,7 +407,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		}
 
 		// 2. No work? Wait or Exit?
-		if len(batchIndices) == 0 {
+		if len(batchIndices) == 0 && activeStep == nil {
 			// Check if all steps are completed
 			allDone := true
 			for _, s := range task.Plan.Steps {
@@ -554,9 +562,17 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					}
 					logMu.Unlock()
 					tm.OutputChan <- "--------------------------------"
-					step.Status = "completed"
-					if res := resultBuilder.String(); res != "" {
-						step.Result = res
+
+					if execErr != nil {
+						// FAILURE HANDLING: Set to Waiting Input
+						step.Status = "waiting_input"
+						step.Result = fmt.Sprintf("Error: %v", execErr)
+						tm.OutputChan <- fmt.Sprintf("[%s] Step %d paused on error. Waiting for user input...", task.ID, step.ID)
+					} else {
+						step.Status = "completed"
+						if res := resultBuilder.String(); res != "" {
+							step.Result = res
+						}
 					}
 				}(idx)
 			}
@@ -567,6 +583,21 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			// Check for auto-update triggers
 			lastIdx := len(task.Plan.Steps) - 1
 			finishedLast := false
+			failedAny := false
+
+			for _, idx := range batchIndices {
+				if task.Plan.Steps[idx].Status == "waiting_input" {
+					failedAny = true
+				}
+				if idx == lastIdx && task.Plan.Steps[idx].Status == "completed" {
+					finishedLast = true
+				}
+			}
+
+			if failedAny {
+				// Loop again to handle waiting input
+				continue
+			}
 			for _, idx := range batchIndices {
 				if idx == lastIdx {
 					finishedLast = true
@@ -598,6 +629,9 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			for i := range p.Steps {
 				if p.Steps[i].ID == activeStep.ID {
 					p.Steps[i].Status = "waiting_input"
+					if activeStep.Result != "" {
+						p.Steps[i].Result = activeStep.Result // Persist error message if any
+					}
 					break
 				}
 			}
@@ -648,6 +682,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.OutputChan <- fmt.Sprintf("\n[%s] Review content (%s):", task.ID, activeStep.AgentID)
 			tm.OutputChan <- formatStepParams(activeStep.Params)
 			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
+
+		default:
+			// Generic or Error Handling
+			tm.OutputChan <- fmt.Sprintf("[%s] Step %d Paused/Failed: %s", task.ID, activeStep.ID, activeStep.Action)
+			if activeStep.Result != "" {
+				tm.OutputChan <- fmt.Sprintf("Message: %s", activeStep.Result)
+			}
+			tm.OutputChan <- "Options: [Type specific instruction] | '/retry' | '/stop'"
 		}
 
 		// WAIT FOR INPUT
