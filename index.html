@@ -890,32 +890,36 @@
                 <p class="text-[10px] text-slate-400 hidden md:block">Spec-Driven AI<br /> met Mens-in-de-Loop</p>
             </div>
         </div>
-        <div class="flex flex-row space-x-2 md:space-x-3 items-center" id="top-nav-actions">
-            <!-- Scenario 1 Button -->
-            <!-- Scenario 1 Button -->
-            <button onclick="runScenario('response')"
-                class="group px-2 py-1 md:px-3 md:py-1.5 w-auto bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
-                <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-400 group-hover:animate-ping"></div>
-                <div class="text-left">
-                    <div class="text-[8px] md:text-[9px] text-slate-400 uppercase font-bold leading-tight">Direct
+        <div class="flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-3" id="top-nav-actions">
+            <span class="md:hidden text-[9px] text-slate-400 font-bold uppercase tracking-wider">Simuleer</span>
+            <div class="flex flex-row space-x-2 md:space-x-3 items-center">
+                <!-- Scenario 1 Button -->
+                <!-- Scenario 1 Button -->
+                <button onclick="runScenario('response')"
+                    class="group px-2 py-1 md:px-3 md:py-1.5 w-auto bg-slate-800 hover:bg-slate-700 rounded border border-slate-600 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
+                    <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-400 group-hover:animate-ping"></div>
+                    <div class="text-left">
+                        <div class="text-[8px] md:text-[9px] text-slate-400 uppercase font-bold leading-tight">Direct
+                        </div>
+                        <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Vraag & Antwoord
+                        </div>
                     </div>
-                    <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Vraag & Antwoord</div>
-                </div>
-            </button>
+                </button>
 
-            <!-- Scenario 2 Button -->
-            <button onclick="runScenario('build')"
-                class="group px-2 py-1 md:px-3 md:py-1.5 w-auto bg-indigo-900 hover:bg-indigo-800 rounded border border-indigo-700 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
-                <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400 group-hover:animate-ping"></div>
-                <div class="text-left">
-                    <div class="text-[8px] md:text-[9px] text-indigo-300 uppercase font-bold leading-tight">Indirect
+                <!-- Scenario 2 Button -->
+                <button onclick="runScenario('build')"
+                    class="group px-2 py-1 md:px-3 md:py-1.5 w-auto bg-indigo-900 hover:bg-indigo-800 rounded border border-indigo-700 transition flex items-center space-x-1 md:space-x-2 flex-shrink-0">
+                    <div class="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400 group-hover:animate-ping"></div>
+                    <div class="text-left">
+                        <div class="text-[8px] md:text-[9px] text-indigo-300 uppercase font-bold leading-tight">Indirect
+                        </div>
+                        <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Bouwen & Goedkeuring
+                        </div>
                     </div>
-                    <div class="hidden md:block text-[10px] md:text-xs font-bold leading-tight">Bouwen & Goedkeuring
-                    </div>
-                </div>
-            </button>
+                </button>
 
 
+            </div>
         </div>
     </nav>
 
@@ -1617,13 +1621,19 @@
                         card.id = 'active-card';
                         card.className = 'project-card';
                         card.innerText = title;
-                        document.getElementById('col-backlog').appendChild(card);
+                        const target = document.getElementById('col-backlog');
+                        target.appendChild(card);
+                        target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                     }
 
                     function moveCard(colId) {
                         const card = document.getElementById('active-card');
                         const target = document.getElementById(colId);
-                        if (card && target) target.appendChild(card);
+                        if (card && target) {
+                            target.appendChild(card);
+                            // Scroll to column (essential for mobile)
+                            target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                        }
                     }
 
                     function highlight(id, color = 'blue', internal = false) {
