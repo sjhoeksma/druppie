@@ -17,9 +17,13 @@ De volledige architectuur is interactief te verkennen.
 3. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
 4. **PWA Support**: Voeg de app toe aan je startscherm op mobiel voor een native ervaring.
 
+## 💧 Locale installatie
+
+De locale installatie is gemaakt met GOLang je can een locale build gebruiken met ```go run ./cmd``` zorg wel dat je in de core directory bent ```cd core```. Mocht je een locale build willen gebruiken dan gebruik je ```go build -o druppie ./cmd```. Gebruik de ```help``` parameter om te zien welke commando's er beschikbaar zijn.
+
 ## 🚀 Snel Starten met het Platform
 
-De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./druppie.sh```
+De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./script/druppie.sh``` of mocht je reeds een locale build gemaakt hebben dan gebruik je ```./core/druppie cli```
 
  ![Druppie CLI](./druppie_cli.png)
 
@@ -34,7 +38,6 @@ De password voor de verschillende services is 'druppie' worden opgeslagen in de 
 ![Druppie k3d](./druppie_k3d.png) 
 Deze installatie is een lokaal installatie en draait in een docker container en is toegankelijk via de k3d cluster op [https://localhost](https://localhost) waarbij je wel even het certificaat moet accepteren.
 
-Wil je alles in een keer lokaal installeren? dan gebruik je ```./druppie.sh ua k3d```
 ---
 
 ## 📂 Projectstructuur
@@ -85,7 +88,7 @@ De regels en wetten vertaald naar techniek:
 
 Bekijk de [Script Overview](./script/overview.md) voor een lijst van alle beschikbare beheerscripts.
 
-## 🐳 Docker (Druppie Core)
+## 🐳 Docker (Druppie)
 
 To run the Druppie Core server (including UI and backend logic) using Docker in a production-like environment:
 
