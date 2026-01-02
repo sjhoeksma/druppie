@@ -140,6 +140,7 @@ const DOC_REGISTRY = {
     "general": [
         { name: "Project Readme", path: "README.md" },
         { name: "Het Verhaal Druppie", path: "story/story.md" },
+        { name: "Project Brief", path: "story/project_brief.md" },
         { name: "License (MIT)", path: "LICENSE.md" },
     ]
 };
