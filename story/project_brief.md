@@ -27,15 +27,17 @@ Wij geven digitalisering vorm aan de hand van duidelijke principes (het "Ontwerp
 
 ---
 
-## 2. Project Druppie: Functionele Specificatie & Projectbeschrijving
+## 2. Project Druppie
 
 ### 2.1 Wat is Druppie?
-Druppie is niet zomaar een "Chatbot" of een "Automatiseringstool". Het is een **Autonoom AI-Platform voor Software Creatie & Beheer**, specifiek ontworpen voor de Publieke Sector (Waterschappen).
+Druppie is niet zomaar een "Chatbot" of een "Automatiseringstool". Het is een **Autonoom AI-Platform voor Data Toegang & Software Creatie & Beheer**, specifiek ontworpen voor de Publieke Sector (Waterschappen).
 
 In essentie is Druppie een "Collega" (AI Workforce) die functioneert als de intermediair tussen de **Business** (de vraag van de medewerker) en de **Techniek** (de code/infrastructuur).
 
 *   **Identiteit**: Druppie manifesteert zich als een vriendelijke waterdruppel, maar erachter schuilt een netwerk van gespecialiseerde AI-agenten (Architect, Developer, Security Officer) die samenwerken.
 *   **Functie**: Het Platform neemt de *volledige* lifecycle van digitale oplossingen over: van vraagarticulatie, ontwerp en toetsing aan wetgeving, tot de daadwerkelijke bouw, automatishe uitrol en beheer.
+*   **Uitbreidbaar**: Druppie kan gemakkelijkworden uitgebreid met nieuwe AI-agenten en technieken omdat de business zonder tussenkomst van IT beheer agents kan beschrijven in natuurlijke taal die door Druppie wordt vertaald tot code.
+*   **Resultaat**: Een volledig werkbaar digitale oplossing die voldoet aan alle bestuurlijke kaders, ambities en veilig is.
 
 ### 2.2 Waarom doen we dit? (De Noodzaak)
 Gelet op de bestuurlijke visie (De IJsberg) staan we voor enorme uitdagingen:
@@ -47,12 +49,15 @@ Gelet op de bestuurlijke visie (De IJsberg) staan we voor enorme uitdagingen:
 *   **Snelheid**: Software creatie versnellen van maanden naar minuten.
 *   **Uniformiteit**: Kwaliteit en veiligheid borgen "by design". Elke oplossing voldoet *bewezen* aan de vastgestelde kaders.
 *   **Democratisering**: Iedereen in de organisatie kan een veilige applicatie laten bouwen, zonder zelf te hoeven programmeren.
+* **Data Toegang**: Iedereen heeft alleen toegang tot de data waar hij recht op heeft, volgens de IAM oplossing, hierdoor kan geen onveilige toegang onstaan tot tijdens het gebruike van Druppie.
+* **Privacy**: Druppie zorgt voor privacy door gebruik te maken van een privacy-first oplossing, er wordt altijd een privacy impact assessment gemaakt en een privacy impact statement gemaakt. Er wordt geen privacy gevoeligde data gedeeld buiten de boundaries die gedefinieerd zijn door de privacy impact assessment.
+*   **Logging en Monitoring**: Alles leggen wij vast in een logging en monitoring systeem zodat we altijd kunnen kijken naar de geschiedenis van een oplossing en transparantie kunnen bieden.
 
 ### 2.3 Wat is Druppie NIET?
 Om verwachtingen te managen, is het cruciaal te definiëren wat buiten scope valt:
-*   ❌ **Geen "Magic Button" zonder toezicht**: Druppie werkt volgens het principe van *Human-in-the-Loop*. Hij doet niets zonder expliciete goedkeuring op cruciale momenten (vooral bij uitgaven, publicatie of risico's).
+*   ❌ **Geen "Magic Button" zonder toezicht**: Druppie werkt volgens het strikte principe van *Human-in-the-Loop*, *security-by-design* en *privacy-by-design*. Hij doet niets zonder expliciete goedkeuring op cruciale momenten (vooral bij uitgaven, publicatie of risico's).
 *   ❌ **Geen vervanging van de mens**: Druppie neemt repetitief, controlerend en complex technisch werk over. Hierdoor kunnen mensen zich richten op het *Probleem* (Domeinkennis) en de *Creativiteit*.
-*   ❌ **Geen "ChatGPT Wrapper"**: Druppie "babbelt" niet zomaar. Hij *denkt* in specificaties, *voert* echte acties uit (Git commits, Compilers, Deployments) en *valideert* zijn eigen werk. Hij is deterministisch in zijn output (werkende software).
+*   ❌ **Geen "ChatGPT Wrapper"**: Druppie "babbelt" niet zomaar. Hij *denkt* in specificaties, *voert* echte acties uit (Git commits, Data Analyse,Compilers, Deployments) en *valideert* zijn eigen werk. Hij is deterministisch in zijn output (werkende software).
 *   ❌ **Geen SaaS pakket**: Het is een platform dat *eigendom* is van het Waterschap, draaiend op eigen infrastructuur/cloud, met volledige controle over data en modellen.
 
 ### 2.4 Functionele Werking (De "Flow")
@@ -106,10 +111,13 @@ De interface voor interactie en beheer.
     *   Kanban Bord (voor procesinzicht).
     *   Simulatie Modus (Direct/Indirect scenario's).
 
-### Agents & Skills
-De digitale workforce.
+### Componenten
+Druppie maakt gebruik van verschillende componeten om zo zelfstandig mogelijk digitale te kunnen werken.
+*  **Compliance** (`/compliance`): Beheert de bedrijfsregels, wetsgeving en compliance (bijv. AVG, ISO 27001, BIO, NIS2).
 *   **Agents** (`/agents`): Gedefinieerde rollen (bijv. `architect-agent`, `builder-agent`, `reviewer-agent`).
-*   **Skills** (`/skills`): Specifieke taken die agents kunnen uitvoeren (bijv. `git-commit`, `docker-build`, `trivy-scan`).
+*   **Skills** (`/skills`): Specifieke taken die agents kunnen uitvoeren (bijv. `git-commit`, `docker-build`, `trivy-scan`, `create-video`, `create-power-bi-report`).    
+*   **Bouwblokken** (`/blocks`): Herbruikbare componenten, die door agents kunnen worden gebruikt. Dit kunnen technische componenten zijn (bijv. `git-commit`, `docker-build`, `trivy-scan`), maar ook conceptuele componenten (bijv. `dashboard`, `reporting`, `monitoring`) die reeds eerder zijn gemaakt door andere gebruikers.
+*   **MCP** (`/mcp`): Een MCP server is een server die het Model Context Protocol (MCP) implementeert. Dit protocol is ontworpen om AI-modellen (zoals LLM’s) op een gestandaardiseerde, veilige en schaalbare manier toegang te geven tot externe context en functionaliteit.
 
 ---
 
@@ -156,12 +164,24 @@ Alle technische ontwerpbeslissingen zijn vastgelegd in de `/design` map. Hierond
     go run ./cmd serve
     ```
 
-2.  **Docker**:
+2a.  **Docker**:
     ```bash
     docker build -t druppie .
     docker run -p 8080:80 druppie
     ```
     Open `http://localhost:8080/ui/` voor de interface.
+
+2b.  **Kubernetes**:
+
+    Het instaleren van Druppie op een Kubernetes cluster is gedaan door het gebruik van Helm. De installatie vereist een Gitea repository en een Gitea token. Voor de installatie van een lokaal cluster kan je gebruik maken van `script/druppie.sh`.
+    ```bash
+     helm install druppie ./deploy/helm \
+     --set git.provider="gitea" \
+     --set git.url="http://gitea-http.gitea.svc.cluster.local:3000" \
+     --set git.user="druppie" \
+     --set git.tokenSecretName="gitea-token"
+    ```
+    Open `http://<your-k8s-cluster>:8080/ui/` voor de interface.
 
 ### Projectstructuur
 ```
