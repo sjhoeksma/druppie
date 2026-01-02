@@ -115,6 +115,60 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			tm := NewTaskManager(plannerService)
 			cfg := cfgMgr.Get()
 
+			// Start Cleanup Routine
+			go func() {
+				rootDir, _ := findProjectRoot()
+				if rootDir != "" {
+					storeDir := filepath.Join(rootDir, ".druppie")
+					cleanupDays := cfg.Server.CleanupDays
+					if cleanupDays <= 0 {
+						cleanupDays = 7 // Default fallback if config missing
+					}
+
+					// Helper function
+					doCleanup := func() {
+						fmt.Printf("[Cleanup] Checking for plans older than %d days...\n", cleanupDays)
+						plansDir := filepath.Join(storeDir, "plans")
+						entries, err := os.ReadDir(plansDir)
+						if err != nil {
+							fmt.Printf("[Cleanup] Failed to read plans dir: %v\n", err)
+							return
+						}
+
+						cutoff := time.Now().AddDate(0, 0, -cleanupDays)
+						count := 0
+
+						for _, entry := range entries {
+							if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+								info, err := entry.Info()
+								if err == nil && info.ModTime().Before(cutoff) {
+									id := strings.TrimSuffix(entry.Name(), ".json")
+									// Use Store to delete (handles logs/files/plans)
+									if err := plannerService.Store.DeletePlan(id); err == nil {
+										count++
+										fmt.Printf("[Cleanup] Deleted old plan: %s (Age: %s)\n", id, time.Since(info.ModTime()).Round(time.Hour))
+									} else {
+										fmt.Printf("[Cleanup] Failed to delete plan %s: %v\n", id, err)
+									}
+								}
+							}
+						}
+						if count > 0 {
+							fmt.Printf("[Cleanup] Completed. Removed %d old plans.\n", count)
+						}
+					}
+
+					// Initial run
+					doCleanup()
+
+					// Periodic run (every 24h)
+					ticker := time.NewTicker(24 * time.Hour)
+					for range ticker.C {
+						doCleanup()
+					}
+				}
+			}()
+
 			// Start log drainer to:
 			// 1. Unblock the buffered channel
 			// 2. Print to server console (stdout)

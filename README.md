@@ -12,13 +12,18 @@ De focus ligt op het automatiseren van de volledige lifecycle binnen een **overh
 
 De volledige architectuur is interactief te verkennen.
 
-1. Open **`index.html`** in je browser.
-2. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
-3. Draai simulaties (Scenarios) om de interactie tussen componenten te visualiseren.
+1. Open **`index.html`** in je browser (Architecture Portal).
+2. Open **`ui/index.html`** voor de Chat Interface.
+3. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
+4. **PWA Support**: Voeg de app toe aan je startscherm op mobiel voor een native ervaring.
+
+## 💧 Locale installatie
+
+De locale installatie is gemaakt met GOLang je can een locale build gebruiken met ```go run ./cmd``` zorg wel dat je in de core directory bent ```cd core```. Mocht je een locale build willen gebruiken dan gebruik je ```go build -o druppie ./cmd```. Gebruik de ```help``` parameter om te zien welke commando's er beschikbaar zijn.
 
 ## 🚀 Snel Starten met het Platform
 
-De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./druppie.sh```
+De makkelijkste manier om te beginnen is via de **Druppie CLI** ```./script/druppie.sh``` of mocht je reeds een locale build gemaakt hebben dan gebruik je ```./core/druppie cli```
 
  ![Druppie CLI](./druppie_cli.png)
 
@@ -33,31 +38,28 @@ De password voor de verschillende services is 'druppie' worden opgeslagen in de 
 ![Druppie k3d](./druppie_k3d.png) 
 Deze installatie is een lokaal installatie en draait in een docker container en is toegankelijk via de k3d cluster op [https://localhost](https://localhost) waarbij je wel even het certificaat moet accepteren.
 
-Wil je alles in een keer lokaal installeren? dan gebruik je ```./druppie.sh ua k3d```
 ---
 
 ## 📂 Projectstructuur
 
 De repository is opgebouwd uit verschillende lagen:
 
-### 1. 🧱 [Bouwblokken](./bouwblokken/)
+### 1. 🧱 [Bouwblokken](./blocks/)
 De lego-stenen van het platform. Definities van tools en componenten:
 *   **Security**: Trivy, SonarQube.
 *   **Data**: MinIO, Gitea, Qdrant (Vector DB).
 *   **GIS**: GeoServer, PostGIS, WebODM, GeoNode.
 *   **Observability**: LGTM Stack (Loki, Grafana, Tempo, Prometheus).
 
-### 2. 🏗️ [Build Plane](./build_plane/)
-De "Agent Factory". Hier wordt code omgezet in veilige artifacts:
-*   **Builder Agent**: AI die code, tests en docs genereert.
-*   **Automated Testing**: Unit, Integration, E2E in Tekton pipelines.
-*   **Secure Supply Chain**: SBOMs en signatures bij elke build.
+### 2. 🧠 [Core](./core/) & [UI](./ui/)
+De applicatie logica en interfaces:
+*   **[Core](./core/)**: Go-based backend (Server, Agent Runner, Vector DB Client).
+*   **[UI](./ui/)**: De "Mens-in-de-Loop" Chat Interface.
 
-### 3. ⚙️ [Runtime](./runtime/)
-De landingsplaats (Kubernetes):
-*   **Hybride Cluster**: Draait deels in Azure, deels On-Premise.
-*   **Policy Engine (Kyverno)**: Dwingt regels af (bv. "Geen root containers").
-*   **Agentic RAG**: Netwerk van AI agenten die veilig data ontsluiten.
+### 3. 🤖 [Agents](./agents/) & [Skills](./skills/)
+De definitions van de workforce:
+*   **[Agents](./agents/)**: Definities van rollen (Architect, Developer, Reviewer).
+*   **[Skills](./skills/)**: De vaardigheden die agents kunnen gebruiken.
 
 ### 4. 📝 [Ontwerpen (Designs)](./design/)
 Gedetailleerde technische ontwerpen en functionele beschrijvingen:
@@ -86,25 +88,25 @@ De regels en wetten vertaald naar techniek:
 
 Bekijk de [Script Overview](./script/overview.md) voor een lijst van alle beschikbare beheerscripts.
 
-## 🐳 Docker (Druppie Core)
+## 🐳 Docker (Druppie)
 
 To run the Druppie Core server (including UI and backend logic) using Docker in a production-like environment:
 
 1.  **Build the image** (execute from the project root):
     ```bash
-    docker build -t druppie-core .
+    docker build -t druppie .
     ```
 
 2.  **Run the container**:
     ```bash
     docker run -d \
-      -p 8080:8080 \
+      -p 8080:80 \
       -v $(pwd)/.druppie:/app/.druppie \
       --name druppie-server \
-      druppie-core
+      druppie
     ```
 
-    *   **Port 8080**: Access the UI at `http://localhost:8080/ui/`.
+    *   **Port 8080**: Access the Portal at `http://localhost:8080` and UI at `http://localhost:8080/ui/`.
     *   **Volume**: Maps your local `.druppie` directory to the container, ensuring plans and logs are persisted and accessible locally.
 
 ## Search index
