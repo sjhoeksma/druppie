@@ -87,11 +87,71 @@ Het proces loopt altijd via vaste stappen (De "Fabriek"):
     *   De **Beheer Agent** zorgt voor de dagelijkse beheeromgeving en beheert en update de runtime.
     *   Elke stap in het proces wordt geregistreerd in een audit trail.
 
+```mermaid
+sequenceDiagram
+    participant User as Gebruiker
+    participant UI as Druppie UI
+    participant Arch as Architect Agent
+    participant Policy as Policy Engine
+    participant Build as Builder Agent
+    participant Foundry as Foundry
+    participant Run as Runtime
+
+    User->>UI: "Ik wil een Water Dashboard"
+    UI->>Arch: Vertaal naar specificatie
+    Arch->>Policy: Mag ik dit bouwen? (Check Kader)
+    Policy-->>Arch: Akkoord (Groen Licht)
+    Arch->>Build: Genereer Code (TF/Go/HTML)
+    Build->>Foundry: Bouw Containers & Scan (Trivy)
+    Foundry-->>Build: Build Succesvol (SBOM OK)
+    Build->>Run: Deploy naar Cluster
+    Run-->>User: Link naar Applicatie
+```
+
 ---
 
 ## 3. Technische Implementatie & Architectuur
 
 De architectuur volgt een strikte scheiding tussen de "Hersenen" (Core) en "Handen" (Agents).
+
+```mermaid
+graph TD
+    subgraph "Control Plane (Hersenen)"
+        UI["Druppie UI (PWA)"]
+        Core["Druppie Core (Orchestrator)"]
+        Registry["Registry (Blokken)"]
+        Planner["Planner (Logic)"]
+        Policy["Policy Engine (Compliance)"]
+    end
+
+    subgraph "Execution Plane (Handen)"
+        Agents["AI Workforce (Agents)"]
+        Skills["Skill Library (Git, Docker)"]
+        MCP["MCP Server (Context)"]
+        Git["Git (Versiebeheer)"]
+        Foundry["Build Agent (CI/CD & Security)"]
+    end
+
+    subgraph "Runtime Plane (Resultaat)"
+        Apps["Gegenereerde Apps"]
+        K8s["Kubernetes Cluster"]
+    end
+
+    UI -->|Stelt Vraag| Core
+    Core -->|Raadpleegt| Registry
+    Core -->|Toetst| Policy
+    Core -->|Plant| Planner
+    Planner -->|Stuurt aan| Agents
+    Agents -->|Gebruikt| Skills
+    Agents -->|Werkt met| MCP
+    
+    %% CI/CD Loop
+    Agents -->|Commit Code| Git
+    Git -->|Triggert| Foundry
+    Foundry -->|Build & Scan| Foundry
+    Foundry -->|Deploy| K8s
+    K8s -->|Draait| Apps
+```
 
 ### [Druppie Core (Backend)](../core/README.md)
 De centrale orkestrator geschreven in **Go**.
