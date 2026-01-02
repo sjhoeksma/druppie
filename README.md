@@ -12,9 +12,10 @@ De focus ligt op het automatiseren van de volledige lifecycle binnen een **overh
 
 De volledige architectuur is interactief te verkennen.
 
-1. Open **`index.html`** in je browser.
-2. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
-3. Draai simulaties (Scenarios) om de interactie tussen componenten te visualiseren.
+1. Open **`index.html`** in je browser (Architecture Portal).
+2. Open **`ui/index.html`** voor de Chat Interface.
+3. Gebruik het dashboard om door de verschillende lagen (Bouwblokken, Skills, Runtime) te navigeren.
+4. **PWA Support**: Voeg de app toe aan je startscherm op mobiel voor een native ervaring.
 
 ## 🚀 Snel Starten met het Platform
 
@@ -47,17 +48,15 @@ De lego-stenen van het platform. Definities van tools en componenten:
 *   **GIS**: GeoServer, PostGIS, WebODM, GeoNode.
 *   **Observability**: LGTM Stack (Loki, Grafana, Tempo, Prometheus).
 
-### 2. 🏗️ [Build Plane](./build_plane/)
-De "Agent Factory". Hier wordt code omgezet in veilige artifacts:
-*   **Builder Agent**: AI die code, tests en docs genereert.
-*   **Automated Testing**: Unit, Integration, E2E in Tekton pipelines.
-*   **Secure Supply Chain**: SBOMs en signatures bij elke build.
+### 2. 🧠 [Core](./core/) & [UI](./ui/)
+De applicatie logica en interfaces:
+*   **[Core](./core/)**: Go-based backend (Server, Agent Runner, Vector DB Client).
+*   **[UI](./ui/)**: De "Mens-in-de-Loop" Chat Interface.
 
-### 3. ⚙️ [Runtime](./runtime/)
-De landingsplaats (Kubernetes):
-*   **Hybride Cluster**: Draait deels in Azure, deels On-Premise.
-*   **Policy Engine (Kyverno)**: Dwingt regels af (bv. "Geen root containers").
-*   **Agentic RAG**: Netwerk van AI agenten die veilig data ontsluiten.
+### 3. 🤖 [Agents](./agents/) & [Skills](./skills/)
+De definitions van de workforce:
+*   **[Agents](./agents/)**: Definities van rollen (Architect, Developer, Reviewer).
+*   **[Skills](./skills/)**: De vaardigheden die agents kunnen gebruiken.
 
 ### 4. 📝 [Ontwerpen (Designs)](./design/)
 Gedetailleerde technische ontwerpen en functionele beschrijvingen:
@@ -101,10 +100,10 @@ To run the Druppie Core server (including UI and backend logic) using Docker in 
       -p 8080:80 \
       -v $(pwd)/.druppie:/app/.druppie \
       --name druppie-server \
-      druppie-core
+      druppie
     ```
 
-    *   **Port 8080**: Access the UI at `http://localhost:8080/ui/`.
+    *   **Port 8080**: Access the Portal at `http://localhost:8080` and UI at `http://localhost:8080/ui/`.
     *   **Volume**: Maps your local `.druppie` directory to the container, ensuring plans and logs are persisted and accessible locally.
 
 ## Search index

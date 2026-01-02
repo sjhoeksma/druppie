@@ -43,6 +43,7 @@ COPY --from=builder /app/druppie_cli.png /app/druppie_cli.png
 COPY --from=builder /app/druppie_k3d.png /app/druppie_k3d.png
 COPY --from=builder /app/README.md /app/README.md
 COPY --from=builder /app/LICENSE.md /app/LICENSE.md
+COPY --from=builder /app/manifest.json /app/manifest.json
 
 
 # Copy Concept Folders

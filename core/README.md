@@ -58,13 +58,14 @@ This command maps your local `.druppie` configuration/data directory to the cont
 
 ```bash
 docker run -d \
-  -p 8080:8080 \
+  -p 8080:80 \
   -v $(pwd)/.druppie:/app/.druppie \
   --name druppie-server \
-  druppie-core
+  druppie
 ```
 
-*   **UI**: `http://localhost:8080`
+*   **Portal**: `http://localhost:8080` (Process Flow)
+*   **Chat UI**: `http://localhost:8080/ui/`
 *   **Logs**: Check `./.druppie/logs` locally to see execution logs.
 *   **Plans**: Plans are persisted in `./.druppie/plans`.
 *   **Config**: Edit `./.druppie/config.yaml` to change settings (e.g., LLM provider).
@@ -74,7 +75,7 @@ If you’ve made changes to the code or UI and want to update your running `drup
 
 1.  **Rebuild the Image**:
     ```bash
-    docker build -t druppie-core .
+    docker build -t druppie .
     ```
 
 2.  **Stop & Remove Old Container**:
@@ -89,7 +90,7 @@ If you’ve made changes to the code or UI and want to update your running `drup
       -p 8080:80 \
       -v $(pwd)/.druppie:/app/.druppie \
       --name druppie-server \
-      druppie-core
+      druppie
     ```
 
 ## �🚀 Usage

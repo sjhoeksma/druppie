@@ -1,7 +1,7 @@
 {
     "name": "Druppie",
     "short_name": "Druppie",
-    "description": "Druppie: Full Cycle AI Architecture",
+    "description": "Druppie: AI Architecture Demonstrator",
     "start_url": "index.html",
     "scope": "/",
     "display": "standalone",
