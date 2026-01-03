@@ -148,6 +148,49 @@ curl -X POST -d '{"repo_url":"https://github.com/my/repo", "commit_hash":"HEAD"}
 - `PUT /v1/config`: Update configuration.
 - `POST /v1/chat/completions`: Analyze intent and generate plans.
 
+## 🔐 Authentication & Access Control
+
+Druppie Core now supports multiple Identity Access Management (IAM) providers and Role-Based Access Control (RBAC) for registry filtering.
+
+### 1. IAM Providers
+You can configure the IAM provider in `config.yaml` or via environment variables (`IAM_PROVIDER`).
+*   **Local** (Default): Uses a local user store (`.druppie/iam/users.json`). Good for single-user or small team testing.
+*   **Keycloak**: Integrates with an external Keycloak instance for enterprise SSO.
+*   **Demo**: Disables authentication obstacles and grants full admin access.
+
+### 2. Local CLI Authentication
+When using the CLI locally, you must authenticate to access protected resources (like Planner or Chat) unless you are in Demo mode.
+
+**Login:**
+```bash
+./druppie login
+# Prompts for Username and Password
+# Default Admin: admin / admin
+```
+This saves a session token to `~/.druppie/token`.
+
+**Logout:**
+```bash
+./druppie logout
+```
+
+### 3. Demo Mode
+For quick testing without login, use the `--demo` flag. This forces the application to treat you as a "root" admin user.
+
+```bash
+# Run server in demo mode
+./druppie serve --demo
+
+# Use CLI tools in demo mode (skip login)
+./druppie chat --demo
+./druppie plan "deploy database" --demo
+```
+
+### 4. RBAC & Filtering
+Registry items (Agents, Skills, Building Blocks) can now be restricted by user groups. Items with an `auth_groups` field in their frontmatter will only be visible to users belonging to those groups.
+*   **Admin/Root**: Sees everything.
+*   **Unauthenticated**: Sees only public items (no `auth_groups` defined).
+
 ## 📦 Git Configuration
 
 Druppie Core requires a Git repository to store project code. You can use the internal Gitea instance (default) or an external provider.

@@ -26,6 +26,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func getAuthContext(ctx context.Context, p iam.Provider, demo bool) context.Context {
+	if demo {
+		u := &iam.User{ID: "demo", Username: "demo", Groups: []string{"root", "admin"}}
+		return iam.ContextWithUser(ctx, u)
+	}
+
+	if _, ok := p.(*iam.DemoProvider); ok {
+		u := &iam.User{ID: "demo", Username: "demo", Groups: []string{"root", "admin"}}
+		return iam.ContextWithUser(ctx, u)
+	}
+
+	token, err := iam.LoadClientToken()
+	if err != nil || token == "" {
+		return ctx
+	}
+
+	if lp, ok := p.(*iam.LocalProvider); ok {
+		if u, ok := lp.GetUserByToken(token); ok {
+			return iam.ContextWithUser(ctx, u)
+		}
+	}
+	return ctx
+}
+
 func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "druppie",
@@ -1019,6 +1043,53 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 	// runInteractiveLoop Removed
 
+	var loginCmd = &cobra.Command{
+		Use:   "login",
+		Short: "Login to local provider",
+		Run: func(cmd *cobra.Command, args []string) {
+			_, _, _, _, _, iamProv, err := setup(cmd)
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			localProv, ok := iamProv.(*iam.LocalProvider)
+			if !ok {
+				fmt.Println("Error: Login only supported for 'local' IAM provider.")
+				os.Exit(1)
+			}
+
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Username: ")
+			user, _ := reader.ReadString('\n')
+			user = strings.TrimSpace(user)
+
+			fmt.Print("Password: ")
+			pass, _ := reader.ReadString('\n')
+			pass = strings.TrimSpace(pass)
+
+			token, u, err := localProv.Login(user, pass)
+			if err != nil {
+				fmt.Printf("Login failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := iam.SaveClientToken(token); err != nil {
+				fmt.Printf("Failed to save session: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Logged in as %s (Groups: %v)\n", u.Username, u.Groups)
+		},
+	}
+
+	var logoutCmd = &cobra.Command{
+		Use:   "logout",
+		Short: "Logout from local session",
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = iam.ClearClientToken()
+			fmt.Println("Logged out.")
+		},
+	}
+
 	// TaskManager instance
 	var tm *TaskManager
 
@@ -1026,12 +1097,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "chat",
 		Short: "Start interactive chat",
 		Run: func(cmd *cobra.Command, args []string) {
-			cfgMgr, _, router, planner, _, _, err := setup(cmd)
+			cfgMgr, _, router, planner, _, iamProv, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
 			}
 			cfg := cfgMgr.Get()
+			ctx := getAuthContext(context.Background(), iamProv, demo)
 
 			// Initialize TaskManager
 			tm = NewTaskManager(planner)
@@ -1052,7 +1124,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				if err != nil {
 					fmt.Printf("[Error] Failed to load plan: %v\n", err)
 				} else {
-					tm.StartTask(context.Background(), plan)
+					tm.StartTask(ctx, plan)
 				}
 			}
 
@@ -1125,21 +1197,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// If not handled by task, treat as new Router Request
 					if !strings.HasPrefix(input, "/") {
 						fmt.Println("[Router - Analyzing]")
-						intent, rawRouterResp, err := router.Analyze(context.Background(), input)
+						intent, rawRouterResp, err := router.Analyze(ctx, input)
 						if err != nil {
 							fmt.Printf("[Error] Router failed: %v\n> ", err)
 							continue
 						}
 
 						if intent.Action == "create_project" {
-							plan, err := planner.CreatePlan(context.Background(), intent, "")
+							plan, err := planner.CreatePlan(ctx, intent, "")
 							if err != nil {
 								fmt.Printf("[Error] Planner failed: %v\n> ", err)
 								continue
 							}
 							_ = planner.Store.LogInteraction(plan.ID, "Router", input, rawRouterResp)
 
-							task := tm.StartTask(context.Background(), plan)
+							task := tm.StartTask(ctx, plan)
 							activeTaskID = task.ID
 							fmt.Printf("[Planner] Started Plan %s\n", plan.ID)
 						} else {
@@ -1167,11 +1239,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Short: "Generate a plan for a given prompt",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			_, _, router, planner, _, _, err := setup(cmd)
+			_, _, router, planner, _, iamProv, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
 			}
+			ctx := getAuthContext(context.Background(), iamProv, demo)
 
 			prompt := strings.Join(args, " ")
 
@@ -1235,7 +1308,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Initialize TaskManager early to unify output
 			tm := NewTaskManager(planner)
 
-			intent, rawRouterResp, err := router.Analyze(context.Background(), effectivePrompt)
+			intent, rawRouterResp, err := router.Analyze(ctx, effectivePrompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)
@@ -1273,7 +1346,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				intent.Prompt = effectivePrompt
 
 				var err error
-				currentPlan, err = planner.CreatePlan(context.Background(), intent, currentPlan.ID)
+				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
 				if err != nil {
 					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
 					os.Exit(1)
@@ -1288,7 +1361,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// Initialize TaskManager for execution
-			task := tm.StartTask(context.Background(), currentPlan)
+			task := tm.StartTask(ctx, currentPlan)
 			fmt.Printf("[%s] Started Plan execution...\n", currentPlan.ID)
 
 			// Inject the postponed AI response if exists
@@ -1337,6 +1410,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.PersistentFlags().BoolVar(&demo, "demo", false, "Enable demo mode (full admin access, no login)")
 
 	rootCmd.AddCommand(registryCmd)
+	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(serveCmd)

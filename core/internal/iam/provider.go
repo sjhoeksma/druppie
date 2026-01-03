@@ -104,6 +104,9 @@ func NewLocalProvider(baseDir string) (*LocalProvider, error) {
 	if err := p.loadGroups(); err != nil {
 		return nil, err
 	}
+	if err := p.loadSessions(); err != nil {
+		return nil, err
+	}
 
 	// Ensure admin GROUP exists
 	if _, ok := p.groups["group-admin"]; !ok {
@@ -206,6 +209,80 @@ func (p *LocalProvider) saveGroups() error {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+func (p *LocalProvider) loadSessions() error {
+	path := filepath.Join(p.storeDir, "sessions.json")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &p.sessions)
+}
+
+func (p *LocalProvider) saveSessions() error {
+	path := filepath.Join(p.storeDir, "sessions.json")
+	data, err := json.MarshalIndent(p.sessions, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+// Login performs authentication for CLI
+func (p *LocalProvider) Login(username, password string) (string, *User, error) {
+	p.mu.RLock()
+	u, ok := p.users[username]
+	p.mu.RUnlock()
+
+	if !ok {
+		return "", nil, fmt.Errorf("invalid credentials")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return "", nil, fmt.Errorf("invalid credentials")
+	}
+
+	token := generateToken()
+	p.mu.Lock()
+	p.sessions[token] = u.Username
+	_ = p.saveSessions()
+	p.mu.Unlock()
+
+	return token, &User{
+		ID:       u.ID,
+		Username: u.Username,
+		Email:    u.Email,
+		Groups:   u.Groups,
+	}, nil
+}
+
+func (p *LocalProvider) GetUserByToken(token string) (*User, bool) {
+	p.mu.RLock()
+	username, ok := p.sessions[token]
+	p.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+
+	p.mu.RLock()
+	stored, exists := p.users[username]
+	p.mu.RUnlock()
+
+	if !exists {
+		return nil, false
+	}
+
+	return &User{
+		ID:       stored.ID,
+		Username: stored.Username,
+		Email:    stored.Email,
+		Groups:   stored.Groups,
+	}, true
 }
 
 func (p *LocalProvider) Middleware() func(http.Handler) http.Handler {
@@ -314,34 +391,13 @@ func (p *LocalProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.mu.RLock()
-	u, ok := p.users[req.Username]
-	p.mu.RUnlock()
-
-	if !ok {
+	token, user, err := p.Login(req.Username, req.Password)
+	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-		return
-	}
-
-	token := generateToken()
-	p.mu.Lock()
-	p.sessions[token] = u.Username
-	p.mu.Unlock()
-
-	// Populate response user
-	respUser := User{
-		ID:       u.ID,
-		Username: u.Username,
-		Email:    u.Email,
-		Groups:   u.Groups,
-	}
-
-	resp := LoginResponse{Token: token, User: respUser}
+	resp := LoginResponse{Token: token, User: *user}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -352,6 +408,7 @@ func (p *LocalProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 		token := strings.TrimPrefix(auth, "Bearer ")
 		p.mu.Lock()
 		delete(p.sessions, token)
+		_ = p.saveSessions()
 		p.mu.Unlock()
 	}
 	w.WriteHeader(http.StatusOK)
