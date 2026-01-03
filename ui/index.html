@@ -1043,7 +1043,7 @@
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <h1>Druppie Chat</h1>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <button onclick="handleLogout()" title="Logout" style="
+                    <button id="logout-btn" onclick="handleLogout()" title="Logout" style="
                         background: transparent;
                         border: none;
                         padding: 0.25rem;
@@ -1312,7 +1312,40 @@
 
     // --- Auth Logic ---
 
+    async function checkConfig() {
+        try {
+            const res = await originalFetch('/info');
+            if (!res.ok) return false;
+            const info = await res.json();
+
+            // Allow access if provider is demo
+            // The info endpoint returns { "auth_required": bool, "iam": { "provider": "..." } }
+            // If auth_required is false, we bypass. 
+            // We can also double check iam.provider if we want, but the server logic handles it.
+
+            if (info.auth_required === false) return true;
+
+            return false;
+        } catch (e) {
+            console.warn("Config check failed", e);
+            return false;
+        }
+    }
+
     async function initAuth() {
+        // First check server config to see if we can bypass auth
+        const bypassAuth = await checkConfig();
+        if (bypassAuth) {
+            document.getElementById('login-overlay').style.display = 'none';
+            // Hide logout button in demo mode
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) logoutBtn.style.display = 'none';
+
+            updatePlanSelector();
+            state.stateInterval = setInterval(updatePlanSelector, 5000);
+            return;
+        }
+
         // Try recover user
         const storedUser = localStorage.getItem('druppie_user');
         if (storedUser) {

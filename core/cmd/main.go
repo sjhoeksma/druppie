@@ -268,6 +268,25 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				http.ServeFile(w, r, filepath.Join(root, "ui", "admin.html"))
 			})
 
+			// Public System Info
+			r.Get("/info", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				cfg := cfgMgr.Get()
+
+				// Determine if auth is required
+				// Logic: If IAM provider is NOT 'demo' (and maybe eventually 'none'), it is required.
+				// However, config.IAM.Provider defaults to 'local'.
+				authRequired := cfg.IAM.Provider != "demo"
+
+				resp := map[string]interface{}{
+					"auth_required": authRequired,
+					"iam": map[string]string{
+						"provider": cfg.IAM.Provider,
+					},
+				}
+				json.NewEncoder(w).Encode(resp)
+			})
+
 			// API Routes
 			r.Route("/v1", func(r chi.Router) {
 				// Apply IAM Middleware to all v1 routes
@@ -993,6 +1012,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			if port == "" {
 				port = "8080"
 			}
+			fmt.Printf("Providers: Git=[%s], IAM=[%s], LLM=[%s]\n",
+				cfg.Git.Provider,
+				cfg.IAM.Provider,
+				cfg.LLM.DefaultProvider,
+			)
 			fmt.Printf("Starting server on port %s...\n", port)
 			// Binds to 0.0.0.0 (all interfaces)
 			if err := http.ListenAndServe(":"+port, r); err != nil {
