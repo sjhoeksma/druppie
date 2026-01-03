@@ -743,11 +743,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							plan.Status = "stopped"
 						}
 					} else {
-						// No active task - check if plan says running but task is gone
-						// We prefer to return the persistent status (even if zombie) to avoid race conditions during startup
-						// if plan.Status == "running" || plan.Status == "waiting_input" {
-						// 	  plan.Status = "stopped"
-						// }
+						// No active task - check if plan says running but task is gone (Zombie State)
+						if plan.Status == "running" || plan.Status == "waiting_input" {
+							plan.Status = "stopped"
+							// Fix persistence
+							_ = plannerService.Store.SavePlan(plan)
+						}
 					}
 					tm.mu.Unlock()
 

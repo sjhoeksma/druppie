@@ -1499,6 +1499,8 @@
                 opt.value = p.plan_id;
                 // Add status icon char maybe?
                 let statusChar = '⚪️';
+                if (p.status === 'stopped') statusChar = '🟠';
+                if (p.status === 'waiting_input') statusChar = '❓';
                 if (p.status === 'running') statusChar = '🟢';
                 if (p.status === 'completed') statusChar = '✅';
                 if (p.status === 'failed') statusChar = '🔴';
@@ -1515,7 +1517,9 @@
                 selector.appendChild(opt);
             });
 
-            if (currentVal) {
+            if (state.currentPlanId) {
+                selector.value = state.currentPlanId;
+            } else if (currentVal) {
                 selector.value = currentVal;
             }
         } catch (e) {
@@ -2276,15 +2280,40 @@
 
         lucide.createIcons();
 
-        // Auto-scroll Kanban columns to bottom to show new items
-        Object.values(elements.cols).forEach(col => {
-            const cardsContainer = col.querySelector('.col-cards');
-            if (cardsContainer && cardsContainer.scrollHeight > cardsContainer.clientHeight) {
-                // Only scroll if we are reasonably close to bottom or it's a new update?
-                // For now, let's just force scroll to see latest.
-                cardsContainer.scrollTop = cardsContainer.scrollHeight;
+        // Scroll the column containing the LAST card into view
+        // to ensure user sees the latest activity / new card.
+        if (plan.steps.length > 0) {
+            const lastStep = plan.steps[plan.steps.length - 1];
+            let lastColContainer = null;
+            if (lastStep.status === 'waiting_input') {
+                lastColContainer = elements.cols.interaction.querySelector('.col-cards');
+            } else if (lastStep.status === 'running') {
+                lastColContainer = elements.cols.running.querySelector('.col-cards');
+            } else if (lastStep.status === 'completed' || lastStep.status === 'failed' || lastStep.status === 'stopped' || lastStep.status === 'error') {
+                lastColContainer = elements.cols.completed.querySelector('.col-cards');
+            } else {
+                lastColContainer = elements.cols.pending.querySelector('.col-cards');
             }
-        });
+
+            // Scroll that specific container
+            // Scroll that specific container
+            if (lastColContainer) {
+                requestAnimationFrame(() => {
+                    // Vertical scroll of the card list
+                    if (lastColContainer.scrollHeight > lastColContainer.clientHeight) {
+                        lastColContainer.scrollTop = lastColContainer.scrollHeight;
+                    }
+
+                    // Horizontal scroll of the entire Kanban board (Mobile)
+                    // Find the parent column element (task-card's grand-parent is kanban-col?)
+                    // Actually lastColContainer is .col-cards. Its parent is the .kanban-col.
+                    const col = lastColContainer.parentElement;
+                    if (col) {
+                        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }
+                });
+            }
+        }
     }
 
     function renderStepList(plan) {
