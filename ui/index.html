@@ -2127,7 +2127,6 @@
             }
 
             if (state.currentPollingRate !== desiredRate) {
-                console.log(`Adjusting polling rate to ${desiredRate}ms`);
                 setupPolling(desiredRate);
             }
         } catch (e) { }
@@ -2282,7 +2281,8 @@
 
         // Scroll the column containing the LAST card into view
         // to ensure user sees the latest activity / new card.
-        if (plan.steps.length > 0) {
+        // Disable auto-scroll if plan is stopped to allow user to inspect history without jumping.
+        if (plan.steps.length > 0 && plan.status !== 'stopped') {
             const lastStep = plan.steps[plan.steps.length - 1];
             let lastColContainer = null;
             if (lastStep.status === 'waiting_input') {
