@@ -17,7 +17,14 @@ COPY . .
 
 # Build the binary
 WORKDIR /app/core
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/druppie ./cmd
+ARG VERSION=dev
+RUN if [ -d "../.git" ]; then \
+    export GIT_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "$VERSION"); \
+    else \
+    export GIT_VERSION=$VERSION; \
+    fi && \
+    echo "Building Version: $GIT_VERSION" && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.Version=$GIT_VERSION" -o /app/druppie ./cmd
 # Compress binary
 RUN upx --best --lzma /app/druppie
 
@@ -55,7 +62,7 @@ COPY --from=builder /app/mcp /app/mcp
 COPY --from=builder /app/research /app/research
 COPY --from=builder /app/script /app/script
 COPY --from=builder /app/skills /app/skills
-# COPY --from=builder /app/story /app/story
+COPY --from=builder /app/story /app/story
 COPY --from=builder /app/tools /app/tools
 COPY --from=builder /app/ui /app/ui
 

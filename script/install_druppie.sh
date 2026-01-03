@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Druppie Core Installer
-# Installs the main application logic (Druppie Core) via Helm
+# Druppie Installer
+# Installs the main application logic (Druppie) via Helm
 
 # Context Checks
 if [ -z "$DRUPPIE_DOMAIN" ]; then
@@ -10,7 +10,7 @@ if [ -z "$DRUPPIE_DOMAIN" ]; then
     exit 1
 fi
 
-echo "Deploying Druppie Core to Kubernetes..."
+echo "Deploying Druppie to Kubernetes..."
 
 # Path to the Helm chart and Core Source
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +18,7 @@ CHART_PATH="$SCRIPT_DIR/../core/deploy/helm"
 CORE_DIR="$SCRIPT_DIR/../core"
 
 # 1. Build Docker Image
-echo "Building Druppie Core Docker Image..."
+echo "Building Druppie Docker Image..."
 if ! command -v docker &> /dev/null; then
     echo "Error: Docker not found. Cannot build image."
     exit 1

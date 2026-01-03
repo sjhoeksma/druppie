@@ -51,11 +51,21 @@ func getAuthContext(ctx context.Context, p iam.Provider, demo bool) context.Cont
 	return ctx
 }
 
+var (
+	Version = "dev"
+)
+
 func main() {
+	// 0. Version Check
+	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
+		fmt.Printf("Druppie version: %s\n", Version)
+		os.Exit(0)
+	}
+
 	var rootCmd = &cobra.Command{
 		Use:   "druppie",
-		Short: "Druppie Core Helper CLI & API Server",
-		Long: `Druppie Core manages the Registry, Planner, and Orchestration API. 
+		Short: "Druppie Helper CLI & API Server",
+		Long: `Druppie manages the Registry, Planner, and Orchestration API. 
 By default, it starts the API Server on port 8080. 
 Use global flags like --plan-id to resume existing planning tasks or --llm-provider to switch backends.`,
 	}
@@ -142,7 +152,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 	var serveCmd = &cobra.Command{
 		Use:   "serve",
-		Short: "Start the Druppie Core API Server",
+		Short: "Start the Druppie API Server",
 		Run: func(cmd *cobra.Command, args []string) {
 			cfgMgr, reg, routerService, plannerService, buildEngine, iamProvider, err := setup(cmd)
 			if err != nil {
@@ -597,6 +607,14 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 					w.WriteHeader(http.StatusOK)
+				})
+
+				// Version Endpoint
+				r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{
+						"version": Version,
+					})
 				})
 
 				// Build Trigger Endpoint
@@ -1272,7 +1290,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Initialize TaskManager
 			tm = NewTaskManager(planner)
 
-			fmt.Println("--- Druppie Core Chat (Async) ---")
+			fmt.Println("--- Druppie Chat (Async) ---")
 			fmt.Printf("LLM Provider: %s\n", cfg.LLM.DefaultProvider)
 			fmt.Println("Commands: /exit, /list, /stop <id>, /switch <id>")
 

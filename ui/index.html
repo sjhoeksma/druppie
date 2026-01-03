@@ -1194,6 +1194,9 @@
                 <i data-lucide="log-out" size="18"></i>
             </button>
         </div>
+        <div id="app-version"
+            style="font-size: 0.6rem; color: var(--text-dim); text-align: center; margin-top: 0.5rem; opacity: 0.5;">
+            v...</div>
     </div>
 </aside>
 
@@ -1334,6 +1337,7 @@
             if (state.stateInterval) clearInterval(state.stateInterval);
             state.stateInterval = setInterval(updatePlanSelector, 5000);
             updatePlanSelector();
+            fetchVersion();
             return;
         }
 
@@ -1349,9 +1353,23 @@
             // Start things
             updatePlanSelector();
             state.stateInterval = setInterval(updatePlanSelector, 5000);
+            fetchVersion(); // Added fetchVersion
         } else {
             // Show login
             showLogin();
+        }
+    }
+
+    async function fetchVersion() {
+        try {
+            const res = await fetch('/v1/version');
+            if (res.ok) {
+                const data = await res.json();
+                const el = document.getElementById('app-version');
+                if (el) el.textContent = `v${data.version}`;
+            }
+        } catch (e) {
+            console.warn("Failed to fetch version", e);
         }
     }
 
