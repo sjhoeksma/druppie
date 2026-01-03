@@ -65,6 +65,7 @@ type ExecutionPlan struct {
 	Steps          []Step   `json:"steps"`
 	SelectedAgents []string `json:"selected_agents"`
 	Files          []string `json:"files,omitempty"`
+	AllowedGroups  []string `json:"allowed_groups,omitempty"`
 }
 
 // MCPServer represents an external tool server

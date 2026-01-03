@@ -345,6 +345,16 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							Status: "completed",
 							Steps:  []model.Step{},
 						}
+						// If user is authenticated, set creator ID
+						user, _ := iam.GetUserFromContext(r.Context())
+						if user != nil {
+							currentPlan.CreatorID = user.Username
+							// Optional: Add creator's groups by default?
+							// currentPlan.AllowedGroups = user.Groups
+							// Let's keep it clean for now, maybe just Creator access implicity logic elsewhere?
+							// The user request was "allow a plan to be accessible by users that are within the group list"
+							// So we need to populate this list.
+						}
 					} else {
 						// Update status of existing plan to indicate activity
 						currentPlan.Status = "running"
@@ -637,15 +647,42 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 					// Filter plans by creator (if user is authenticated)
 					if user, ok := iam.GetUserFromContext(r.Context()); ok {
-						// Check if user is admin (optional, for now strictly filtering per request)
-						// Iterate and filter
-						var filtered []model.ExecutionPlan
-						for _, p := range plans {
-							if p.CreatorID == user.ID {
-								filtered = append(filtered, p)
+						// If user is 'demo' user (ID 'demo-user'), show everything
+						if user.ID == "demo-user" {
+							// No filtering needed
+						} else {
+							// Check if user is admin (optional, for now strictly filtering per request)
+							// Iterate and filter
+							var filtered []model.ExecutionPlan
+							for _, p := range plans {
+								// Show plan if:
+								// 1. It has no creator (legacy/demo/public)
+								// 2. User is the creator
+								// 3. User is in one of the allowed groups
+								if p.CreatorID == "" || p.CreatorID == user.Username {
+									filtered = append(filtered, p)
+									continue
+								}
+
+								// Check groups
+								allowed := false
+								for _, allowedGroup := range p.AllowedGroups {
+									for _, userGroup := range user.Groups {
+										if allowedGroup == userGroup {
+											allowed = true
+											break
+										}
+									}
+									if allowed {
+										break
+									}
+								}
+								if allowed {
+									filtered = append(filtered, p)
+								}
 							}
+							plans = filtered
 						}
-						plans = filtered
 					}
 
 					// Update plan statuses based on actual task states
@@ -784,6 +821,70 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					w.WriteHeader(http.StatusOK)
+				})
+
+				// Group Management Endpoints for Plans
+				r.Post("/plans/{id}/groups/{group}", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					group := chi.URLParam(r, "group")
+
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+
+					// Check duplication
+					exists := false
+					for _, g := range plan.AllowedGroups {
+						if g == group {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						plan.AllowedGroups = append(plan.AllowedGroups, group)
+						if err := plannerService.Store.SavePlan(plan); err != nil {
+							http.Error(w, "Failed to update plan", http.StatusInternalServerError)
+							return
+						}
+					}
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r.Delete("/plans/{id}/groups/{group}", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					group := chi.URLParam(r, "group")
+
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+
+					newGroups := []string{}
+					for _, g := range plan.AllowedGroups {
+						if g != group {
+							newGroups = append(newGroups, g)
+						}
+					}
+					plan.AllowedGroups = newGroups
+					if err := plannerService.Store.SavePlan(plan); err != nil {
+						http.Error(w, "Failed to update plan", http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r.Get("/plans/{id}/groups", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(plan.AllowedGroups)
 				})
 
 				r.Post("/plans/{id}/files", func(w http.ResponseWriter, r *http.Request) {

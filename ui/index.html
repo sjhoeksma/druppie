@@ -1085,6 +1085,8 @@
                     font-family: 'JetBrains Mono', monospace;
                     outline: none;
                     cursor: pointer;
+                    width: 100%;
+                    max-width: 100%;
                 ">
                 <option value="">Maak een plan...</option>
             </select>
@@ -1462,8 +1464,9 @@
 
     // Update plan selector with available plans
     async function updatePlanSelector() {
-        // If not logged in, do nothing (should be handled by auth logic, but safe guard)
-        if (!state.token) return;
+        // Token check removed to allow Demo Mode (which has no token) to fetch plans.
+        // The fetch interceptor handles 401s if they occur.
+
 
         try {
             const resp = await fetch('/v1/plans');
@@ -1483,26 +1486,26 @@
 
             plans.sort((a, b) => {
                 // Approximate sort by ID (timestamp based usually) descending
-                if (a.id > b.id) return -1;
-                if (a.id < b.id) return 1;
+                if (a.plan_id > b.plan_id) return -1;
+                if (a.plan_id < b.plan_id) return 1;
                 return 0;
             });
 
             plans.forEach(p => {
                 const opt = document.createElement('option');
-                opt.value = p.id;
+                opt.value = p.plan_id;
                 // Add status icon char maybe?
                 let statusChar = '⚪️';
                 if (p.status === 'running') statusChar = '🟢';
-                if (p.status === 'completed') statusChar = 'xx';
+                if (p.status === 'completed') statusChar = '✅';
                 if (p.status === 'failed') statusChar = '🔴';
 
                 // Show Plan ID + first few words of intent
-                let label = p.id;
+                let label = p.plan_id;
                 if (p.intent && (p.intent.prompt || p.intent.initial_prompt)) {
                     let txt = p.intent.prompt || p.intent.initial_prompt;
                     if (txt.length > 30) txt = txt.substring(0, 30) + '...';
-                    label = `${statusChar} ${txt} (${p.id})`;
+                    label = `${statusChar} ${txt} (${p.plan_id})`;
                 }
                 opt.textContent = label;
                 selector.appendChild(opt);
@@ -1827,8 +1830,74 @@
                 }
                 break;
 
+            case '/add_group':
+                if (!state.currentPlanId) {
+                    addChatMessage('ai', '⚠️ Geen actief plan.');
+                    break;
+                }
+                const addGroup = parts[1];
+                if (!addGroup) {
+                    addChatMessage('ai', '⚠️ Gebruik: /add_group <group_name>');
+                    break;
+                }
+                try {
+                    const resp = await fetch(`/v1/plans/${state.currentPlanId}/groups/${addGroup}`, { method: 'POST' });
+                    if (resp.ok) {
+                        addChatMessage('ai', `✅ Groep '${addGroup}' toegevoegd aan plan.`);
+                    } else {
+                        addChatMessage('ai', `❌ Fout bij toevoegen groep: ${await resp.text()}`);
+                    }
+                } catch (e) {
+                    addChatMessage('ai', `❌ Fout: ${e.message}`);
+                }
+                break;
+
+            case '/remove_group':
+                if (!state.currentPlanId) {
+                    addChatMessage('ai', '⚠️ Geen actief plan.');
+                    break;
+                }
+                const rmGroup = parts[1];
+                if (!rmGroup) {
+                    addChatMessage('ai', '⚠️ Gebruik: /remove_group <group_name>');
+                    break;
+                }
+                try {
+                    const resp = await fetch(`/v1/plans/${state.currentPlanId}/groups/${rmGroup}`, { method: 'DELETE' });
+                    if (resp.ok) {
+                        addChatMessage('ai', `✅ Groep '${rmGroup}' verwijderd van plan.`);
+                    } else {
+                        addChatMessage('ai', `❌ Fout bij verwijderen groep: ${await resp.text()}`);
+                    }
+                } catch (e) {
+                    addChatMessage('ai', `❌ Fout: ${e.message}`);
+                }
+                break;
+
+            case '/list_groups':
+                if (!state.currentPlanId) {
+                    addChatMessage('ai', '⚠️ Geen actief plan.');
+                    break;
+                }
+                try {
+                    const resp = await fetch(`/v1/plans/${state.currentPlanId}/groups`);
+                    if (resp.ok) {
+                        const groups = await resp.json();
+                        if (groups && groups.length > 0) {
+                            addChatMessage('ai', `📋 Toegestane groepen:\n${groups.map(g => `• ${g}`).join('\n')}`);
+                        } else {
+                            addChatMessage('ai', '📋 Dit plan heeft geen specifieke toegangsgroepen ingesteld (alleen eigenaar).');
+                        }
+                    } else {
+                        addChatMessage('ai', `❌ Fout bij ophalen groepen: ${await resp.text()}`);
+                    }
+                } catch (e) {
+                    addChatMessage('ai', `❌ Fout: ${e.message}`);
+                }
+                break;
+
             default:
-                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan`);
+                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
         }
     }
 
