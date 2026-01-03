@@ -1501,11 +1501,12 @@
                 if (p.status === 'failed') statusChar = '🔴';
 
                 // Show Plan ID + first few words of intent
-                let label = p.plan_id;
+                const shortId = p.plan_id.replace('plan-', '');
+                let label = shortId;
                 if (p.intent && (p.intent.prompt || p.intent.initial_prompt)) {
                     let txt = p.intent.prompt || p.intent.initial_prompt;
                     if (txt.length > 30) txt = txt.substring(0, 30) + '...';
-                    label = `${statusChar} ${txt} (${p.plan_id})`;
+                    label = `${statusChar} ${txt} (${shortId})`;
                 }
                 opt.textContent = label;
                 selector.appendChild(opt);
@@ -1935,12 +1936,19 @@
 
     function startMonitoring() {
         if (state.pollingInterval) clearInterval(state.pollingInterval);
+        state.currentPollingRate = 2000;
         updatePlan();
         updateLogs();
+        setupPolling(state.currentPollingRate);
+    }
+
+    function setupPolling(rate) {
+        if (state.pollingInterval) clearInterval(state.pollingInterval);
+        state.currentPollingRate = rate;
         state.pollingInterval = setInterval(() => {
             updatePlan();
             updateLogs();
-        }, 2000);
+        }, rate);
     }
 
     async function updatePlan() {
@@ -2102,6 +2110,18 @@
             } else if (plan.status !== 'waiting_input') {
                 state.isWaitingForInput = false;
             }
+
+            // Dynamic Polling Rate Adjustment
+            // If plan is in a terminal or paused state, reduce polling frequency to save resources
+            let desiredRate = 2000;
+            if (plan.status === 'stopped' || plan.status === 'completed' || plan.status === 'failed') {
+                desiredRate = 10000;
+            }
+
+            if (state.currentPollingRate !== desiredRate) {
+                console.log(`Adjusting polling rate to ${desiredRate}ms`);
+                setupPolling(desiredRate);
+            }
         } catch (e) { }
     }
 
@@ -2251,6 +2271,16 @@
         elements.cols.completed.querySelector('.task-count').textContent = counts.completed;
 
         lucide.createIcons();
+
+        // Auto-scroll Kanban columns to bottom to show new items
+        Object.values(elements.cols).forEach(col => {
+            const cardsContainer = col.querySelector('.col-cards');
+            if (cardsContainer && cardsContainer.scrollHeight > cardsContainer.clientHeight) {
+                // Only scroll if we are reasonably close to bottom or it's a new update?
+                // For now, let's just force scroll to see latest.
+                cardsContainer.scrollTop = cardsContainer.scrollHeight;
+            }
+        });
     }
 
     function renderStepList(plan) {
