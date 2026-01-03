@@ -1335,6 +1335,8 @@
     }
 
     async function initAuth() {
+        if (state.stateInterval) clearInterval(state.stateInterval);
+
         // First check server config to see if we can bypass auth
         const bypassAuth = await checkConfig();
         if (bypassAuth) {
@@ -1343,8 +1345,9 @@
             const logoutBtn = document.getElementById('logout-btn');
             if (logoutBtn) logoutBtn.style.display = 'none';
 
-            updatePlanSelector();
+            if (state.stateInterval) clearInterval(state.stateInterval);
             state.stateInterval = setInterval(updatePlanSelector, 5000);
+            updatePlanSelector();
             return;
         }
 
@@ -1521,8 +1524,9 @@
     }
 
     // Update selector periodically
-    setInterval(updatePlanSelector, 5000);
-    updatePlanSelector();
+    // Update selector periodically - MOVED TO initAuth
+    // setInterval(updatePlanSelector, 5000);
+    // updatePlanSelector();
 
     function switchTab(name) {
         const panel = document.getElementById('bottom-panel');
