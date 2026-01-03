@@ -162,7 +162,7 @@ Use the Gitea instance running inside the same Kubernetes cluster.
 
 2. **Install Chart**:
    ```bash
-   helm install druppie-core ./deploy/helm \
+   helm install druppie ./deploy/helm \
      --set git.provider="gitea" \
      --set git.url="http://gitea-http.gitea.svc.cluster.local:3000" \
      --set git.user="my-org" \
@@ -180,7 +180,7 @@ Use an external provider like GitHub.
 
 2. **Install Chart** (with overrides):
    ```bash
-   helm install druppie-core ./deploy/helm \
+   helm install druppie ./deploy/helm \
      --set git.provider="github" \
      --set git.url="https://api.github.com" \
      --set git.user="my-org" \

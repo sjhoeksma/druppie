@@ -23,7 +23,7 @@ if ! command -v docker &> /dev/null; then
     echo "Error: Docker not found. Cannot build image."
     exit 1
 fi
-docker build -t druppie-core:latest "$CORE_DIR"
+docker build -t druppie:latest "$CORE_DIR"
 
 # 2. Import into k3d (if running locally on k3d)
 # We use the cluster name from env or default
@@ -32,7 +32,7 @@ K3D_CLUSTER_NAME="${DRUPPIE_CLUSTER_NAME:-druppie-dev}"
 if command -v k3d &> /dev/null; then
     if k3d cluster list | grep -q "$K3D_CLUSTER_NAME"; then
         echo "Importing image into k3d cluster '$K3D_CLUSTER_NAME'..."
-        k3d image import druppie-core:latest -c "$K3D_CLUSTER_NAME"
+        k3d image import druppie:latest -c "$K3D_CLUSTER_NAME"
     else
         echo "k3d installed but cluster '$K3D_CLUSTER_NAME' not found. Skipping import (assuming remote or other setup)."
     fi
@@ -44,7 +44,7 @@ echo "Deploying Druppie Core to Kubernetes..."
 
 # Install/Upgrade the Helm chart
 # We use 'upgrade --install' to ensure idempotency
-helm upgrade --install druppie-core "$CHART_PATH" \
+helm upgrade --install druppie "$CHART_PATH" \
   --namespace druppie \
   --create-namespace \
   --set ingress.host="$DRUPPIE_DOMAIN" \

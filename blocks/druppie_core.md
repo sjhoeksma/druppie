@@ -274,7 +274,7 @@ The Core Service must be implemented in **Go** (version 1.22+) to ensure high co
 *   **Security**: The container must run as a **non-root user** (UID 10001).
 
 ### 4.3 Deployment: Helm
-All operational manifests must be packaged as a Helm Chart (`druppie-core`).
+All operational manifests must be packaged as a Helm Chart (`druppie`).
 *   **Values.yaml**: Must expose configuration for:
     *   `replicaCount` (HPA settings).
     *   `image.tag` (Version pinning).

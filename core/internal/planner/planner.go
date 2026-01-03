@@ -117,14 +117,20 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 }
 
 func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID string) (model.ExecutionPlan, error) {
+	// Extract user groups for filtering
+	userGroups := []string{}
+	if user, ok := iam.GetUserFromContext(ctx); ok && user != nil {
+		userGroups = user.Groups
+	}
+
 	// 1. Gather Context from Registry
-	blocks := p.registry.ListBuildingBlocks()
+	blocks := p.registry.ListBuildingBlocks(userGroups)
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
 		blockNames = append(blockNames, b.Name)
 	}
 
-	allAgents := p.registry.ListAgents()
+	allAgents := p.registry.ListAgents(userGroups)
 
 	// Filter Agents
 	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents)
@@ -398,7 +404,12 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// 2. Re-Prompt LLM for Next Steps
 	// Filter Active Agents based on Plan Selection
 	// Only show agents that were originally selected + their sub-agents
-	allRegistryAgents := p.registry.ListAgents()
+	// Extract user groups
+	userGroups := []string{}
+	if user, ok := iam.GetUserFromContext(ctx); ok && user != nil {
+		userGroups = user.Groups
+	}
+	allRegistryAgents := p.registry.ListAgents(userGroups)
 	allowedMap := make(map[string]bool)
 	for _, id := range plan.SelectedAgents {
 		allowedMap[id] = true
@@ -457,7 +468,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		os.Exit(1)
 	}
 
-	blocks := p.registry.ListBuildingBlocks()
+	blocks := p.registry.ListBuildingBlocks(userGroups)
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
 		blockNames = append(blockNames, b.Name)

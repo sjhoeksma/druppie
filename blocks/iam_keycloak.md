@@ -34,7 +34,7 @@ helm upgrade --install keycloak bitnami/keycloak \
   --set auth.adminPassword=SECRET_ADMIN_PW \
   --set service.type=ClusterIP \
   --set postgresql.enabled=false \
-  --set externalDatabase.host=druppie-core-db-rw.default.svc.cluster.local \
+  --set externalDatabase.host=druppie-db-rw.default.svc.cluster.local \
   --set externalDatabase.user=druppie \
   --set externalDatabase.password=DB_PASSWORD \
   --set externalDatabase.database=keycloak

@@ -235,4 +235,7 @@ func (m *Manager) loadEnv() {
 			m.config.Server.CleanupDays = days
 		}
 	}
+	if iam := os.Getenv("IAM_PROVIDER"); iam != "" {
+		m.config.IAM.Provider = iam
+	}
 }

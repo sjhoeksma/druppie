@@ -28,7 +28,7 @@ import (
 
 func main() {
 	var rootCmd = &cobra.Command{
-		Use:   "druppie-core",
+		Use:   "druppie",
 		Short: "Druppie Core Helper CLI & API Server",
 		Long: `Druppie Core manages the Registry, Planner, and Orchestration API. 
 By default, it starts the API Server on port 8080. 
@@ -39,6 +39,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	var llmProviderOverride string
 	var buildProviderOverride string
 	var debug bool
+	var demo bool
 	var planID string
 
 	// Register commands
@@ -48,6 +49,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine
 	setup := func(_ *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, iam.Provider, error) {
+		// If demo flag is set, force IAM provider to demo via env var (handled by config manager loadEnv)
+		if demo {
+			os.Setenv("IAM_PROVIDER", "demo")
+		}
+
 		// Check if we are in 'core' and need to move up to project root
 		cwd, _ := os.Getwd()
 		if filepath.Base(cwd) == "core" {
@@ -250,7 +256,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				// Registry Endpoints
 				r.Get("/registry", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					blocks := reg.ListBuildingBlocks()
+					user, _ := iam.GetUserFromContext(r.Context())
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					blocks := reg.ListBuildingBlocks(groups)
 					json.NewEncoder(w).Encode(blocks)
 				})
 
@@ -509,27 +520,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 						}
 					}()
-				})
-
-				// Agent Endpoint
-				r.Get("/agents", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					agents := reg.ListAgents()
-					json.NewEncoder(w).Encode(agents)
-				})
-
-				// MCP Endpoint
-				r.Get("/mcp", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					list := reg.ListMCPServers()
-					json.NewEncoder(w).Encode(list)
-				})
-
-				// Skill Endpoint
-				r.Get("/skills", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					skills := reg.ListSkills()
-					json.NewEncoder(w).Encode(skills)
 				})
 
 				// Configuration Endpoint
@@ -821,6 +811,41 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					w.WriteHeader(http.StatusOK)
 					w.Write([]byte(fmt.Sprintf(`{"filename": "%s"}`, filename)))
 				})
+				// Agent Endpoint
+				r.Get("/agents", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					agents := reg.ListAgents(groups)
+					json.NewEncoder(w).Encode(agents)
+				})
+
+				// MCP Endpoint
+				r.Get("/mcp", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					list := reg.ListMCPServers(groups)
+					json.NewEncoder(w).Encode(list)
+				})
+
+				// Skill Endpoint
+				r.Get("/skills", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					list := reg.ListSkills(groups)
+					json.NewEncoder(w).Encode(list)
+				})
 
 				r.Get("/logs/{id}", func(w http.ResponseWriter, r *http.Request) {
 					id := chi.URLParam(r, "id")
@@ -914,6 +939,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				})
 			})
 
+			// Setup IAM Routes
+			r.Group(func(r chi.Router) {
+				iamProvider.RegisterRoutes(r.With(middleware.Logger))
+			})
+
 			// Serve static files (expecting 'ui' folder to be present in root)
 			workDir, _ := os.Getwd()
 			var staticRoot string
@@ -960,7 +990,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			fmt.Printf("Loaded: %d Building Blocks, %d Skills, %d MCP Servers, %d Agents\n",
 				stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"])
 
-			for _, bb := range reg.ListBuildingBlocks() {
+			// Admin has all access
+			adminGroups := []string{"root", "admin"}
+
+			for _, bb := range reg.ListBuildingBlocks(adminGroups) {
 				fmt.Printf("- [Block] %s: %s\n", bb.ID, bb.Name)
 			}
 
@@ -978,7 +1011,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// ListAgents was added in Phase 2
-			for _, agent := range reg.ListAgents() {
+			for _, agent := range reg.ListAgents(adminGroups) {
 				fmt.Printf("- [Agent] %s: %s\n", agent.ID, agent.Name)
 			}
 		},
@@ -1301,6 +1334,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.PersistentFlags().StringVar(&llmProviderOverride, "llm-provider", "", "Override default LLM provider")
 	rootCmd.PersistentFlags().StringVar(&buildProviderOverride, "build-provider", "", "Override default Build provider")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", true, "Enable debug mode (print raw LLM responses)")
+	rootCmd.PersistentFlags().BoolVar(&demo, "demo", false, "Enable demo mode (full admin access, no login)")
 
 	rootCmd.AddCommand(registryCmd)
 	rootCmd.AddCommand(chatCmd)

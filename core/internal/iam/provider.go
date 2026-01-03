@@ -67,6 +67,8 @@ func NewProvider(cfg config.IAMConfig, baseDir string) (Provider, error) {
 		return NewKeycloakProvider(cfg.Keycloak), nil
 	case "local":
 		return NewLocalProvider(baseDir)
+	case "demo":
+		return NewDemoProvider(), nil
 	default:
 		fmt.Printf("Unknown IAM provider '%s', defaulting to local\n", cfg.Provider)
 		return NewLocalProvider(baseDir)

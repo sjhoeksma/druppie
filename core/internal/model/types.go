@@ -20,7 +20,8 @@ type BuildingBlock struct {
 	Outputs      []string          `json:"outputs" yaml:"outputs"`
 	GitRepo      string            `json:"git_repo" yaml:"git_repo"`
 	// Original fields from Frontmatter might vary, so we map them as needed
-	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	AuthGroups []string          `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
 // Skill represents an AI persona or system prompt
@@ -30,6 +31,7 @@ type Skill struct {
 	Description  string   `json:"description" yaml:"description"`
 	SystemPrompt string   `json:"system_prompt" yaml:"system_prompt"`
 	AllowedTools []string `json:"allowed_tools" yaml:"allowed_tools"`
+	AuthGroups   []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
 // Intent represents the analyzed user request
@@ -67,10 +69,11 @@ type ExecutionPlan struct {
 
 // MCPServer represents an external tool server
 type MCPServer struct {
-	ID        string `json:"id" yaml:"id"`
-	Name      string `json:"name" yaml:"name"`
-	URL       string `json:"url" yaml:"url"`
-	Transport string `json:"transport" yaml:"transport"` // sse, stdio
+	ID         string   `json:"id" yaml:"id"`
+	Name       string   `json:"name" yaml:"name"`
+	URL        string   `json:"url" yaml:"url"`
+	Transport  string   `json:"transport" yaml:"transport"` // sse, stdio
+	AuthGroups []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
 // AgentDefinition represents a temple for spawning agents
@@ -88,6 +91,7 @@ type AgentDefinition struct {
 	Condition    string   `json:"condition" yaml:"condition"`   // Logic for when this agent should be triggered
 	Workflow     string   `json:"workflow" yaml:"workflow"`     // Mermaid diagram or text workflow
 	Priority     float64  `json:"priority" yaml:"priority"`
+	AuthGroups   []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
 // ComplianceRule represents a policy
