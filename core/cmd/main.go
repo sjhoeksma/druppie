@@ -454,7 +454,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 3. Execution
-						if intent.Action == "create_project" {
+						// Treat any action that IS NOT simple chat as a request for Planning/Execution.
+						// This ensures query_registry, orchestrate_complex, etc., are handled by the Planner.
+						if intent.Action != "general_chat" {
 							// If we were chatting, we might want to start fresh or pivot.
 							// For simplicity, we treat this as a "New Plan" triggering event.
 							// Stop the active task to prevent it from marking the plan as "Completed"

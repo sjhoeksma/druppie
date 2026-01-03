@@ -191,6 +191,17 @@ Registry items (Agents, Skills, Building Blocks) can now be restricted by user g
 *   **Admin/Root**: Sees everything.
 *   **Unauthenticated**: Sees only public items (no `auth_groups` defined).
 
+### 5. Plan Access Control
+Plans are now governed by granular access control:
+*   **Ownership**: Plans created by a user are assigned a `creator_id` matching their username.
+*   **Group Access**: Plans can be shared with specific groups via the `allowed_groups` field. Users in these groups can view and interact with the plan.
+*   **Demo Mode Protection**: When enabled, the Demo provider bypasses these checks, making all plans visible for demonstration purposes.
+
+**Management Commands (Chat UI):**
+*   `/add_group <group>`: Grant access to a plan for a user group.
+*   `/remove_group <group>`: Revoke group access.
+*   `/list_groups`: View currently authorized groups for the active plan.
+
 ## 📦 Git Configuration
 
 Druppie Core requires a Git repository to store project code. You can use the internal Gitea instance (default) or an external provider.
