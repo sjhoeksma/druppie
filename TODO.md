@@ -12,19 +12,21 @@
     - [x] Add ingress path to Postgres Admin tool (/sys/postgres) (Skipped - Tool not installed)
     - [x] Add ingress path to Rancher UI (/sys/rancher)
     - [x] Add ingress path to Grafana (/sys/grafana)
-- [ ] Add multi user support, login via KeyCloak
+- [x] Add multi user support, login via KeyCloak
 - [ ] Add support for multiple pods (one per druppie project)
-- [ ] Add ai provider selection
-- [ ] Add authentication groups
+- [x] Add ai provider selection
+- [x] Add authentication groups
 - [ ] Add K3D support intel based macs
-- [ ] Configure the total solution as one working piece 
+- [x] Configure the total solution as one working piece 
 - [x] Convert generate_search_index to a druppie command and run it in docker file
-- [ ] Add security provider selection
-- [ ] Add authentication groups
+- [x] Add security provider selection
+- [x] Add authentication groups
 - [ ] Secret management
+- [ ] Finish the admin UI
+- [ ] Version number by checking git tags
 
 # TESTING
 
-- [ ] maak een kinder film over het zuiveren van afval water, 1 min, youtube
-- [ ] Kan je mij een verhaal vertellen over druppie
-- [ ] Vertel meer over het Druppie-platform.
+- [x] VIDEO: maak een kinder film over het zuiveren van afval water, 1 min, youtube
+- [x] CHAT: Kan je mij een verhaal vertellen over druppie
+- [x] CHAT Continue: Vertel meer over het Druppie-platform.

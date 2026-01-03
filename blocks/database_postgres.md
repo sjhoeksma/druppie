@@ -54,7 +54,7 @@ Een voorbeeld van een High-Available cluster met 3 instances (1 Primary, 2 Repli
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: druppie-core-db
+  name: druppie-db
 spec:
   instances: 3
   
@@ -79,9 +79,9 @@ spec:
 ### 2. Connecteren vanuit Applicaties
 Zodra het cluster draait, maakt CNPG automatisch de volgende resources aan die door applicaties gebruikt kunnen worden:
 
-*   **Service (`druppie-core-db-rw`)**: Een stabiel endpoint voor schrijfoperaties (Primary).
-*   **Service (`druppie-core-db-ro`)**: Een stabiel endpoint voor leesoperaties (Read-Only replicas).
-*   **Secret (`druppie-core-db-app`)**: Bevat de inloggegevens (`username`, `password`, `dbname`, `host`).
+*   **Service (`druppie-db-rw`)**: Een stabiel endpoint voor schrijfoperaties (Primary).
+*   **Service (`druppie-db-ro`)**: Een stabiel endpoint voor leesoperaties (Read-Only replicas).
+*   **Secret (`druppie-db-app`)**: Bevat de inloggegevens (`username`, `password`, `dbname`, `host`).
 
 *Voorbeeld Pod gebruik:*
 ```yaml
@@ -95,16 +95,16 @@ spec:
     image: my-app:latest
     env:
       - name: DB_HOST
-        value: druppie-core-db-rw
+        value: druppie-db-rw
       - name: DB_USER
         valueFrom:
           secretKeyRef:
-            name: druppie-core-db-app
+            name: druppie-db-app
             key: username
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
-            name: druppie-core-db-app
+            name: druppie-db-app
             key: password
 ```
 

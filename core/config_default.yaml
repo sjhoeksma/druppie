@@ -33,3 +33,5 @@ git:
     url: ""
     user: ""
     token: ""
+iam: # ProviderOptions: local, keycloak, demo
+    provider: local

@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: druppie-core
+  repository: druppie
   pullPolicy: IfNotPresent
   tag: "latest"
 

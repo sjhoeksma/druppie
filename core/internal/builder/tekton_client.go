@@ -75,7 +75,7 @@ func (c *TektonClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 			GenerateName: runName + "-",
 			Namespace:    c.namespace,
 			Labels: map[string]string{
-				"druppie.nl/managed-by": "druppie-core",
+				"druppie.nl/managed-by": "druppie",
 				"druppie.nl/repo":       repoURL,
 			},
 		},

@@ -43,7 +43,7 @@ helm upgrade --install gitea gitea-charts/gitea \
   --set persistence.size=10Gi \
   --set postgresql.enabled=false \
   --set gitea.database.type=postgres \
-  --set gitea.database.host=druppie-core-db-rw.default.svc.cluster.local \
+  --set gitea.database.host=druppie-db-rw.default.svc.cluster.local \
   --set gitea.database.user=druppie \
   --set gitea.database.name=gitea
 ```

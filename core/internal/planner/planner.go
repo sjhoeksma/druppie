@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
@@ -116,14 +117,20 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 }
 
 func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID string) (model.ExecutionPlan, error) {
+	// Extract user groups for filtering
+	userGroups := []string{}
+	if user, ok := iam.GetUserFromContext(ctx); ok && user != nil {
+		userGroups = user.Groups
+	}
+
 	// 1. Gather Context from Registry
-	blocks := p.registry.ListBuildingBlocks()
+	blocks := p.registry.ListBuildingBlocks(userGroups)
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
 		blockNames = append(blockNames, b.Name)
 	}
 
-	allAgents := p.registry.ListAgents()
+	allAgents := p.registry.ListAgents(userGroups)
 
 	// Filter Agents
 	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents)
@@ -301,10 +308,17 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if planID == "" {
 		planID = fmt.Sprintf("plan-%d", time.Now().Unix())
 	}
+
+	creatorID := ""
+	if u, ok := iam.GetUserFromContext(ctx); ok {
+		creatorID = u.ID
+	}
+
 	plan := model.ExecutionPlan{
 		// Use a UUID or timestamp.
 		// Note: The Caller (main.go) dictates the ID in the async flow, but for synchronous creation we generate one.
 		ID:             planID,
+		CreatorID:      creatorID,
 		Intent:         intent,
 		Status:         "created",
 		Steps:          steps,
@@ -390,7 +404,12 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// 2. Re-Prompt LLM for Next Steps
 	// Filter Active Agents based on Plan Selection
 	// Only show agents that were originally selected + their sub-agents
-	allRegistryAgents := p.registry.ListAgents()
+	// Extract user groups
+	userGroups := []string{}
+	if user, ok := iam.GetUserFromContext(ctx); ok && user != nil {
+		userGroups = user.Groups
+	}
+	allRegistryAgents := p.registry.ListAgents(userGroups)
 	allowedMap := make(map[string]bool)
 	for _, id := range plan.SelectedAgents {
 		allowedMap[id] = true
@@ -449,7 +468,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		os.Exit(1)
 	}
 
-	blocks := p.registry.ListBuildingBlocks()
+	blocks := p.registry.ListBuildingBlocks(userGroups)
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
 		blockNames = append(blockNames, b.Name)
