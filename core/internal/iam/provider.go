@@ -232,6 +232,12 @@ func (p *LocalProvider) saveSessions() error {
 	return os.WriteFile(path, data, 0644)
 }
 
+func (p *LocalProvider) ReloadSessions() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.loadSessions()
+}
+
 // Login performs authentication for CLI
 func (p *LocalProvider) Login(username, password string) (string, *User, error) {
 	p.mu.RLock()
@@ -258,6 +264,15 @@ func (p *LocalProvider) Login(username, password string) (string, *User, error) 
 		Email:    u.Email,
 		Groups:   u.Groups,
 	}, nil
+}
+
+// Logout removes the session for CLI
+func (p *LocalProvider) Logout(token string) error {
+	p.mu.Lock()
+	delete(p.sessions, token)
+	err := p.saveSessions()
+	p.mu.Unlock()
+	return err
 }
 
 func (p *LocalProvider) GetUserByToken(token string) (*User, bool) {
@@ -406,10 +421,7 @@ func (p *LocalProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
 	if auth != "" && strings.HasPrefix(auth, "Bearer ") {
 		token := strings.TrimPrefix(auth, "Bearer ")
-		p.mu.Lock()
-		delete(p.sessions, token)
-		_ = p.saveSessions()
-		p.mu.Unlock()
+		_ = p.Logout(token)
 	}
 	w.WriteHeader(http.StatusOK)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/router"
 	"github.com/sjhoeksma/druppie/core/internal/store"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func getAuthContext(ctx context.Context, p iam.Provider, demo bool) context.Context {
@@ -1064,8 +1065,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			user = strings.TrimSpace(user)
 
 			fmt.Print("Password: ")
-			pass, _ := reader.ReadString('\n')
-			pass = strings.TrimSpace(pass)
+			bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+			if err != nil {
+				fmt.Println("\nError reading password")
+				os.Exit(1)
+			}
+			pass := string(bytePassword)
+			fmt.Println() // Print newline after password input
 
 			token, u, err := localProv.Login(user, pass)
 			if err != nil {
@@ -1085,6 +1091,19 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "logout",
 		Short: "Logout from local session",
 		Run: func(cmd *cobra.Command, args []string) {
+			// First clean up server side if possible
+			// We need setup to get the provider
+			// Ignoring errors here since logout should be best-effort on local cleanup
+			_, _, _, _, _, iamProv, _ := setup(cmd)
+
+			if localProv, ok := iamProv.(*iam.LocalProvider); ok {
+				token, _ := iam.LoadClientToken()
+				if token != "" {
+					_ = localProv.ReloadSessions() // Sync first just in case
+					_ = localProv.Logout(token)
+				}
+			}
+
 			_ = iam.ClearClientToken()
 			fmt.Println("Logged out.")
 		},
@@ -1104,6 +1123,23 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 			cfg := cfgMgr.Get()
 			ctx := getAuthContext(context.Background(), iamProv, demo)
+
+			if user, _ := iam.GetUserFromContext(ctx); user == nil {
+				fmt.Println("You need to login first.")
+				loginCmd.Run(cmd, args)
+
+				// Force reload of sessions for the current provider instance
+				if lp, ok := iamProv.(*iam.LocalProvider); ok {
+					_ = lp.ReloadSessions()
+				}
+
+				// Re-acquire context after login
+				ctx = getAuthContext(context.Background(), iamProv, demo)
+				if user, _ := iam.GetUserFromContext(ctx); user == nil {
+					fmt.Println("Login failed or cancelled.")
+					os.Exit(1)
+				}
+			}
 
 			// Initialize TaskManager
 			tm = NewTaskManager(planner)
@@ -1245,6 +1281,22 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				os.Exit(1)
 			}
 			ctx := getAuthContext(context.Background(), iamProv, demo)
+
+			if user, _ := iam.GetUserFromContext(ctx); user == nil {
+				fmt.Println("You need to login first.")
+				loginCmd.Run(cmd, args)
+
+				// Force reload of sessions for the current provider instance
+				if lp, ok := iamProv.(*iam.LocalProvider); ok {
+					_ = lp.ReloadSessions()
+				}
+
+				ctx = getAuthContext(context.Background(), iamProv, demo)
+				if user, _ := iam.GetUserFromContext(ctx); user == nil {
+					fmt.Println("Login failed or cancelled.")
+					os.Exit(1)
+				}
+			}
 
 			prompt := strings.Join(args, " ")
 
