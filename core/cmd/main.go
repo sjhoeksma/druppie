@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/config"
+	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
@@ -23,13 +24,48 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/router"
 	"github.com/sjhoeksma/druppie/core/internal/store"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+)
+
+func getAuthContext(ctx context.Context, p iam.Provider, demo bool) context.Context {
+	if demo {
+		u := &iam.User{ID: "demo", Username: "demo", Groups: []string{"root", "admin"}}
+		return iam.ContextWithUser(ctx, u)
+	}
+
+	if _, ok := p.(*iam.DemoProvider); ok {
+		u := &iam.User{ID: "demo", Username: "demo", Groups: []string{"root", "admin"}}
+		return iam.ContextWithUser(ctx, u)
+	}
+
+	token, err := iam.LoadClientToken()
+	if err != nil || token == "" {
+		return ctx
+	}
+
+	if lp, ok := p.(*iam.LocalProvider); ok {
+		if u, ok := lp.GetUserByToken(token); ok {
+			return iam.ContextWithUser(ctx, u)
+		}
+	}
+	return ctx
+}
+
+var (
+	Version = "dev"
 )
 
 func main() {
+	// 0. Version Check
+	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
+		fmt.Printf("Druppie version: %s\n", Version)
+		os.Exit(0)
+	}
+
 	var rootCmd = &cobra.Command{
-		Use:   "druppie-core",
-		Short: "Druppie Core Helper CLI & API Server",
-		Long: `Druppie Core manages the Registry, Planner, and Orchestration API. 
+		Use:   "druppie",
+		Short: "Druppie Helper CLI & API Server",
+		Long: `Druppie manages the Registry, Planner, and Orchestration API. 
 By default, it starts the API Server on port 8080. 
 Use global flags like --plan-id to resume existing planning tasks or --llm-provider to switch backends.`,
 	}
@@ -38,6 +74,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	var llmProviderOverride string
 	var buildProviderOverride string
 	var debug bool
+	var demo bool
 	var planID string
 
 	// Register commands
@@ -46,7 +83,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 	// Helper to bootstrap dependencies
 	// Returns ConfigManager to allow updates, and Builder Engine
-	setup := func(_ *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, error) {
+	setup := func(_ *cobra.Command) (*config.Manager, *registry.Registry, *router.Router, *planner.Planner, builder.BuildEngine, iam.Provider, error) {
+		// If demo flag is set, force IAM provider to demo via env var (handled by config manager loadEnv)
+		if demo {
+			os.Setenv("IAM_PROVIDER", "demo")
+		}
+
 		// Check if we are in 'core' and need to move up to project root
 		cwd, _ := os.Getwd()
 		if filepath.Base(cwd) == "core" {
@@ -58,20 +100,20 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		fmt.Printf("Loading registry from: %s\n", rootDir)
 		reg, err := registry.LoadRegistry(rootDir)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
 		druppieStore, err := store.NewFileStore(storeDir)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("store init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("store init error: %w", err)
 		}
 
 		// Load Configuration from Store
 		cfgMgr, err := config.NewManager(druppieStore)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("config load error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("config load error: %w", err)
 		}
 		cfg := cfgMgr.Get()
 
@@ -88,26 +130,31 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		// Initialize Build Engine
 		buildEngine, err := builder.NewEngine(cfg.Build)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("builder init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("builder init error: %w", err)
 		}
 
 		// Initialize LLM with Config
 		llmManager, err := llm.NewManager(context.Background(), cfg.LLM)
 		if err != nil {
-			return nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
 		}
 
 		r := router.NewRouter(llmManager, druppieStore, debug)
 		p := planner.NewPlanner(llmManager, reg, druppieStore, debug)
 
-		return cfgMgr, reg, r, p, buildEngine, nil
+		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
+		if err != nil {
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("iam init error: %w", err)
+		}
+
+		return cfgMgr, reg, r, p, buildEngine, iamProv, nil
 	}
 
 	var serveCmd = &cobra.Command{
 		Use:   "serve",
-		Short: "Start the Druppie Core API Server",
+		Short: "Start the Druppie API Server",
 		Run: func(cmd *cobra.Command, args []string) {
-			cfgMgr, reg, routerService, plannerService, buildEngine, err := setup(cmd)
+			cfgMgr, reg, routerService, plannerService, buildEngine, iamProvider, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Startup Error: %v\n", err)
 				os.Exit(1)
@@ -225,8 +272,37 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			})
 			r.Use(middleware.Recoverer)
 
+			// UI Route
+			r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				http.ServeFile(w, r, filepath.Join(root, "ui", "admin.html"))
+			})
+
+			// Public System Info
+			r.Get("/info", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				cfg := cfgMgr.Get()
+
+				// Determine if auth is required
+				// Logic: If IAM provider is NOT 'demo' (and maybe eventually 'none'), it is required.
+				// However, config.IAM.Provider defaults to 'local'.
+				authRequired := cfg.IAM.Provider != "demo"
+
+				resp := map[string]interface{}{
+					"auth_required": authRequired,
+					"iam": map[string]string{
+						"provider": cfg.IAM.Provider,
+					},
+				}
+				json.NewEncoder(w).Encode(resp)
+			})
+
 			// API Routes
 			r.Route("/v1", func(r chi.Router) {
+				// Apply IAM Middleware to all v1 routes
+				r.Use(iamProvider.Middleware())
+				iamProvider.RegisterRoutes(r)
+
 				r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("OK"))
 				})
@@ -234,7 +310,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				// Registry Endpoints
 				r.Get("/registry", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					blocks := reg.ListBuildingBlocks()
+					user, _ := iam.GetUserFromContext(r.Context())
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					blocks := reg.ListBuildingBlocks(groups)
 					json.NewEncoder(w).Encode(blocks)
 				})
 
@@ -274,6 +355,16 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							Status: "completed",
 							Steps:  []model.Step{},
 						}
+						// If user is authenticated, set creator ID
+						user, _ := iam.GetUserFromContext(r.Context())
+						if user != nil {
+							currentPlan.CreatorID = user.Username
+							// Optional: Add creator's groups by default?
+							// currentPlan.AllowedGroups = user.Groups
+							// Let's keep it clean for now, maybe just Creator access implicity logic elsewhere?
+							// The user request was "allow a plan to be accessible by users that are within the group list"
+							// So we need to populate this list.
+						}
 					} else {
 						// Update status of existing plan to indicate activity
 						currentPlan.Status = "running"
@@ -307,8 +398,16 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					})
 
 					// Process asynchronously
+					// Capture user from request context before async
+					user, userOk := iam.GetUserFromContext(r.Context())
+
 					// Process asynchronously
 					go func() {
+						// Create background context with user
+						ctx := context.Background()
+						if userOk {
+							ctx = iam.ContextWithUser(ctx, user)
+						}
 						tm.OutputChan <- fmt.Sprintf("[%s] Analyzing request...", planID)
 
 						effectivePrompt := req.Prompt
@@ -336,7 +435,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 2. Analyze Intent
-						intent, rawRouterResp, err := routerService.Analyze(context.Background(), effectivePrompt)
+						intent, rawRouterResp, err := routerService.Analyze(ctx, effectivePrompt)
 						if err != nil {
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
@@ -365,7 +464,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 3. Execution
-						if intent.Action == "create_project" {
+						// Treat any action that IS NOT simple chat as a request for Planning/Execution.
+						// This ensures query_registry, orchestrate_complex, etc., are handled by the Planner.
+						if intent.Action != "general_chat" {
 							// If we were chatting, we might want to start fresh or pivot.
 							// For simplicity, we treat this as a "New Plan" triggering event.
 							// Stop the active task to prevent it from marking the plan as "Completed"
@@ -410,7 +511,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 							tm.OutputChan <- fmt.Sprintf("[%s] Generating Plan...", planID)
 
-							fullPlan, err := plannerService.CreatePlan(context.Background(), intent, planID)
+							fullPlan, err := plannerService.CreatePlan(ctx, intent, planID)
 							if err != nil {
 								tm.OutputChan <- fmt.Sprintf("[%s] Planner failed: %v", planID, err)
 								currentPlan.Status = "stopped"
@@ -451,7 +552,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 
 							// START THE TASK
-							tm.StartTask(context.Background(), currentPlan)
+							tm.StartTask(ctx, currentPlan)
 						} else {
 							tm.OutputChan <- fmt.Sprintf("[%s] Request handled by Router (no plan needed).", planID)
 
@@ -487,24 +588,33 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}()
 				})
 
-				// Agent Endpoint
-				r.Get("/agents", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					agents := reg.ListAgents()
-					json.NewEncoder(w).Encode(agents)
-				})
-
-				// Skill Endpoint
-				r.Get("/skills", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					skills := reg.ListSkills()
-					json.NewEncoder(w).Encode(skills)
-				})
-
 				// Configuration Endpoint
 				r.Get("/config", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(cfgMgr.Get().Sanitize())
+				})
+				r.Put("/config", func(w http.ResponseWriter, r *http.Request) {
+					// We need the raw config struct from the request
+					// Note: validation should happen here
+					var newCfg config.Config
+					if err := json.NewDecoder(r.Body).Decode(&newCfg); err != nil {
+						http.Error(w, "Invalid Config", http.StatusBadRequest)
+						return
+					}
+					// Update via manager
+					if err := cfgMgr.Update(newCfg); err != nil {
+						http.Error(w, fmt.Sprintf("Failed to update config: %v", err), http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				})
+
+				// Version Endpoint
+				r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(map[string]string{
+						"version": Version,
+					})
 				})
 
 				// Build Trigger Endpoint
@@ -553,6 +663,46 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					if err != nil {
 						http.Error(w, "Failed to list plans", http.StatusInternalServerError)
 						return
+					}
+
+					// Filter plans by creator (if user is authenticated)
+					if user, ok := iam.GetUserFromContext(r.Context()); ok {
+						// If user is 'demo' user (ID 'demo-user'), show everything
+						if user.ID == "demo-user" {
+							// No filtering needed
+						} else {
+							// Check if user is admin (optional, for now strictly filtering per request)
+							// Iterate and filter
+							var filtered []model.ExecutionPlan
+							for _, p := range plans {
+								// Show plan if:
+								// 1. It has no creator (legacy/demo/public)
+								// 2. User is the creator
+								// 3. User is in one of the allowed groups
+								if p.CreatorID == "" || p.CreatorID == user.Username {
+									filtered = append(filtered, p)
+									continue
+								}
+
+								// Check groups
+								allowed := false
+								for _, allowedGroup := range p.AllowedGroups {
+									for _, userGroup := range user.Groups {
+										if allowedGroup == userGroup {
+											allowed = true
+											break
+										}
+									}
+									if allowed {
+										break
+									}
+								}
+								if allowed {
+									filtered = append(filtered, p)
+								}
+							}
+							plans = filtered
+						}
 					}
 
 					// Update plan statuses based on actual task states
@@ -611,11 +761,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							plan.Status = "stopped"
 						}
 					} else {
-						// No active task - check if plan says running but task is gone
-						// We prefer to return the persistent status (even if zombie) to avoid race conditions during startup
-						// if plan.Status == "running" || plan.Status == "waiting_input" {
-						// 	  plan.Status = "stopped"
-						// }
+						// No active task - check if plan says running but task is gone (Zombie State)
+						if plan.Status == "running" || plan.Status == "waiting_input" {
+							plan.Status = "stopped"
+							// Fix persistence
+							_ = plannerService.Store.SavePlan(plan)
+						}
 					}
 					tm.mu.Unlock()
 
@@ -693,6 +844,70 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					w.WriteHeader(http.StatusOK)
 				})
 
+				// Group Management Endpoints for Plans
+				r.Post("/plans/{id}/groups/{group}", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					group := chi.URLParam(r, "group")
+
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+
+					// Check duplication
+					exists := false
+					for _, g := range plan.AllowedGroups {
+						if g == group {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						plan.AllowedGroups = append(plan.AllowedGroups, group)
+						if err := plannerService.Store.SavePlan(plan); err != nil {
+							http.Error(w, "Failed to update plan", http.StatusInternalServerError)
+							return
+						}
+					}
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r.Delete("/plans/{id}/groups/{group}", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					group := chi.URLParam(r, "group")
+
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+
+					newGroups := []string{}
+					for _, g := range plan.AllowedGroups {
+						if g != group {
+							newGroups = append(newGroups, g)
+						}
+					}
+					plan.AllowedGroups = newGroups
+					if err := plannerService.Store.SavePlan(plan); err != nil {
+						http.Error(w, "Failed to update plan", http.StatusInternalServerError)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				})
+
+				r.Get("/plans/{id}/groups", func(w http.ResponseWriter, r *http.Request) {
+					id := chi.URLParam(r, "id")
+					plan, err := plannerService.Store.GetPlan(id)
+					if err != nil {
+						http.Error(w, "Plan not found", http.StatusNotFound)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(plan.AllowedGroups)
+				})
+
 				r.Post("/plans/{id}/files", func(w http.ResponseWriter, r *http.Request) {
 					id := chi.URLParam(r, "id")
 					if !strings.HasPrefix(id, "plan-") {
@@ -761,6 +976,41 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 					w.WriteHeader(http.StatusOK)
 					w.Write([]byte(fmt.Sprintf(`{"filename": "%s"}`, filename)))
+				})
+				// Agent Endpoint
+				r.Get("/agents", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					agents := reg.ListAgents(groups)
+					json.NewEncoder(w).Encode(agents)
+				})
+
+				// MCP Endpoint
+				r.Get("/mcp", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					list := reg.ListMCPServers(groups)
+					json.NewEncoder(w).Encode(list)
+				})
+
+				// Skill Endpoint
+				r.Get("/skills", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					user, _ := iamProvider.GetUser(r)
+					var groups []string
+					if user != nil {
+						groups = user.Groups
+					}
+					list := reg.ListSkills(groups)
+					json.NewEncoder(w).Encode(list)
 				})
 
 				r.Get("/logs/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -855,6 +1105,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				})
 			})
 
+			// Setup IAM Routes
+			r.Group(func(r chi.Router) {
+				iamProvider.RegisterRoutes(r.With(middleware.Logger))
+			})
+
 			// Serve static files (expecting 'ui' folder to be present in root)
 			workDir, _ := os.Getwd()
 			var staticRoot string
@@ -879,6 +1134,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			if port == "" {
 				port = "8080"
 			}
+			fmt.Printf("Providers: Git=[%s], IAM=[%s], LLM=[%s]\n",
+				cfg.Git.Provider,
+				cfg.IAM.Provider,
+				cfg.LLM.DefaultProvider,
+			)
 			fmt.Printf("Starting server on port %s...\n", port)
 			// Binds to 0.0.0.0 (all interfaces)
 			if err := http.ListenAndServe(":"+port, r); err != nil {
@@ -892,7 +1152,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "registry",
 		Short: "Dump the loaded registry",
 		Run: func(cmd *cobra.Command, args []string) {
-			_, reg, _, _, _, err := setup(cmd)
+			_, reg, _, _, _, _, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
@@ -901,7 +1161,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			fmt.Printf("Loaded: %d Building Blocks, %d Skills, %d MCP Servers, %d Agents\n",
 				stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"])
 
-			for _, bb := range reg.ListBuildingBlocks() {
+			// Admin has all access
+			adminGroups := []string{"root", "admin"}
+
+			for _, bb := range reg.ListBuildingBlocks(adminGroups) {
 				fmt.Printf("- [Block] %s: %s\n", bb.ID, bb.Name)
 			}
 
@@ -919,13 +1182,78 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// ListAgents was added in Phase 2
-			for _, agent := range reg.ListAgents() {
+			for _, agent := range reg.ListAgents(adminGroups) {
 				fmt.Printf("- [Agent] %s: %s\n", agent.ID, agent.Name)
 			}
 		},
 	}
 
 	// runInteractiveLoop Removed
+
+	var loginCmd = &cobra.Command{
+		Use:   "login",
+		Short: "Login to local provider",
+		Run: func(cmd *cobra.Command, args []string) {
+			_, _, _, _, _, iamProv, err := setup(cmd)
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				os.Exit(1)
+			}
+			localProv, ok := iamProv.(*iam.LocalProvider)
+			if !ok {
+				fmt.Println("Error: Login only supported for 'local' IAM provider.")
+				os.Exit(1)
+			}
+
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Username: ")
+			user, _ := reader.ReadString('\n')
+			user = strings.TrimSpace(user)
+
+			fmt.Print("Password: ")
+			bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+			if err != nil {
+				fmt.Println("\nError reading password")
+				os.Exit(1)
+			}
+			pass := string(bytePassword)
+			fmt.Println() // Print newline after password input
+
+			token, u, err := localProv.Login(user, pass)
+			if err != nil {
+				fmt.Printf("Login failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			if err := iam.SaveClientToken(token); err != nil {
+				fmt.Printf("Failed to save session: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Logged in as %s (Groups: %v)\n", u.Username, u.Groups)
+		},
+	}
+
+	var logoutCmd = &cobra.Command{
+		Use:   "logout",
+		Short: "Logout from local session",
+		Run: func(cmd *cobra.Command, args []string) {
+			// First clean up server side if possible
+			// We need setup to get the provider
+			// Ignoring errors here since logout should be best-effort on local cleanup
+			_, _, _, _, _, iamProv, _ := setup(cmd)
+
+			if localProv, ok := iamProv.(*iam.LocalProvider); ok {
+				token, _ := iam.LoadClientToken()
+				if token != "" {
+					_ = localProv.ReloadSessions() // Sync first just in case
+					_ = localProv.Logout(token)
+				}
+			}
+
+			_ = iam.ClearClientToken()
+			fmt.Println("Logged out.")
+		},
+	}
 
 	// TaskManager instance
 	var tm *TaskManager
@@ -934,17 +1262,35 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Use:   "chat",
 		Short: "Start interactive chat",
 		Run: func(cmd *cobra.Command, args []string) {
-			cfgMgr, _, router, planner, _, err := setup(cmd)
+			cfgMgr, _, router, planner, _, iamProv, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
 			}
 			cfg := cfgMgr.Get()
+			ctx := getAuthContext(context.Background(), iamProv, demo)
+
+			if user, _ := iam.GetUserFromContext(ctx); user == nil {
+				fmt.Println("You need to login first.")
+				loginCmd.Run(cmd, args)
+
+				// Force reload of sessions for the current provider instance
+				if lp, ok := iamProv.(*iam.LocalProvider); ok {
+					_ = lp.ReloadSessions()
+				}
+
+				// Re-acquire context after login
+				ctx = getAuthContext(context.Background(), iamProv, demo)
+				if user, _ := iam.GetUserFromContext(ctx); user == nil {
+					fmt.Println("Login failed or cancelled.")
+					os.Exit(1)
+				}
+			}
 
 			// Initialize TaskManager
 			tm = NewTaskManager(planner)
 
-			fmt.Println("--- Druppie Core Chat (Async) ---")
+			fmt.Println("--- Druppie Chat (Async) ---")
 			fmt.Printf("LLM Provider: %s\n", cfg.LLM.DefaultProvider)
 			fmt.Println("Commands: /exit, /list, /stop <id>, /switch <id>")
 
@@ -960,7 +1306,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				if err != nil {
 					fmt.Printf("[Error] Failed to load plan: %v\n", err)
 				} else {
-					tm.StartTask(context.Background(), plan)
+					tm.StartTask(ctx, plan)
 				}
 			}
 
@@ -1033,21 +1379,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// If not handled by task, treat as new Router Request
 					if !strings.HasPrefix(input, "/") {
 						fmt.Println("[Router - Analyzing]")
-						intent, rawRouterResp, err := router.Analyze(context.Background(), input)
+						intent, rawRouterResp, err := router.Analyze(ctx, input)
 						if err != nil {
 							fmt.Printf("[Error] Router failed: %v\n> ", err)
 							continue
 						}
 
 						if intent.Action == "create_project" {
-							plan, err := planner.CreatePlan(context.Background(), intent, "")
+							plan, err := planner.CreatePlan(ctx, intent, "")
 							if err != nil {
 								fmt.Printf("[Error] Planner failed: %v\n> ", err)
 								continue
 							}
 							_ = planner.Store.LogInteraction(plan.ID, "Router", input, rawRouterResp)
 
-							task := tm.StartTask(context.Background(), plan)
+							task := tm.StartTask(ctx, plan)
 							activeTaskID = task.ID
 							fmt.Printf("[Planner] Started Plan %s\n", plan.ID)
 						} else {
@@ -1075,10 +1421,27 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		Short: "Generate a plan for a given prompt",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			_, _, router, planner, _, err := setup(cmd)
+			_, _, router, planner, _, iamProv, err := setup(cmd)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
+			}
+			ctx := getAuthContext(context.Background(), iamProv, demo)
+
+			if user, _ := iam.GetUserFromContext(ctx); user == nil {
+				fmt.Println("You need to login first.")
+				loginCmd.Run(cmd, args)
+
+				// Force reload of sessions for the current provider instance
+				if lp, ok := iamProv.(*iam.LocalProvider); ok {
+					_ = lp.ReloadSessions()
+				}
+
+				ctx = getAuthContext(context.Background(), iamProv, demo)
+				if user, _ := iam.GetUserFromContext(ctx); user == nil {
+					fmt.Println("Login failed or cancelled.")
+					os.Exit(1)
+				}
 			}
 
 			prompt := strings.Join(args, " ")
@@ -1143,7 +1506,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Initialize TaskManager early to unify output
 			tm := NewTaskManager(planner)
 
-			intent, rawRouterResp, err := router.Analyze(context.Background(), effectivePrompt)
+			intent, rawRouterResp, err := router.Analyze(ctx, effectivePrompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)
@@ -1181,7 +1544,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				intent.Prompt = effectivePrompt
 
 				var err error
-				currentPlan, err = planner.CreatePlan(context.Background(), intent, currentPlan.ID)
+				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
 				if err != nil {
 					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
 					os.Exit(1)
@@ -1196,7 +1559,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// Initialize TaskManager for execution
-			task := tm.StartTask(context.Background(), currentPlan)
+			task := tm.StartTask(ctx, currentPlan)
 			fmt.Printf("[%s] Started Plan execution...\n", currentPlan.ID)
 
 			// Inject the postponed AI response if exists
@@ -1242,8 +1605,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.PersistentFlags().StringVar(&llmProviderOverride, "llm-provider", "", "Override default LLM provider")
 	rootCmd.PersistentFlags().StringVar(&buildProviderOverride, "build-provider", "", "Override default Build provider")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", true, "Enable debug mode (print raw LLM responses)")
+	rootCmd.PersistentFlags().BoolVar(&demo, "demo", false, "Enable demo mode (full admin access, no login)")
 
 	rootCmd.AddCommand(registryCmd)
+	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(serveCmd)

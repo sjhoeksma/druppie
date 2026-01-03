@@ -61,20 +61,40 @@ func (r *Registry) GetAgent(id string) (model.AgentDefinition, error) {
 	return model.AgentDefinition{}, fmt.Errorf("agent %s not found", id)
 }
 
-// ListBuildingBlocks returns all blocks
-func (r *Registry) ListBuildingBlocks() []model.BuildingBlock {
+// hasAccess checks if the user has access to the item based on groups
+func hasAccess(itemGroups, userGroups []string) bool {
+	if len(itemGroups) == 0 {
+		return true
+	}
+	if len(userGroups) == 0 {
+		return false
+	}
+	for _, ig := range itemGroups {
+		for _, ug := range userGroups {
+			if ig == ug {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ListBuildingBlocks returns all blocks accessible to the user
+func (r *Registry) ListBuildingBlocks(userGroups []string) []model.BuildingBlock {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	list := make([]model.BuildingBlock, 0, len(r.BuildingBlocks))
 	for _, v := range r.BuildingBlocks {
-		list = append(list, v)
+		if hasAccess(v.AuthGroups, userGroups) {
+			list = append(list, v)
+		}
 	}
 	return list
 }
 
-// ListAgents returns all agents
-func (r *Registry) ListAgents() []model.AgentDefinition {
+// ListAgents returns all agents accessible to the user
+func (r *Registry) ListAgents(userGroups []string) []model.AgentDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -83,31 +103,37 @@ func (r *Registry) ListAgents() []model.AgentDefinition {
 		if v.Type == "system-agent" {
 			continue
 		}
-		list = append(list, v)
+		if hasAccess(v.AuthGroups, userGroups) {
+			list = append(list, v)
+		}
 	}
 	return list
 }
 
-// ListSkills returns all skills
-func (r *Registry) ListSkills() []model.Skill {
+// ListSkills returns all skills accessible to the user
+func (r *Registry) ListSkills(userGroups []string) []model.Skill {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	list := make([]model.Skill, 0, len(r.Skills))
 	for _, v := range r.Skills {
-		list = append(list, v)
+		if hasAccess(v.AuthGroups, userGroups) {
+			list = append(list, v)
+		}
 	}
 	return list
 }
 
-// ListMCPServers returns all MCP servers
-func (r *Registry) ListMCPServers() []model.MCPServer {
+// ListMCPServers returns all MCP servers accessible to the user
+func (r *Registry) ListMCPServers(userGroups []string) []model.MCPServer {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	list := make([]model.MCPServer, 0, len(r.MCPServers))
 	for _, v := range r.MCPServers {
-		list = append(list, v)
+		if hasAccess(v.AuthGroups, userGroups) {
+			list = append(list, v)
+		}
 	}
 	return list
 }

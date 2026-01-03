@@ -15,6 +15,19 @@ type Config struct {
 	Server ServerConfig `yaml:"server" json:"server"`
 	Build  BuildConfig  `yaml:"build" json:"build"`
 	Git    GitConfig    `yaml:"git" json:"git"`
+	IAM    IAMConfig    `yaml:"iam" json:"iam"`
+}
+
+type IAMConfig struct {
+	Provider string         `yaml:"provider" json:"provider"` // "local", "keycloak"
+	Keycloak KeycloakConfig `yaml:"keycloak" json:"keycloak"`
+}
+
+type KeycloakConfig struct {
+	URL          string `yaml:"url" json:"url"`
+	Realm        string `yaml:"realm" json:"realm"`
+	ClientID     string `yaml:"client_id" json:"client_id"`
+	ClientSecret string `yaml:"client_secret" json:"client_secret"`
 }
 
 type GitConfig struct {
@@ -97,6 +110,9 @@ func NewManager(s store.Store) (*Manager, error) {
 				Provider: "gitea",
 				URL:      "http://gitea-http.gitea.svc.cluster.local:3000",
 			},
+			IAM: IAMConfig{
+				Provider: "local",
+			},
 		},
 	}
 
@@ -175,6 +191,7 @@ func (c Config) Sanitize() Config {
 		p.APIKey = ""
 		safe.LLM.Providers[name] = p
 	}
+	safe.IAM.Keycloak.ClientSecret = ""
 	return safe
 }
 
@@ -217,5 +234,8 @@ func (m *Manager) loadEnv() {
 		if _, err := fmt.Sscanf(cleanup, "%d", &days); err == nil && days > 0 {
 			m.config.Server.CleanupDays = days
 		}
+	}
+	if iam := os.Getenv("IAM_PROVIDER"); iam != "" {
+		m.config.IAM.Provider = iam
 	}
 }

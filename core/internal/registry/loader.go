@@ -161,7 +161,8 @@ func walkAndLoad(dir string, allowedExtensions []string, handler func(path strin
 		var fm []byte
 		var body []byte
 
-		if ext == ".md" {
+		switch ext {
+		case ".md":
 			// Parse Frontmatter + Body
 			var extractErr error
 			fm, body, extractErr = extractFrontmatter(content)
@@ -175,7 +176,7 @@ func walkAndLoad(dir string, allowedExtensions []string, handler func(path strin
 				// No frontmatter found
 				return nil
 			}
-		} else if ext == ".yaml" || ext == ".yml" {
+		case ".yaml", ".yml":
 			// YAML file IS the FM, no body
 			fm = content
 		}

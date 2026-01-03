@@ -148,6 +148,60 @@ curl -X POST -d '{"repo_url":"https://github.com/my/repo", "commit_hash":"HEAD"}
 - `PUT /v1/config`: Update configuration.
 - `POST /v1/chat/completions`: Analyze intent and generate plans.
 
+## 🔐 Authentication & Access Control
+
+Druppie Core now supports multiple Identity Access Management (IAM) providers and Role-Based Access Control (RBAC) for registry filtering.
+
+### 1. IAM Providers
+You can configure the IAM provider in `config.yaml` or via environment variables (`IAM_PROVIDER`).
+*   **Local** (Default): Uses a local user store (`.druppie/iam/users.json`). Good for single-user or small team testing.
+*   **Keycloak**: Integrates with an external Keycloak instance for enterprise SSO.
+*   **Demo**: Disables authentication obstacles and grants full admin access.
+
+### 2. Local CLI Authentication
+When using the CLI locally, you must authenticate to access protected resources (like Planner or Chat) unless you are in Demo mode.
+
+**Login:**
+```bash
+./druppie login
+# Prompts for Username and Password
+# Default Admin: admin / admin
+```
+This saves a session token to `~/.druppie/token`.
+
+**Logout:**
+```bash
+./druppie logout
+```
+
+### 3. Demo Mode
+For quick testing without login, use the `--demo` flag. This forces the application to treat you as a "root" admin user.
+
+```bash
+# Run server in demo mode
+./druppie serve --demo
+
+# Use CLI tools in demo mode (skip login)
+./druppie chat --demo
+./druppie plan "deploy database" --demo
+```
+
+### 4. RBAC & Filtering
+Registry items (Agents, Skills, Building Blocks) can now be restricted by user groups. Items with an `auth_groups` field in their frontmatter will only be visible to users belonging to those groups.
+*   **Admin/Root**: Sees everything.
+*   **Unauthenticated**: Sees only public items (no `auth_groups` defined).
+
+### 5. Plan Access Control
+Plans are now governed by granular access control:
+*   **Ownership**: Plans created by a user are assigned a `creator_id` matching their username.
+*   **Group Access**: Plans can be shared with specific groups via the `allowed_groups` field. Users in these groups can view and interact with the plan.
+*   **Demo Mode Protection**: When enabled, the Demo provider bypasses these checks, making all plans visible for demonstration purposes.
+
+**Management Commands (Chat UI):**
+*   `/add_group <group>`: Grant access to a plan for a user group.
+*   `/remove_group <group>`: Revoke group access.
+*   `/list_groups`: View currently authorized groups for the active plan.
+
 ## 📦 Git Configuration
 
 Druppie Core requires a Git repository to store project code. You can use the internal Gitea instance (default) or an external provider.
@@ -162,7 +216,7 @@ Use the Gitea instance running inside the same Kubernetes cluster.
 
 2. **Install Chart**:
    ```bash
-   helm install druppie-core ./deploy/helm \
+   helm install druppie ./deploy/helm \
      --set git.provider="gitea" \
      --set git.url="http://gitea-http.gitea.svc.cluster.local:3000" \
      --set git.user="my-org" \
@@ -180,7 +234,7 @@ Use an external provider like GitHub.
 
 2. **Install Chart** (with overrides):
    ```bash
-   helm install druppie-core ./deploy/helm \
+   helm install druppie ./deploy/helm \
      --set git.provider="github" \
      --set git.url="https://api.github.com" \
      --set git.user="my-org" \

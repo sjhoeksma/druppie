@@ -1,5 +1,5 @@
 apiVersion: v2
-name: druppie-core
+name: druppie
 description: A Helm chart for Druppie Core Service
 type: application
 version: 0.1.0
