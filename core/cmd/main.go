@@ -298,10 +298,18 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			})
 
 			// Public Version Endpoint
+			// Public Version Endpoint
 			r.Get("/v1/version", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
+
+				// Format version: v1.0.1-1-g123 -> 1.0.1
+				v := strings.TrimPrefix(Version, "v")
+				if idx := strings.Index(v, "-"); idx != -1 {
+					v = v[:idx]
+				}
+
 				json.NewEncoder(w).Encode(map[string]string{
-					"version": Version,
+					"version": v,
 				})
 			})
 
