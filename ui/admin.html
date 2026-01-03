@@ -85,7 +85,11 @@
         <header
             class="flex-none bg-[#1e293b] border-b border-slate-800 p-4 flex items-center justify-between z-20 shadow-sm">
             <div class="flex items-center gap-3">
-                <img src="../druppie_logo.svg" class="w-8 h-8 rounded-lg">
+                <div class="flex flex-col items-center">
+                    <img src="../druppie_logo.svg" class="w-8 h-8 rounded-lg">
+                    <div id="app-version" style="font-size: 0.55rem; color: #94a3b8; line-height: 1; margin-top: 2px;">
+                        v...</div>
+                </div>
                 <span class="font-semibold text-white tracking-tight">Druppie Admin</span>
             </div>
             <div class="flex items-center gap-4">
@@ -368,6 +372,19 @@
             init: async () => {
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.has('view')) app.state.view = urlParams.get('view');
+
+                // Fetch Version
+                // Fetch Version
+                fetch('/v1/version')
+                    .then(r => {
+                        if (!r.ok) throw new Error(r.statusText);
+                        return r.json();
+                    })
+                    .then(d => {
+                        const el = document.getElementById('app-version');
+                        if (el) el.innerText = 'v' + d.version;
+                    })
+                    .catch(e => console.error('Version fetch failed:', e));
 
                 // Load User
                 const storedUser = localStorage.getItem('druppie_user');

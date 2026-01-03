@@ -52,7 +52,7 @@ func getAuthContext(ctx context.Context, p iam.Provider, demo bool) context.Cont
 }
 
 var (
-	Version = "dev"
+	Version = "-.-.-"
 )
 
 func main() {
@@ -295,6 +295,14 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					},
 				}
 				json.NewEncoder(w).Encode(resp)
+			})
+
+			// Public Version Endpoint
+			r.Get("/v1/version", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"version": Version,
+				})
 			})
 
 			// API Routes
@@ -607,14 +615,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 					w.WriteHeader(http.StatusOK)
-				})
-
-				// Version Endpoint
-				r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(map[string]string{
-						"version": Version,
-					})
 				})
 
 				// Build Trigger Endpoint
