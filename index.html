@@ -16,7 +16,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>var version = "1.0.0";</script>
 
     <!-- 
        v11 Updates:
@@ -884,7 +883,11 @@
             <button onclick="toggleSidebar()" class="md:hidden p-1 text-slate-400 hover:text-white focus:outline-none">
                 <i data-lucide="menu" class="w-6 h-6"></i>
             </button>
-            <img src="druppie_logo.svg" alt="Druppie Logo" class="h-12 w-12 rounded">
+            <div class="flex flex-col items-center">
+                <img src="druppie_logo.svg" alt="Druppie Logo" class="h-8 w-8 rounded">
+                <div id="app-version-header"
+                    style="font-size: 0.55rem; color: #94a3b8; line-height: 1; margin-top: 2px;">v...</div>
+            </div>
             <div>
                 <h1 class="text-xl font-semibold tracking-tight">Druppie</h1>
                 <p class="text-[10px] text-slate-400">Documentatie</p>
@@ -935,8 +938,9 @@
             <!-- SIDEBAR -->
             <div class="absolute md:relative inset-y-0 left-0 w-64 bg-slate-800 text-white flex flex-col flex-none shadow-xl z-50 transition-transform duration-300 transform -translate-x-full md:translate-x-0"
                 id="sidebar">
+
                 <!-- Search Input -->
-                <div class="px-3 py-2 border-b border-slate-700 relative">
+                <div class="px-3 py-2 border-b border-t border-slate-700 relative">
                     <div class="relative">
                         <input type="text" id="docSearch" placeholder="Zoek..."
                             class="w-full bg-slate-900 text-xs text-slate-300 px-2 py-1.5 rounded border border-slate-700 focus:outline-none focus:border-blue-500 focus:text-white transition-colors"
@@ -1048,10 +1052,7 @@
                         files.</p>
                 </div>
 
-                <!-- App Version -->
-                <div class="px-3 bg-slate-900 text-right">
-                    <span id="version" class="text-[10px] text-slate-500 font-mono"></span>
-                </div>
+
             </div>
 
             <!-- MAIN CONTENT AREA -->
@@ -2643,9 +2644,22 @@
 
         // Set Version
         const versionEl = document.getElementById('version');
-        if (versionEl && typeof version !== 'undefined') {
-            versionEl.innerText = "v" + version;
-        }
+        // Fetch Dynamic Version
+        (async function () {
+            try {
+                const res = await fetch('/v1/version');
+                if (res.ok) {
+                    const data = await res.json();
+                    const el = document.getElementById('app-version-header');
+                    if (el) el.textContent = 'v' + data.version;
+                }
+            } catch (e) {
+                console.error('Version fetch failed:', e);
+            }
+        })();
+
+
+
 
         // Detect Druppie Core
         async function checkCoreConnection() {
