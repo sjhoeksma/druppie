@@ -1043,19 +1043,6 @@
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <h1>Druppie Chat</h1>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <button id="logout-btn" onclick="handleLogout()" title="Logout" style="
-                        background: transparent;
-                        border: none;
-                        padding: 0.25rem;
-                        color: var(--text-dim);
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        transition: all 0.2s;
-                    " onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-dim)'">
-                        <i data-lucide="log-out" size="18"></i>
-                    </button>
                     <button onclick="createNewPlan()" title="New plan" style="
                         background: transparent;
                         border: 1px solid var(--glass-border);
@@ -1135,7 +1122,7 @@
                 ">
                 <i data-lucide="file-plus" size="14"></i>
             </button>
-            <button onclick="handleCommand('/list')" title="List Plans (/list)" style="
+            <button onclick="handleCommand('/resume')" title="Resume Execution (/resume)" style="
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
                     border-radius: 0.5rem;
@@ -1147,7 +1134,7 @@
                     align-items: center;
                     gap: 0.25rem;
                 ">
-                <i data-lucide="list" size="14"></i>
+                <i data-lucide="play-circle" size="14"></i>
             </button>
             <button onclick="handleCommand('/stop')" title="Stop Execution (/stop)" style="
                     background: var(--glass-bg);
@@ -1177,20 +1164,7 @@
                 ">
                 <i data-lucide="trash-2" size="14"></i>
             </button>
-            <button onclick="handleCommand('/resume')" title="Resume Execution (/resume)" style="
-                    background: var(--glass-bg);
-                    border: 1px solid var(--glass-border);
-                    border-radius: 0.5rem;
-                    padding: 0.25rem 0.5rem;
-                    color: var(--text-dim);
-                    font-size: 0.75rem;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.25rem;
-                ">
-                <i data-lucide="play-circle" size="14"></i>
-            </button>
+
             <a href="../index.html" title="Open Documentation Portal" style="
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
@@ -1206,7 +1180,19 @@
                 ">
                 <i data-lucide="book" size="14"></i>
             </a>
-
+            <button id="logout-btn" onclick="handleLogout()" title="Logout" style="
+                        background: transparent;
+                        border: none;
+                        padding: 0.25rem;
+                        color: var(--text-dim);
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: all 0.2s;
+                    " onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-dim)'">
+                <i data-lucide="log-out" size="18"></i>
+            </button>
         </div>
     </div>
 </aside>
@@ -2436,7 +2422,7 @@
             footerHTML = `
                     <div class="feedback-section">
                         <label class="info-label">Your Response:</label>
-                        <textarea id="feedback-input" class="feedback-input" placeholder="Type je feedback of verbetering..."></textarea>
+                        <textarea id="feedback-input" class="feedback-input" placeholder="Type je verbetering..."></textarea>
                         <div class="modal-actions">
                             <button class="modal-btn primary" onclick="submitModalAction('/accept')">
                                 <i data-lucide="check" size="16"></i> Oké
