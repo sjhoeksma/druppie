@@ -3,6 +3,7 @@ package executor
 import (
 	"bufio"
 	"context"
+	"os/exec"
 
 	"fmt"
 	"io"
@@ -15,14 +16,13 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
 // RunExecutor handles "run_code" actions
 type RunExecutor struct {
-	// We could share the docker client or create new one.
-	// For simplicity, create new one here or inject if passing down.
-	// Let's create new for now to avoid threading huge context.
+	Builder builder.BuildEngine
 }
 
 func (e *RunExecutor) CanHandle(action string) bool {
@@ -128,9 +128,13 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 		return fmt.Errorf("run_code requires 'build_id' or 'command', and no artifacts were found in context")
 	}
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return fmt.Errorf("failed to create docker client: %w", err)
+	var cli *client.Client
+	if !e.Builder.IsLocal() {
+		var err error
+		cli, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			return fmt.Errorf("failed to create docker client: %w", err)
+		}
 	}
 
 	// Determine Run Strategy
@@ -156,19 +160,19 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	if _, err := os.Stat(filepath.Join(artifactPath, "main")); err == nil {
 		// Go binary (preferred)
 		imageRef = "ubuntu:latest"
-		cmd = []string{"/workspace/main"}
+		cmd = []string{"./main"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "app")); err == nil {
 		// Go binary (legacy/alternate)
 		imageRef = "ubuntu:latest"
-		cmd = []string{"/workspace/app"}
+		cmd = []string{"./app"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "main.py")); err == nil {
 		// Python root
 		imageRef = "python:3.11-slim"
-		cmd = []string{"python", "/workspace/main.py"}
+		cmd = []string{"python", "main.py"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "src/main.py")); err == nil {
 		// Python src (fallback)
 		imageRef = "python:3.11-slim"
-		cmd = []string{"python", "/workspace/src/main.py"}
+		cmd = []string{"python", "src/main.py"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "package.json")); err == nil {
 		// Node
 		imageRef = "node:20-alpine"
@@ -181,7 +185,7 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 			imageRef = "node:20-alpine"
 			// Use the first JS file found if no command specified
 			baseName := filepath.Base(jsFiles[0])
-			cmd = []string{"node", "/workspace/" + baseName}
+			cmd = []string{"node", baseName}
 		} else {
 			// Fallback: Check for *.py
 			pyFiles, _ := filepath.Glob(filepath.Join(artifactPath, "*.py"))
@@ -189,7 +193,7 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 			if len(pyFiles) > 0 && cmdStr == "" {
 				imageRef = "python:3.11-slim"
 				baseName := filepath.Base(pyFiles[0])
-				cmd = []string{"python", "/workspace/" + baseName}
+				cmd = []string{"python", baseName}
 			} else if cmdStr != "" {
 				// Intelligent Image Selection based on command
 				cmd = strings.Fields(cmdStr)
@@ -264,10 +268,39 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 						}
 					}
 				}
-			} else {
-				return fmt.Errorf("could not detect run strategy for artifact in %s", artifactPath)
 			}
 		}
+	}
+
+	if e.Builder.IsLocal() {
+		outputChan <- fmt.Sprintf("Running command locally in %s: %v", artifactPath, cmd)
+		lcmd := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+		lcmd.Dir = artifactPath
+
+		// Capture output
+		pr, pw := io.Pipe()
+		lcmd.Stdout = pw
+		lcmd.Stderr = pw
+
+		go func() {
+			scanner := bufio.NewScanner(pr)
+			for scanner.Scan() {
+				outputChan <- scanner.Text()
+			}
+		}()
+
+		if err := lcmd.Start(); err != nil {
+			pw.Close()
+			return fmt.Errorf("failed to start local process: %w", err)
+		}
+
+		err := lcmd.Wait()
+		pw.Close()
+
+		if err != nil {
+			return fmt.Errorf("local process exited with error: %w", err)
+		}
+		return nil
 	}
 
 	outputChan <- fmt.Sprintf("Pulling image %s...", imageRef)

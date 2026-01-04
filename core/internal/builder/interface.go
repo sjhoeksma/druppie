@@ -9,4 +9,5 @@ import (
 type BuildEngine interface {
 	TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string, logWriter io.Writer) (string, error)
 	GetBuildStatus(ctx context.Context, buildID string) (string, error)
+	IsLocal() bool
 }

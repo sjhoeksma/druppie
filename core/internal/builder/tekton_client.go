@@ -121,3 +121,7 @@ func (c *TektonClient) GetBuildStatus(ctx context.Context, buildID string) (stri
 
 	return "Running", nil
 }
+
+func (c *TektonClient) IsLocal() bool {
+	return false
+}
