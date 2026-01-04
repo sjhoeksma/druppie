@@ -33,38 +33,49 @@ WORKDIR /app
 RUN /app/druppie generate
 
 # Run Stage
-FROM gcr.io/distroless/static:nonroot
+FROM python:3.11-slim-bookworm
+
+# Install basic tools needed by agents
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Create a non-root user
+RUN groupadd -g 65532 druppie && \
+    useradd -u 65532 -g druppie -m -s /bin/bash druppie && \
+    chown -R druppie:druppie /app
+
 # Copy Binary
-COPY --from=builder /app/druppie /app/druppie
+COPY --from=builder --chown=druppie:druppie /app/druppie /app/druppie
 
 # Copy Project Documentation & Portal Assets
-COPY --from=builder /app/index.html /app/index.html
-COPY --from=builder /app/doc_registry.js /app/doc_registry.js
-COPY --from=builder /app/search_index.json /app/search_index.json
-COPY --from=builder /app/druppie_logo.svg /app/druppie_logo.svg
-COPY --from=builder /app/druppie_logo.png /app/druppie_logo.png
-COPY --from=builder /app/druppie_cli.png /app/druppie_cli.png
-COPY --from=builder /app/druppie_k3d.png /app/druppie_k3d.png
-COPY --from=builder /app/README.md /app/README.md
-COPY --from=builder /app/LICENSE.md /app/LICENSE.md
-COPY --from=builder /app/manifest.json /app/manifest.json
+COPY --from=builder --chown=druppie:druppie /app/index.html /app/index.html
+COPY --from=builder --chown=druppie:druppie /app/doc_registry.js /app/doc_registry.js
+COPY --from=builder --chown=druppie:druppie /app/search_index.json /app/search_index.json
+COPY --from=builder --chown=druppie:druppie /app/druppie_logo.svg /app/druppie_logo.svg
+COPY --from=builder --chown=druppie:druppie /app/druppie_logo.png /app/druppie_logo.png
+COPY --from=builder --chown=druppie:druppie /app/druppie_cli.png /app/druppie_cli.png
+COPY --from=builder --chown=druppie:druppie /app/druppie_k3d.png /app/druppie_k3d.png
+COPY --from=builder --chown=druppie:druppie /app/README.md /app/README.md
+COPY --from=builder --chown=druppie:druppie /app/LICENSE.md /app/LICENSE.md
+COPY --from=builder --chown=druppie:druppie /app/manifest.json /app/manifest.json
 
 
 # Copy Concept Folders
-COPY --from=builder /app/agents /app/agents
-COPY --from=builder /app/blocks /app/blocks
-COPY --from=builder /app/compliance /app/compliance
-COPY --from=builder /app/design /app/design
-COPY --from=builder /app/mcp /app/mcp
-COPY --from=builder /app/research /app/research
-COPY --from=builder /app/script /app/script
-COPY --from=builder /app/skills /app/skills
-COPY --from=builder /app/story /app/story
-COPY --from=builder /app/tools /app/tools
-COPY --from=builder /app/ui /app/ui
+COPY --from=builder --chown=druppie:druppie /app/agents /app/agents
+COPY --from=builder --chown=druppie:druppie /app/blocks /app/blocks
+COPY --from=builder --chown=druppie:druppie /app/compliance /app/compliance
+COPY --from=builder --chown=druppie:druppie /app/design /app/design
+COPY --from=builder --chown=druppie:druppie /app/mcp /app/mcp
+COPY --from=builder --chown=druppie:druppie /app/research /app/research
+COPY --from=builder --chown=druppie:druppie /app/script /app/script
+COPY --from=builder --chown=druppie:druppie /app/skills /app/skills
+COPY --from=builder --chown=druppie:druppie /app/story /app/story
+COPY --from=builder --chown=druppie:druppie /app/tools /app/tools
+COPY --from=builder --chown=druppie:druppie /app/ui /app/ui
 
 # Setup environment for persistence
 ENV HOME=/app
@@ -75,6 +86,6 @@ VOLUME /app/.druppie
 # Expose port
 EXPOSE 8080
 
-USER 65532:65532
+USER druppie
 
 ENTRYPOINT ["/app/druppie", "serve"]

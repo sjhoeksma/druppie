@@ -177,7 +177,7 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 
 	// Prepare Writers
 	var writers []io.Writer
-	writers = append(writers, os.Stdout)
+	//writers = append(writers, os.Stdout)
 	if logFile != nil {
 		writers = append(writers, logFile)
 		defer logFile.Close()
