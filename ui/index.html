@@ -2286,40 +2286,48 @@
 
         lucide.createIcons();
 
-        // Scroll the column containing the LAST card into view
-        // to ensure user sees the latest activity / new card.
-        // Disable auto-scroll if plan is stopped to allow user to inspect history without jumping.
-        if (plan.steps.length > 0 && plan.status !== 'stopped') {
-            const lastStep = plan.steps[plan.steps.length - 1];
-            let lastColContainer = null;
-            if (lastStep.status === 'waiting_input') {
-                lastColContainer = elements.cols.interaction.querySelector('.col-cards');
-            } else if (lastStep.status === 'running') {
-                lastColContainer = elements.cols.running.querySelector('.col-cards');
-            } else if (lastStep.status === 'completed' || lastStep.status === 'failed' || lastStep.status === 'stopped' || lastStep.status === 'error') {
-                lastColContainer = elements.cols.completed.querySelector('.col-cards');
+        // Scroll logic
+        // 1. Scroll on new plan (placeholder)
+        // 2. Scroll on active plan progress
+        // 3. STOP scroll if plan is completed/stopped/failed
+        let scrollTarget = null;
+
+        if (['completed', 'failed'].includes(plan.status)) {
+            // Do not auto-scroll
+        } else if (plan.steps.length === 0) {
+            // New Plan Placeholder Case
+            if (plan.status === 'running') {
+                scrollTarget = elements.cols.running.querySelector('.col-cards');
             } else {
-                lastColContainer = elements.cols.pending.querySelector('.col-cards');
+                scrollTarget = elements.cols.pending.querySelector('.col-cards');
             }
-
-            // Scroll that specific container
-            // Scroll that specific container
-            if (lastColContainer) {
-                requestAnimationFrame(() => {
-                    // Vertical scroll of the card list
-                    if (lastColContainer.scrollHeight > lastColContainer.clientHeight) {
-                        lastColContainer.scrollTop = lastColContainer.scrollHeight;
-                    }
-
-                    // Horizontal scroll of the entire Kanban board (Mobile)
-                    // Find the parent column element (task-card's grand-parent is kanban-col?)
-                    // Actually lastColContainer is .col-cards. Its parent is the .kanban-col.
-                    const col = lastColContainer.parentElement;
-                    if (col) {
-                        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                    }
-                });
+        } else {
+            // Existing Steps Case
+            const lastStep = plan.steps[plan.steps.length - 1];
+            if (lastStep.status === 'waiting_input') {
+                scrollTarget = elements.cols.interaction.querySelector('.col-cards');
+            } else if (lastStep.status === 'running') {
+                scrollTarget = elements.cols.running.querySelector('.col-cards');
+            } else if (['completed', 'failed', 'stopped', 'error'].includes(lastStep.status)) {
+                scrollTarget = elements.cols.completed.querySelector('.col-cards');
+            } else {
+                scrollTarget = elements.cols.pending.querySelector('.col-cards');
             }
+        }
+
+        if (scrollTarget) {
+            requestAnimationFrame(() => {
+                // Vertical scroll of the card list
+                if (scrollTarget.scrollHeight > scrollTarget.clientHeight) {
+                    scrollTarget.scrollTop = scrollTarget.scrollHeight;
+                }
+
+                // Horizontal scroll of the entire Kanban board (for Mobile/Overflow)
+                const col = scrollTarget.parentElement;
+                if (col) {
+                    col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            });
         }
     }
 
