@@ -1,7 +1,4 @@
 .DS_Store
 .druppie_history
-core/druppie
-druppie
-core/druppie-core
-druppie-core
 .druppie
+core/bin/druppie

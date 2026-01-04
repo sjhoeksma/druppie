@@ -186,10 +186,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						count := 0
 
 						for _, entry := range entries {
-							if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
-								info, err := entry.Info()
+							if entry.IsDir() {
+								planPath := filepath.Join(plansDir, entry.Name(), "plan.json")
+								info, err := os.Stat(planPath)
 								if err == nil && info.ModTime().Before(cutoff) {
-									id := strings.TrimSuffix(entry.Name(), ".json")
+									id := entry.Name()
 									// Use Store to delete (handles logs/files/plans)
 									if err := plannerService.Store.DeletePlan(id); err == nil {
 										count++
@@ -942,7 +943,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
-					targetDir := filepath.Join(rootDir, ".druppie", "files", id)
+					targetDir := filepath.Join(rootDir, ".druppie", "plans", id, "files")
 					if err := os.MkdirAll(targetDir, 0755); err != nil {
 						http.Error(w, "Failed to create directory", http.StatusInternalServerError)
 						return

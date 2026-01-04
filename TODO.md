@@ -26,6 +26,7 @@
 - [x] Version number by checking git tags
 - [ ] Cost management, tokens used by month
 - [ ] Build plane
+- [ ] Plugin system
 
 # TESTING
 
