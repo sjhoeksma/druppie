@@ -97,10 +97,30 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 		fmt.Printf("[LocalBuilder] Detected Python project in %s\n", targetDir)
 		cmd = exec.CommandContext(ctx, "cp", "-r", ".", outputDir)
 
+	} else if _, err := os.Stat(filepath.Join(targetDir, "requirements.txt")); err == nil {
+		// Python with requirements
+		fmt.Printf("[LocalBuilder] Detected Python project (requirements.txt) in %s\n", targetDir)
+		// Copy source to output
+		cmd = exec.CommandContext(ctx, "cp", "-R", ".", outputDir)
+		// Usually we would pip install to a venv, but for creating artifact, copying is enough.
+		// RunExecutor will install deps.
+		// But wait, cmd is executed below. `cp` is executed below.
+		// NOTE: logic flow here is slightly mixed between immediate cp and deferred cmd.
+		// Correct flow: Set cmd to copy. Or run copy immediately and set cmd to echo.
+		copyCmd := exec.CommandContext(ctx, "cp", "-R", ".", outputDir)
+		copyCmd.Dir = targetDir
+		if err := copyCmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to copy source to output: %w", err)
+		}
+		cmd = exec.CommandContext(ctx, "echo", "Python source copied. Dependencies will be installed at runtime.")
+		cmd.Dir = outputDir
+
 	} else {
-		// Fallback: Check for single JS files
-		files, _ := filepath.Glob(filepath.Join(targetDir, "*.js"))
-		if len(files) > 0 {
+		// Fallback: Check for single JS files OR Python files
+		filesJS, _ := filepath.Glob(filepath.Join(targetDir, "*.js"))
+		filesPy, _ := filepath.Glob(filepath.Join(targetDir, "*.py"))
+
+		if len(filesJS) > 0 {
 			fmt.Printf("[LocalBuilder] Detected standalone JS files in %s\n", targetDir)
 			// Copy to output
 			copyCmd := exec.CommandContext(ctx, "cp", "-R", ".", outputDir)
@@ -108,11 +128,30 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 			if err := copyCmd.Run(); err != nil {
 				return "", fmt.Errorf("failed to copy source to output: %w", err)
 			}
-			// No build cmd needed
 			cmd = exec.CommandContext(ctx, "echo", "No build needed for standalone JS")
 			cmd.Dir = outputDir
+		} else if len(filesPy) > 0 {
+			fmt.Printf("[LocalBuilder] Detected standalone Python files in %s\n", targetDir)
+			// Copy to output
+			copyCmd := exec.CommandContext(ctx, "cp", "-R", ".", outputDir)
+			copyCmd.Dir = targetDir
+			if err := copyCmd.Run(); err != nil {
+				return "", fmt.Errorf("failed to copy source to output: %w", err)
+			}
+			cmd = exec.CommandContext(ctx, "echo", "No build needed for standalone Python")
+			cmd.Dir = outputDir
 		} else {
-			return "", fmt.Errorf("unknown build system in %s", targetDir)
+			// Check for Go files
+			filesGo, _ := filepath.Glob(filepath.Join(targetDir, "*.go"))
+			if len(filesGo) > 0 {
+				fmt.Printf("[LocalBuilder] Detected standalone Go files in %s\n", targetDir)
+				appPath := filepath.Join(outputDir, "app")
+				// Try to build
+				cmd = exec.CommandContext(ctx, "go", "build", "-o", appPath, ".")
+				cmd.Dir = targetDir
+			} else {
+				return "", fmt.Errorf("unknown build system in %s", targetDir)
+			}
 		}
 	}
 

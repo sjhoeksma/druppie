@@ -73,7 +73,18 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 	// Check for files to determine Language
 	if _, err := os.Stat(filepath.Join(targetDir, "package.json")); err == nil {
 		imageRef = "node:20-alpine"
-		commands = []string{"/bin/sh", "-c", "npm install && npm run build"}
+
+		// Check if package.json has a build script
+		pkgPath := filepath.Join(targetDir, "package.json")
+		content, _ := os.ReadFile(pkgPath)
+		hasBuildScript := strings.Contains(string(content), "\"build\":")
+
+		if hasBuildScript {
+			commands = []string{"/bin/sh", "-c", "npm install && npm run build && cp -r . ../builds/" + buildID}
+		} else {
+			// No build script - just install and copy
+			commands = []string{"/bin/sh", "-c", "npm install && cp -r . ../builds/" + buildID}
+		}
 	} else if _, err := os.Stat(filepath.Join(targetDir, "go.mod")); err == nil {
 		imageRef = "golang:1.24-alpine"
 		// Go builds to the mounted output dir
@@ -86,12 +97,26 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		// pip install -r requirements.txt --target ../builds/<id>/deps
 		commands = []string{"/bin/sh", "-c", "pip install -r requirements.txt --target ../builds/" + buildID + "/deps && cp -r . ../builds/" + buildID + "/src"}
 	} else {
-		// Generic / Dockerfile?
-		// If Dockerfile exists, we might want to actually `docker build`.
-		// But the user request said "build AGENT... builds code INTO ... directory".
-		// Building a Docker IMAGE is different.
-		// Let's stick to "Running a container to build artifacts" for now unless explicit.
-		return "", fmt.Errorf("unknown project type in %s", targetDir)
+		// Fallback: Check for standalone files
+		pyFiles, _ := filepath.Glob(filepath.Join(targetDir, "*.py"))
+		goFiles, _ := filepath.Glob(filepath.Join(targetDir, "*.go"))
+		jsFiles, _ := filepath.Glob(filepath.Join(targetDir, "*.js"))
+
+		if len(pyFiles) > 0 {
+			// Standalone Python file - just copy to output
+			imageRef = "python:3.11-slim"
+			commands = []string{"/bin/sh", "-c", "cp -r . ../builds/" + buildID}
+		} else if len(goFiles) > 0 {
+			// Standalone Go file - build it
+			imageRef = "golang:1.24-alpine"
+			commands = []string{"/bin/sh", "-c", "go build -o ../builds/" + buildID + "/app ."}
+		} else if len(jsFiles) > 0 {
+			// Standalone JS file - copy
+			imageRef = "node:20-alpine"
+			commands = []string{"/bin/sh", "-c", "cp -r . ../builds/" + buildID}
+		} else {
+			return "", fmt.Errorf("unknown project type in %s", targetDir)
+		}
 	}
 
 	// 4. Pull Image (if needed)

@@ -28,10 +28,13 @@
 - [ ] Build plane
 - [ ] Plugin system
 - [ ] Git saving of plans
+- [ ] Resume command
 
 # TESTING
 
 - [x] VIDEO: maak een kinder film over het zuiveren van afval water, 1 min, youtube
 - [x] CHAT: Kan je mij een verhaal vertellen over druppie
 - [x] CHAT Continue: Vertel meer over het Druppie-platform.
-- [ ] BUILD: Maak een node.js hello world script, bouw het en draai het.
+- [ ] BUILD NodeJs: Maak een node.js hello world script, bouw het en draai het.
+- [ ] BUILD Python: Maak een python hello world script, bouw het en draai het.
+- [ ] BUILD Go: Maak een go hello world script, bouw het en draai het.

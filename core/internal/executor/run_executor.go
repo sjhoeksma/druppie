@@ -156,10 +156,32 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 			baseName := filepath.Base(jsFiles[0])
 			cmd = []string{"node", "/workspace/" + baseName}
 		} else {
-			// Fallback or explicit command
-			if cmdStr != "" {
-				imageRef = "ubuntu:latest"
+			// Fallback: Check for *.py
+			pyFiles, _ := filepath.Glob(filepath.Join(artifactPath, "*.py"))
+
+			if len(pyFiles) > 0 && cmdStr == "" {
+				imageRef = "python:3.11-slim"
+				baseName := filepath.Base(pyFiles[0])
+				cmd = []string{"python", "/workspace/" + baseName}
+			} else if cmdStr != "" {
+				// Intelligent Image Selection based on command
 				cmd = strings.Fields(cmdStr)
+
+				if len(cmd) > 0 {
+					switch cmd[0] {
+					case "python", "python3":
+						imageRef = "python:3.11-slim"
+					case "node", "npm":
+						imageRef = "node:20-alpine"
+					case "go":
+						imageRef = "golang:1.21"
+					default:
+						imageRef = "ubuntu:latest"
+					}
+				} else {
+					imageRef = "ubuntu:latest"
+				}
+
 				// Clean up npm command log noise
 				if len(cmd) > 0 && cmd[0] == "npm" {
 					if len(cmd) > 1 && (cmd[1] == "start" || cmd[1] == "run") {

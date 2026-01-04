@@ -17,7 +17,7 @@ func NewEngine(cfg config.BuildConfig) (BuildEngine, error) {
 		providerName = cfg.Provider // Legacy fallback
 	}
 	if providerName == "" {
-		providerName = "local" // Final fallback
+		providerName = "docker" // Final fallback - use Docker for consistent containerized builds
 	}
 
 	// 2. Get config for that provider
