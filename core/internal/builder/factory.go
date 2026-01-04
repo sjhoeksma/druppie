@@ -50,6 +50,12 @@ func NewEngine(cfg config.BuildConfig) (BuildEngine, error) {
 			return nil, fmt.Errorf("failed to initialize local client: %w", err)
 		}
 		return client, nil
+	case "docker":
+		client, err := NewDockerClient(pCfg.WorkingDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize docker client: %w", err)
+		}
+		return client, nil
 	default:
 		return nil, fmt.Errorf("unknown build provider type: %s", pCfg.Type)
 	}

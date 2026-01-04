@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
@@ -44,13 +45,13 @@ type Task struct {
 	Cancel    context.CancelFunc
 }
 
-func NewTaskManager(p *planner.Planner) *TaskManager {
+func NewTaskManager(p *planner.Planner, buildEngine builder.BuildEngine) *TaskManager {
 	tm := &TaskManager{
 		tasks:           make(map[string]*Task),
 		planner:         p,
 		OutputChan:      make(chan string, 100),
 		TaskDoneChan:    make(chan string, 10),
-		dispatcher:      executor.NewDispatcher(),
+		dispatcher:      executor.NewDispatcher(buildEngine),
 		workflowManager: workflows.NewManager(),
 	}
 	return tm
@@ -566,6 +567,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					if execErr != nil {
 						// FAILURE HANDLING: Set to Waiting Input
 						step.Status = "waiting_input"
+						step.Error = execErr.Error()
 						step.Result = fmt.Sprintf("Error: %v", execErr)
 						tm.OutputChan <- fmt.Sprintf("[%s] Step %d paused on error. Waiting for user input...", task.ID, step.ID)
 					} else {
@@ -708,6 +710,13 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				tm.OutputChan <- fmt.Sprintf("[%s] Status updated to RUNNING (Input received)", task.ID)
 			}
 			tm.mu.Unlock()
+			if len(batchIndices) == 0 {
+				tm.OutputChan <- fmt.Sprintf("[%s] Error: No active step to apply input to. Resetting state...", task.ID)
+				// If we are getting here repeatedly with "defaults", we are in an infinite loop.
+				// Stop the task.
+				task.Status = TaskStatusError
+				return
+			}
 			activeStepIdx := batchIndices[0]
 
 			// Logic duplication from original main.go

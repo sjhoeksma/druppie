@@ -45,6 +45,13 @@ Strategies:
    - **Constraint**: Strict Stage Gating. Never schedule Step B if Step A (its input) is not 'completed'.
    - **Strict Adherence**: Follow the Diagram EXACTLY. Do NOT insert extra steps (like `creative-writing` or `quality-check`) UNLESS the User explicitly requests features outside the standard workflow.
 
+5.5. **Execution Rules**:
+   - **Code Lifecycle**: If the User wants to Run or Deploy code:
+     1. **Creation**: If the code does not exist, you MUST first schedule `developer` (`create_code`). (Keywords: "maak", "schrijf", "create", "write").
+     2. **Build**: Only after creation, schedule `build-agent` (`build_code`).
+     3. **Run**: Only after build, schedule `run-agent` (`run_code`).
+   - **Missing Files**: If an agent reports "files missing" or "no build system", you must INSERT a `create_code` step before the failing step to fix it.
+
 6. **Completion Strategy**:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
    - **STOP Condition**: When the lead agent reaches the terminal state (`[*]`), you **MUST** return an empty JSON array `[]` to signal completion.

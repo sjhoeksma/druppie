@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Druppie Code</title>
+    <link rel="icon" type="image/svg+xml" href="../druppie_logo.svg">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-deep: #0f172a;
+            --bg-card: #1e293b;
+            --accent: #38bdf8;
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #file-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .file-item {
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-dim);
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .file-item.active {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent);
+        }
+
+        #editor-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #editor-header {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 50px;
+        }
+
+        #monaco {
+            flex: 1;
+        }
+
+        .btn {
+            background: var(--accent);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            color: var(--bg-deep);
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--text-main);
+            color: var(--text-main);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <span>Files</span>
+            <button class="btn-secondary" onclick="refreshFiles()" style="padding:0.25rem;"><i data-lucide="refresh-cw"
+                    style="width:16px;"></i></button>
+        </div>
+        <div id="file-tree">Loading...</div>
+    </div>
+    <div id="editor-container">
+        <div id="editor-header">
+            <span id="current-file">No file selected</span>
+            <div style="display:flex; gap:0.5rem;">
+                <button class="btn" style="background:#22c55e;" onclick="saveFile()">Save</button>
+                <button class="btn btn-secondary" onclick="window.close()">Close</button>
+            </div>
+        </div>
+        <div id="monaco"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <script>
+        lucide.createIcons();
+        const urlParams = new URLSearchParams(window.location.search);
+        const planID = urlParams.get('plan_id');
+        let editor;
+        let currentPath = null;
+
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            editor = monaco.editor.create(document.getElementById('monaco'), {
+                value: '// Select a file to view',
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true
+            });
+            refreshFiles();
+        });
+
+        async function refreshFiles() {
+            if (!planID) {
+                document.getElementById('file-tree').innerText = 'No Plan ID provided';
+                return;
+            }
+            try {
+                // List files API
+                const res = await fetch(`/v1/plans/${planID}/files`);
+                const files = await res.json();
+                renderTree(files);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderTree(files) {
+            const container = document.getElementById('file-tree');
+            container.innerHTML = '';
+
+            // Allow files to be list of strings or objects. Assume list of relative paths.
+            files.forEach(f => {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.innerHTML = `<i data-lucide="file" style="width:16px;"></i> ${f}`;
+                div.onclick = () => loadFile(f);
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function loadFile(path) {
+            currentPath = path;
+            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+            // Visual feedback basic
+            document.getElementById('current-file').innerText = path;
+
+            try {
+                const res = await fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`);
+                const content = await res.text();
+                editor.setValue(content);
+
+                // Detect language
+                let lang = 'plaintext';
+                if (path.endsWith('.js')) lang = 'javascript';
+                if (path.endsWith('.py')) lang = 'python';
+                if (path.endsWith('.go')) lang = 'go';
+                if (path.endsWith('.html')) lang = 'html';
+                if (path.endsWith('.json')) lang = 'json';
+                if (path.endsWith('.md')) lang = 'markdown';
+                if (path.endsWith('.yaml')) lang = 'yaml';
+                monaco.editor.setModelLanguage(editor.getModel(), lang);
+
+            } catch (e) {
+                editor.setValue('Error loading file');
+            }
+        }
+
+        async function saveFile() {
+            if (!currentPath) return;
+            const content = editor.getValue();
+            try {
+                await fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(currentPath)}`, {
+                    method: 'PUT',
+                    body: content
+                });
+                // Flash success?
+                const btn = document.querySelector('button[onclick="saveFile()"]');
+                const oldText = btn.innerText;
+                btn.innerText = 'Saved!';
+                setTimeout(() => btn.innerText = oldText, 2000);
+            } catch (e) {
+                alert('Failed to save');
+            }
+        }
+    </script>
+</body>
+
+</html>

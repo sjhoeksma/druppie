@@ -1184,6 +1184,20 @@
                 ">
                 <i data-lucide="book" size="14"></i>
             </a>
+            <button onclick="openCodeEditor()" title="Open Code Editor" style="
+                    background: var(--glass-bg);
+                    border: 1px solid var(--glass-border);
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.5rem;
+                    color: var(--text-dim);
+                    font-size: 0.75rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                ">
+                <i data-lucide="code" size="14"></i>
+            </button>
             <button id="logout-btn" onclick="handleLogout()" title="Logout" style="
                         background: transparent;
                         border: none;
@@ -1303,6 +1317,14 @@
         token: localStorage.getItem('druppie_token'),
         user: null
     };
+
+    function openCodeEditor() {
+        if (!state.currentPlanId) {
+            alert('Please select a plan first.');
+            return;
+        }
+        window.open(`/code?plan_id=${state.currentPlanId}`, '_blank');
+    }
 
     // --- Auth Logic ---
 
