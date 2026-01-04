@@ -749,55 +749,68 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				tm.OutputChan <- fmt.Sprintf("[%s] Status updated to RUNNING (Input received)", task.ID)
 			}
 			tm.mu.Unlock()
-			if len(batchIndices) == 0 {
+			// 1. Identify which step to apply input to
+			activeStepIdx := -1
+			if activeStep != nil {
+				// Find index of activeStep in our local plan copy
+				for i := range task.Plan.Steps {
+					if &task.Plan.Steps[i] == activeStep {
+						activeStepIdx = i
+						break
+					}
+				}
+			} else if len(batchIndices) > 0 {
+				activeStepIdx = batchIndices[0]
+			}
+
+			if activeStepIdx == -1 {
 				tm.OutputChan <- fmt.Sprintf("[%s] Error: No active step to apply input to. Resetting state...", task.ID)
 				// If we are getting here repeatedly with "defaults", we are in an infinite loop.
 				// Stop the task.
 				task.Status = TaskStatusError
 				return
 			}
-			activeStepIdx := batchIndices[0]
 
 			// Logic duplication from original main.go
-			if activeStep.Action == "ask_questions" {
-				if answer == "/accept" || answer == "accept" {
-					// Use defaults logic... simplified for simplicity here, assuming main loop might handle or we handle here
-					// We need to reconstruct defaults.
-					// Ideally we refactor defaults logic to helper, but let's do it inlinish
-					var assumptions []interface{}
-					if as, ok := activeStep.Params["assumptions"]; ok {
-						if listAs, isListAs := as.([]interface{}); isListAs {
-							assumptions = listAs
-						}
+			// Apply to plan
+			isAccept := answer == "/accept" || answer == "accept"
+
+			if activeStep.Action == "ask_questions" && isAccept {
+				// Reconstruct defaults from assumptions
+				var assumptions []interface{}
+				if as, ok := activeStep.Params["assumptions"]; ok {
+					if listAs, isListAs := as.([]interface{}); isListAs {
+						assumptions = listAs
 					}
-					var questions []interface{}
-					if qs, ok := activeStep.Params["questions"]; ok {
-						if list, isList := qs.([]interface{}); isList {
-							questions = list
-						} else {
-							questions = []interface{}{qs}
-						}
-					}
-					var details strings.Builder
-					for i, q := range questions {
-						val := "Unknown"
-						if i < len(assumptions) {
-							val = fmt.Sprintf("%v", assumptions[i])
-						}
-						details.WriteString(fmt.Sprintf("%v - %v\n", q, val))
-					}
-					answer = details.String()
 				}
+				var questions []interface{}
+				if qs, ok := activeStep.Params["questions"]; ok {
+					if list, isList := qs.([]interface{}); isList {
+						questions = list
+					} else {
+						questions = []interface{}{qs}
+					}
+				}
+				var details strings.Builder
+				for i, q := range questions {
+					val := "Accepted Default"
+					if i < len(assumptions) {
+						val = fmt.Sprintf("%v", assumptions[i])
+					}
+					details.WriteString(fmt.Sprintf("%v: %v\n", q, val))
+				}
+				answer = details.String()
 			}
 
-			// Apply to plan
-			if answer == "/accept" || answer == "accept" {
+			if isAccept {
 				task.Plan.Steps[activeStepIdx].Status = "completed"
+				task.Plan.Steps[activeStepIdx].Result = answer
 				_ = tm.planner.Store.SavePlan(*task.Plan)
 
 				if activeStepIdx == len(task.Plan.Steps)-1 {
 					tm.OutputChan <- fmt.Sprintf("[%s] Determining next steps...", task.ID)
-					updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, "User accepted content.")
+					// Use the actual answer (details) instead of a hardcoded string
+					updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, answer)
 					if err == nil {
 						task.Plan = updatedPlan
 					}

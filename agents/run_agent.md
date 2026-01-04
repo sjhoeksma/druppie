@@ -22,6 +22,10 @@ When asked to run code, you should output a plan step with action "run_code" and
 - `build_id`: The ID of the build to run (from build_code step result).
 - `command`: Optional override command to run.
 
+**NOTE**: The build artifact already contains the source code from the `src` directory at its root.
+When providing a `command`, do **NOT** include the `src/` prefix for files.
+Example: Use `python hello.py` instead of `python src/hello.py`.
+
 **CRITICAL**: Schedule ONLY ONE `run_code` step unless specifically asked to run multiple times. Do NOT create a loop.
 
 ### Example Step

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 
@@ -53,10 +54,16 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 			// Path: .druppie/plans/<plan-id>/src
 			repoURL = fmt.Sprintf(".druppie/plans/%s/src", planID)
 		} else {
-			if repoURL == "" {
-				return fmt.Errorf("missing required param 'repo_url' or 'path'")
-			}
+			return fmt.Errorf("missing required param 'repo_url' or 'path'")
 		}
+	}
+
+	// Check if source directory exists and is not empty
+	if _, err := os.Stat(repoURL); os.IsNotExist(err) {
+		return fmt.Errorf("source directory '%s' does not exist. You must call 'create_code' before 'build_code'", repoURL)
+	}
+	if entries, err := os.ReadDir(repoURL); err != nil || len(entries) == 0 {
+		return fmt.Errorf("source directory '%s' is empty. You must call 'create_code' with content before 'build_code'", repoURL)
 	}
 
 	// Robustness check: if repoURL contains "plan-" but NOT our current planID, it's likely a hallucination copy-paste

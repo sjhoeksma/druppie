@@ -40,6 +40,11 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	buildID, _ := step.Params["build_id"].(string)
 	cmdStr, _ := step.Params["command"].(string)
 
+	// If buildID is the placeholder, treat it as empty for now to allow auto-detection
+	if buildID == "${BUILD_ID}" || buildID == "BUILD_ID" {
+		buildID = ""
+	}
+
 	planID := ""
 	if p, ok := step.Params["plan_id"].(string); ok {
 		planID = p
@@ -48,7 +53,8 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	}
 
 	if buildID == "" && cmdStr == "" {
-		return fmt.Errorf("run_code requires 'build_id' or 'command'")
+		// We still try to proceed because the auto-detection logic below might find a build
+		// But if we are really stuck, we'll return the error later or during detection
 	}
 
 	// If we have buildID, we need to find where it is.
@@ -107,6 +113,19 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 				outputChan <- fmt.Sprintf("Auto-detected latest build: %s", latestDir)
 			}
 		}
+
+		if artifactPath == "" {
+			// LAST RESORT: Try the source directory
+			srcDir := filepath.Join(cwd, ".druppie", "plans", planID, "src")
+			if entries, err := os.ReadDir(srcDir); err == nil && len(entries) > 0 {
+				artifactPath = srcDir
+				outputChan <- "No build artifacts found. Falling back to source directory for execution."
+			}
+		}
+	}
+
+	if artifactPath == "" && cmdStr == "" {
+		return fmt.Errorf("run_code requires 'build_id' or 'command', and no artifacts were found in context")
 	}
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -134,12 +153,20 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	}
 
 	// Detect artifact type
-	if _, err := os.Stat(filepath.Join(artifactPath, "app")); err == nil {
-		// Go binary
-		imageRef = "ubuntu:latest" // Or alpine if static
+	if _, err := os.Stat(filepath.Join(artifactPath, "main")); err == nil {
+		// Go binary (preferred)
+		imageRef = "ubuntu:latest"
+		cmd = []string{"/workspace/main"}
+	} else if _, err := os.Stat(filepath.Join(artifactPath, "app")); err == nil {
+		// Go binary (legacy/alternate)
+		imageRef = "ubuntu:latest"
 		cmd = []string{"/workspace/app"}
+	} else if _, err := os.Stat(filepath.Join(artifactPath, "main.py")); err == nil {
+		// Python root
+		imageRef = "python:3.11-slim"
+		cmd = []string{"python", "/workspace/main.py"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "src/main.py")); err == nil {
-		// Python (if we copied src)
+		// Python src (fallback)
 		imageRef = "python:3.11-slim"
 		cmd = []string{"python", "/workspace/src/main.py"}
 	} else if _, err := os.Stat(filepath.Join(artifactPath, "package.json")); err == nil {
@@ -166,6 +193,45 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 			} else if cmdStr != "" {
 				// Intelligent Image Selection based on command
 				cmd = strings.Fields(cmdStr)
+
+				// HEURISTIC: Binary name mismatch (main vs app)
+				if len(cmd) > 0 && (cmd[0] == "./main" || cmd[0] == "main" || cmd[0] == "./app" || cmd[0] == "app") {
+					target := cmd[0]
+					if !strings.HasPrefix(target, "./") && !strings.HasPrefix(target, "npm") && !strings.HasPrefix(target, "python") {
+						target = "./" + target
+					}
+					// If specified file DOES NOT exist
+					if _, err := os.Stat(filepath.Join(artifactPath, target)); os.IsNotExist(err) {
+						// Look for the other one
+						other := "app"
+						if strings.Contains(target, "app") {
+							other = "main"
+						}
+						if _, errOther := os.Stat(filepath.Join(artifactPath, other)); errOther == nil {
+							outputChan <- fmt.Sprintf("Correction: binary '%s' not found, mapping to '%s'", target, other)
+							if strings.HasPrefix(target, "./") {
+								cmd[0] = "./" + other
+							} else {
+								cmd[0] = other
+							}
+						}
+					}
+				}
+
+				// HEURISTIC: If command tries to access src/ but it doesn't exist, strip it
+				// Example: "python src/hello.py" -> "python hello.py"
+				for i, arg := range cmd {
+					if strings.HasPrefix(arg, "src/") || strings.HasPrefix(arg, "src\\") {
+						possiblePath := strings.TrimPrefix(strings.TrimPrefix(arg, "src/"), "src\\")
+						if _, err := os.Stat(filepath.Join(artifactPath, possiblePath)); err == nil {
+							// If the file exists without src/ prefix, but NOT with it
+							if _, errSrc := os.Stat(filepath.Join(artifactPath, arg)); os.IsNotExist(errSrc) {
+								outputChan <- fmt.Sprintf("Correction: stripping 'src/' prefix from command argument: %s", arg)
+								cmd[i] = possiblePath
+							}
+						}
+					}
+				}
 
 				if len(cmd) > 0 {
 					switch cmd[0] {
@@ -293,18 +359,24 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 
 	// Wait
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	var exitCode int64
 	select {
 	case err := <-errCh:
 		if err != nil {
 			return fmt.Errorf("error waiting for run container: %w", err)
 		}
-	case <-statusCh:
+	case status := <-statusCh:
+		exitCode = status.StatusCode
 	}
 
 	// Cleanup with detached context to ensure it runs even on cancellation
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = cli.ContainerRemove(cleanupCtx, resp.ID, container.RemoveOptions{Force: true})
+
+	if exitCode != 0 {
+		return fmt.Errorf("container exited with non-zero status: %d", exitCode)
+	}
 
 	outputChan <- "Execution completed."
 	return nil

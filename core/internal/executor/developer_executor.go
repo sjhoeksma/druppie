@@ -64,50 +64,73 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 		outputChan <- fmt.Sprintf("Debug: Received params for create_code: %+v", step.Params)
 
 		if len(fileMap) == 0 {
+			// Template Fallback
+			if tName, ok := step.Params["template"].(string); ok {
+				pType, _ := step.Params["project_type"].(string)
+				outputChan <- fmt.Sprintf("Applying template: %s for project type: %s", tName, pType)
+				switch strings.ToLower(tName) {
+				case "hello-world":
+					switch strings.ToLower(pType) {
+					case "go", "golang":
+						fileMap = map[string]interface{}{"main.go": "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"Hello, Druppie Go World!\")\n}\n"}
+					case "python", "py":
+						fileMap = map[string]interface{}{"main.py": "print(\"Hello, Druppie Python World!\")\n"}
+					case "nodejs", "javascript", "js":
+						fileMap = map[string]interface{}{"app.js": "console.log(\"Hello, Druppie Node World!\");\n"}
+					}
+				}
+			}
 			// Fallback: Check for single file in root params (filename/path + content/code)
 			var path, content string
 
-			if p, ok := step.Params["filename"].(string); ok {
-				path = p
-			}
-			if p, ok := step.Params["path"].(string); ok {
-				path = p
-			}
-
-			if c, ok := step.Params["content"].(string); ok {
-				content = c
-			}
-			if c, ok := step.Params["code"].(string); ok {
-				content = c
+			for _, key := range []string{"filename", "file_name", "path", "file"} {
+				if p, ok := step.Params[key].(string); ok {
+					path = p
+					break
+				}
 			}
 
-			// Check for Language hint
+			for _, key := range []string{"content", "code", "body", "text"} {
+				if c, ok := step.Params[key].(string); ok {
+					content = c
+					break
+				}
+			}
+
+			// Check for Language/Project Type hint
 			lang := ""
 			if l, ok := step.Params["language"].(string); ok {
 				lang = strings.ToLower(l)
+			}
+			if lang == "" {
+				if pt, ok := step.Params["project_type"].(string); ok {
+					lang = strings.ToLower(pt)
+				}
 			}
 
 			// Auto-Infer Path if missing but content exists
 			if path == "" && content != "" {
 				switch lang {
 				case "nodejs", "javascript", "js":
-					path = "src/app.js"
+					path = "app.js"
 				case "python", "py":
-					path = "src/main.py"
+					path = "main.py"
 				case "go", "golang":
-					path = "src/main.go"
+					path = "main.go"
+				case "html":
+					path = "index.html"
 				default:
 					// Generic
-					path = "src/script.txt"
+					path = "script.txt"
 				}
-				outputChan <- fmt.Sprintf("Auto-inferred filename: %s (from language: %s)", path, lang)
+				outputChan <- fmt.Sprintf("Auto-inferred filename: %s (from language/project_type: %s)", path, lang)
 			}
 
 			if path != "" && content != "" {
 				fileMap = map[string]interface{}{path: content}
 				outputChan <- fmt.Sprintf("Recovered single file from params: %s", path)
 			} else {
-				return fmt.Errorf("create_code requires 'files' parameter map or list of objects")
+				return fmt.Errorf("create_code requires 'files' parameter map or list of objects (none found in %v)", step.Params)
 			}
 		}
 
@@ -118,10 +141,12 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 				continue
 			}
 
-			// Clean path to prevent traversal escape (simple check)
-			// Do NOT strip "src/" prefix; let the planner define structure (e.g. src/app.js)
-
+			// Clean path to prevent traversal escape
+			// Strip "src/" prefix if present since projectRoot already points to src/
 			cleanPath := filepath.Clean(path)
+			cleanPath = strings.TrimPrefix(cleanPath, "src/")
+			cleanPath = strings.TrimPrefix(cleanPath, "src\\") // Windows
+
 			if cleanPath == "." || cleanPath == "/" {
 				continue
 			}

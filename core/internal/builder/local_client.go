@@ -88,8 +88,8 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 	} else if _, err := os.Stat(filepath.Join(targetDir, "go.mod")); err == nil {
 		// Golang
 		fmt.Printf("[LocalBuilder] Detected Go project in %s\n", targetDir)
-		// go build -o <outputDir>/app
-		appPath := filepath.Join(outputDir, "app")
+		// go build -o <outputDir>/main
+		appPath := filepath.Join(outputDir, "main")
 		cmd = exec.CommandContext(ctx, "go", "build", "-o", appPath, ".")
 
 	} else if _, err := os.Stat(filepath.Join(targetDir, "requirements.txt")); err == nil {
@@ -145,7 +145,7 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 			filesGo, _ := filepath.Glob(filepath.Join(targetDir, "*.go"))
 			if len(filesGo) > 0 {
 				fmt.Printf("[LocalBuilder] Detected standalone Go files in %s\n", targetDir)
-				appPath := filepath.Join(outputDir, "app")
+				appPath := filepath.Join(outputDir, "main")
 				// Try to build
 				cmd = exec.CommandContext(ctx, "go", "build", "-o", appPath, ".")
 				cmd.Dir = targetDir

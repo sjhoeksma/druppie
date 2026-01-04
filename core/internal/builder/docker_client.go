@@ -89,7 +89,7 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		imageRef = "golang:1.24-alpine"
 		// Go builds to the mounted output dir
 		// We need to be careful with paths inside the container
-		commands = []string{"/bin/sh", "-c", "go build -o ../builds/" + buildID + "/app ."}
+		commands = []string{"/bin/sh", "-c", "go build -o ../builds/" + buildID + "/main ."}
 	} else if _, err := os.Stat(filepath.Join(targetDir, "requirements.txt")); err == nil {
 		imageRef = "python:3.11-slim"
 		// Python often doesn't "build" binaries, but let's assume we want to prep dependencies or artifacts
@@ -109,7 +109,7 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		} else if len(goFiles) > 0 {
 			// Standalone Go file - build it
 			imageRef = "golang:1.24-alpine"
-			commands = []string{"/bin/sh", "-c", "go build -o ../builds/" + buildID + "/app ."}
+			commands = []string{"/bin/sh", "-c", "go build -o ../builds/" + buildID + "/main ."}
 		} else if len(jsFiles) > 0 {
 			// Standalone JS file - copy
 			imageRef = "node:20-alpine"
