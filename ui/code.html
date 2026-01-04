@@ -3,9 +3,16 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Druppie Code</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Druppie">
+    <meta name="theme-color" content="#0f172a">
+    <title>Druppie</title>
     <link rel="icon" type="image/svg+xml" href="../druppie_logo.svg">
+    <link rel="apple-touch-icon" href="../druppie_logo.png">
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
@@ -36,10 +43,11 @@
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            transition: transform 0.3s ease;
         }
 
         .sidebar-header {
-            padding: 1rem;
+            padding: 0.6rem 1rem;
             border-bottom: 1px solid var(--border);
             font-weight: 600;
             display: flex;
@@ -62,6 +70,7 @@
             align-items: center;
             gap: 0.5rem;
             color: var(--text-dim);
+            word-break: break-word;
         }
 
         .file-item:hover {
@@ -88,6 +97,14 @@
             justify-content: space-between;
             align-items: center;
             height: 50px;
+            gap: 0.5rem;
+        }
+
+        #current-file {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         #monaco {
@@ -102,6 +119,7 @@
             color: var(--bg-deep);
             font-weight: 600;
             cursor: pointer;
+            white-space: nowrap;
         }
 
         .btn:hover {
@@ -118,24 +136,115 @@
             border-color: var(--text-main);
             color: var(--text-main);
         }
+
+        #menu-toggle {
+            display: none;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            padding: 0.25rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            body {
+                grid-template-columns: 1fr;
+            }
+
+            #sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 250px;
+                z-index: 1000;
+                transform: translateX(-100%);
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+
+            #menu-toggle {
+                display: block;
+            }
+
+            #editor-header {
+                padding: 0.5rem;
+            }
+
+            .btn {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.85rem;
+            }
+
+            #current-file {
+                font-size: 0.85rem;
+            }
+
+            /* Overlay when sidebar is open */
+            #sidebar.open::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 250px;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: -1;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .btn-text {
+                display: none;
+            }
+
+            .btn {
+                padding: 0.5rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+
+        /* Hide Monaco Editor mobile keyboard icon */
+        .monaco-editor .iPadShowKeyboard {
+            display: none !important;
+        }
     </style>
 </head>
 
 <body>
     <div id="sidebar">
         <div class="sidebar-header">
-            <span>Files</span>
-            <button class="btn-secondary" onclick="refreshFiles()" style="padding:0.25rem;"><i data-lucide="refresh-cw"
-                    style="width:16px;"></i></button>
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 0.1rem;">
+                    <img src="../druppie_logo.svg" alt="Druppie" style="width: 32px; height: 32px;">
+                    <div id="app-version" style="font-size: 0.55rem; color: var(--text-dim); opacity: 0.7;">v...</div>
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 0.95rem; font-weight: 600;">Druppie</span>
+                    <span style="font-size: 0.7rem; color: var(--text-dim); opacity: 0.8;">File Editor</span>
+                </div>
+            </div>
+            <button class="btn-secondary" onclick="refreshFiles()" style="padding:0.25rem;" title="Refresh files">
+                <i data-lucide="refresh-cw" style="width:16px;"></i>
+            </button>
         </div>
         <div id="file-tree">Loading...</div>
     </div>
     <div id="editor-container">
         <div id="editor-header">
+            <button id="menu-toggle" onclick="toggleSidebar()"><i data-lucide="menu" style="width:20px;"></i></button>
             <span id="current-file">No file selected</span>
             <div style="display:flex; gap:0.5rem;">
-                <button class="btn" style="background:#22c55e;" onclick="saveFile()">Save</button>
-                <button class="btn btn-secondary" onclick="window.close()">Close</button>
+                <button class="btn" style="background:#22c55e;" onclick="saveFile()"><span
+                        class="btn-text">Save</span><i data-lucide="save" style="width:16px;"></i></button>
+                <button class="btn btn-secondary"
+                    onclick="window.location.href=`/ui/index.html?plan_id=${planID}`"><span
+                        class="btn-text">Close</span><i data-lucide="x" style="width:16px;"></i></button>
             </div>
         </div>
         <div id="monaco"></div>
@@ -149,16 +258,56 @@
         let editor;
         let currentPath = null;
 
+        // Get token from localStorage (shared with main UI)
+        const token = localStorage.getItem('druppie_token');
+
+        // Fetch interceptor to add auth token
+        const originalFetch = window.fetch;
+        window.fetch = async (...args) => {
+            let [resource, config] = args;
+            if (typeof resource === 'string' && resource.startsWith('/v1/')) {
+                config = config || {};
+                config.headers = config.headers || {};
+                if (token) {
+                    config.headers['Authorization'] = 'Bearer ' + token;
+                }
+            }
+            const response = await originalFetch(resource, config);
+            if (response.status === 401) {
+                alert('Authentication required. Please login from the main UI.');
+                window.close();
+            }
+            return response;
+        };
+
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
         require(['vs/editor/editor.main'], function () {
             editor = monaco.editor.create(document.getElementById('monaco'), {
-                value: '// Select a file to view',
+                value: '// Select a file from the menu',
                 language: 'javascript',
                 theme: 'vs-dark',
-                automaticLayout: true
+                automaticLayout: true,
+                quickSuggestions: false,
+                // Hide mobile keyboard icon
+                readOnly: false,
+                domReadOnly: false
             });
             refreshFiles();
+            fetchVersion();
         });
+
+        async function fetchVersion() {
+            try {
+                const res = await fetch('/v1/version');
+                if (res.ok) {
+                    const data = await res.json();
+                    const el = document.getElementById('app-version');
+                    if (el) el.textContent = `v${data.version}`;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch version", e);
+            }
+        }
 
         async function refreshFiles() {
             if (!planID) {
@@ -190,32 +339,6 @@
             lucide.createIcons();
         }
 
-        async function loadFile(path) {
-            currentPath = path;
-            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
-            // Visual feedback basic
-            document.getElementById('current-file').innerText = path;
-
-            try {
-                const res = await fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`);
-                const content = await res.text();
-                editor.setValue(content);
-
-                // Detect language
-                let lang = 'plaintext';
-                if (path.endsWith('.js')) lang = 'javascript';
-                if (path.endsWith('.py')) lang = 'python';
-                if (path.endsWith('.go')) lang = 'go';
-                if (path.endsWith('.html')) lang = 'html';
-                if (path.endsWith('.json')) lang = 'json';
-                if (path.endsWith('.md')) lang = 'markdown';
-                if (path.endsWith('.yaml')) lang = 'yaml';
-                monaco.editor.setModelLanguage(editor.getModel(), lang);
-
-            } catch (e) {
-                editor.setValue('Error loading file');
-            }
-        }
 
         async function saveFile() {
             if (!currentPath) return;
@@ -225,15 +348,64 @@
                     method: 'PUT',
                     body: content
                 });
-                // Flash success?
+                // Flash success
                 const btn = document.querySelector('button[onclick="saveFile()"]');
-                const oldText = btn.innerText;
-                btn.innerText = 'Saved!';
-                setTimeout(() => btn.innerText = oldText, 2000);
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = '<span class="btn-text">Saved!</span><i data-lucide="check" style="width:16px;"></i>';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    lucide.createIcons();
+                }, 2000);
             } catch (e) {
                 alert('Failed to save');
             }
         }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        // Close sidebar on file selection (mobile)
+        function loadFile(path) {
+            currentPath = path;
+            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('current-file').innerText = path;
+
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+
+            try {
+                fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`)
+                    .then(res => res.text())
+                    .then(content => {
+                        editor.setValue(content);
+
+                        // Detect language
+                        let lang = 'plaintext';
+                        if (path.endsWith('.js')) lang = 'javascript';
+                        if (path.endsWith('.py')) lang = 'python';
+                        if (path.endsWith('.go')) lang = 'go';
+                        if (path.endsWith('.html')) lang = 'html';
+                        if (path.endsWith('.json')) lang = 'json';
+                        if (path.endsWith('.md')) lang = 'markdown';
+                        if (path.endsWith('.yaml')) lang = 'yaml';
+                        monaco.editor.setModelLanguage(editor.getModel(), lang);
+                    })
+                    .catch(e => {
+                        editor.setValue('Error loading file');
+                    });
+            } catch (e) {
+                editor.setValue('Error loading file');
+            }
+        }
+
+        // Initialize icons after DOM updates
+        lucide.createIcons();
+
     </script>
 </body>
 

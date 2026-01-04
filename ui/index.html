@@ -1169,6 +1169,21 @@
                 <i data-lucide="trash-2" size="14"></i>
             </button>
 
+            <button onclick="openCodeEditor()" title="Open Code Editor" style="
+                    background: var(--glass-bg);
+                    border: 1px solid var(--glass-border);
+                    border-radius: 0.5rem;
+                    padding: 0.25rem 0.5rem;
+                    color: var(--text-dim);
+                    font-size: 0.75rem;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                ">
+                <i data-lucide="code" size="14"></i>
+            </button>
+
             <a href="../index.html" title="Open Documentation Portal" style="
                     background: var(--glass-bg);
                     border: 1px solid var(--glass-border);
@@ -1184,20 +1199,7 @@
                 ">
                 <i data-lucide="book" size="14"></i>
             </a>
-            <button onclick="openCodeEditor()" title="Open Code Editor" style="
-                    background: var(--glass-bg);
-                    border: 1px solid var(--glass-border);
-                    border-radius: 0.5rem;
-                    padding: 0.25rem 0.5rem;
-                    color: var(--text-dim);
-                    font-size: 0.75rem;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.25rem;
-                ">
-                <i data-lucide="code" size="14"></i>
-            </button>
+
             <button id="logout-btn" onclick="handleLogout()" title="Logout" style="
                         background: transparent;
                         border: none;
@@ -1320,10 +1322,9 @@
 
     function openCodeEditor() {
         if (!state.currentPlanId) {
-            alert('Please select a plan first.');
-            return;
+            return; // Silently return if no plan selected
         }
-        window.open(`/code?plan_id=${state.currentPlanId}`, '_blank');
+        window.location.href = `/code?plan_id=${state.currentPlanId}`;
     }
 
     // --- Auth Logic ---
@@ -1375,10 +1376,29 @@
         if (state.token) {
             // Optimistic success, hide login
             document.getElementById('login-overlay').style.display = 'none';
-            // Start things
-            updatePlanSelector();
+
+            // Check for plan_id in URL parameter (e.g., from code editor)
+            const urlParams = new URLSearchParams(window.location.search);
+            const planIdParam = urlParams.get('plan_id');
+
+            // Start things - await updatePlanSelector if we need to switch to a specific plan
+            if (planIdParam) {
+                await updatePlanSelector();
+                // Set the dropdown value and trigger change event to load the plan
+                const selector = document.getElementById('plan-selector');
+                if (selector) {
+                    selector.value = planIdParam;
+                    // Trigger the onchange event to load the plan
+                    selector.dispatchEvent(new Event('change'));
+                }
+                // Clean up URL (remove parameter)
+                window.history.replaceState({}, '', '/ui/index.html');
+            } else {
+                updatePlanSelector();
+            }
+
             state.stateInterval = setInterval(updatePlanSelector, 5000);
-            fetchVersion(); // Added fetchVersion
+            fetchVersion();
         } else {
             // Show login
             showLogin();

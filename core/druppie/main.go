@@ -796,9 +796,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						id = "plan-" + id
 					}
 
-					// Find plan dir: .druppie/plans/<id>
+					// Find plan dir: .druppie/plans/<id>/src (source code only)
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id)
+					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
 
 					var files []string
 					// Walk relative
@@ -809,7 +809,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						if !info.IsDir() {
 							rel, _ := filepath.Rel(planDir, path)
 							// Filter out common junk
-							if !strings.Contains(rel, ".git") {
+							if !strings.Contains(rel, ".git") && !strings.HasPrefix(rel, "node_modules") {
 								files = append(files, rel)
 							}
 						}
@@ -836,7 +836,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id)
+					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
 					absPath := filepath.Join(planDir, pathParam)
 
 					// Security check
@@ -862,7 +862,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id)
+					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
 					absPath := filepath.Join(planDir, pathParam)
 
 					// Security check
