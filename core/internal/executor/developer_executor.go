@@ -142,10 +142,7 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 			}
 
 			// Clean path to prevent traversal escape
-			// Strip "src/" prefix if present since projectRoot already points to src/
 			cleanPath := filepath.Clean(path)
-			cleanPath = strings.TrimPrefix(cleanPath, "src/")
-			cleanPath = strings.TrimPrefix(cleanPath, "src\\") // Windows
 
 			if cleanPath == "." || cleanPath == "/" {
 				continue
