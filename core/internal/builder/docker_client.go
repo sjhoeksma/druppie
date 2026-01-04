@@ -80,10 +80,10 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		hasBuildScript := strings.Contains(string(content), "\"build\":")
 
 		if hasBuildScript {
-			commands = []string{"/bin/sh", "-c", "npm install && npm run build && cp -r . ../builds/" + buildID}
+			commands = []string{"/bin/sh", "-c", "npm install --no-audit --no-fund && npm run build && cp -r . ../builds/" + buildID}
 		} else {
 			// No build script - just install and copy
-			commands = []string{"/bin/sh", "-c", "npm install && cp -r . ../builds/" + buildID}
+			commands = []string{"/bin/sh", "-c", "npm install --no-audit --no-fund && cp -r . ../builds/" + buildID}
 		}
 	} else if _, err := os.Stat(filepath.Join(targetDir, "go.mod")); err == nil {
 		imageRef = "golang:1.24-alpine"
@@ -169,9 +169,9 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		// Just a dummy file or fallback
 	}
 
-	// Create MultiWriter: File + Stdout + Provided Writer
+	// Create MultiWriter: File + Provided Writer
 	var writers []io.Writer
-	writers = append(writers, os.Stdout)
+	//writers = append(writers, os.Stdout)
 	if logFile != nil {
 		writers = append(writers, logFile)
 		defer logFile.Close()
