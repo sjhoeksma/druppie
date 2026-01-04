@@ -212,3 +212,7 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 func (c *DockerClient) GetBuildStatus(ctx context.Context, buildID string) (string, error) {
 	return "Succeeded", nil
 }
+
+func (c *DockerClient) IsLocal() bool {
+	return false
+}

@@ -203,3 +203,7 @@ func (c *LocalClient) GetBuildStatus(ctx context.Context, buildID string) (strin
 	// Real implementation would look up state.
 	return "Succeeded", nil
 }
+
+func (c *LocalClient) IsLocal() bool {
+	return true
+}

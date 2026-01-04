@@ -20,7 +20,7 @@ func NewDispatcher(buildEngine builder.BuildEngine) *Dispatcher {
 			&FileReaderExecutor{},                // File Reader
 			&DeveloperExecutor{},                 // Developer (Code Creator)
 			&BuildExecutor{Builder: buildEngine}, // Helper for building code
-			&RunExecutor{},                       // Helper for running code
+			&RunExecutor{Builder: buildEngine},   // Helper for running code
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},
