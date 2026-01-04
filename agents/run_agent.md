@@ -4,6 +4,7 @@ name: "Run Agent"
 description: "Specialized agent for running built artifacts or code in a sandboxed environment."
 type: execution-agent
 version: 1.0.0
+native: true
 skills: ["run_code"]
 subagents: []
 tools: []
@@ -29,7 +30,7 @@ When asked to run code, you should output a plan step with action "run_code" and
 {
   "action": "run_code",
   "params": {
-    "build_id": "build-170000000",
+    "build_id": "${BUILD_ID}",
     "command": "npm start"
   },
   "depends_on": [PREVIOUS_BUILD_STEP_ID]

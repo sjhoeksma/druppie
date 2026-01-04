@@ -57,7 +57,8 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 			// Check if it contains some other plan ID pattern
 			// Also check for short IDs like "1" or "plans/1" which are common hallucinations
 			if strings.Contains(repoURL, "plan-") || strings.Contains(repoURL, "<YOUR_PLAN_ID>") || strings.Contains(repoURL, "/plans/1/") {
-				outputChan <- fmt.Sprintf("⚠️ Detected likely invalid path '%s'. Auto-correcting to current plan '%s'...", repoURL, planID)
+				// Silent auto-correction for common hallucinations
+				// outputChan <- fmt.Sprintf("⚠️ Detected likely invalid path '%s'. Auto-correcting to current plan '%s'...", repoURL, planID)
 				repoURL = fmt.Sprintf(".druppie/plans/%s/src", planID)
 			}
 		}

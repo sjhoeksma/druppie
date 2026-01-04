@@ -4,6 +4,7 @@ name: "Developer"
 description: "Specialized agent for writing, modifying, and generating source code files."
 type: execution-agent
 version: 1.0.0
+native: true
 skills: ["create_code", "modify_code"]
 subagents: []
 tools: []

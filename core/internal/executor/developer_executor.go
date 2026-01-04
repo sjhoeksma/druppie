@@ -57,7 +57,7 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 		// Debug params
 		outputChan <- fmt.Sprintf("Debug: Received params for create_code: %+v", step.Params)
 
-		if fileMap == nil || len(fileMap) == 0 {
+		if len(fileMap) == 0 {
 			// Fallback: Check for single file in root params (filename/path + content/code)
 			var path, content string
 
