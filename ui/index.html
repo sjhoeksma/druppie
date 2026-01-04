@@ -296,10 +296,12 @@
             flex: 1;
             padding: 0rem 2rem 0rem 2rem;
             overflow-x: auto;
+            overflow-y: hidden;
             display: flex;
             gap: 2rem;
             background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.05), transparent);
             transition: background 0.5s ease;
+            min-height: 0;
         }
 
         #kanban-container.state-pending {
@@ -1385,12 +1387,16 @@
             if (planIdParam) {
                 await updatePlanSelector();
                 // Set the dropdown value and trigger change event to load the plan
-                const selector = document.getElementById('plan-selector');
-                if (selector) {
-                    selector.value = planIdParam;
-                    // Trigger the onchange event to load the plan
-                    selector.dispatchEvent(new Event('change'));
-                }
+                // Use setTimeout to avoid interfering with initial page interactions
+                setTimeout(() => {
+                    const selector = document.getElementById('plan-selector');
+                    if (selector && selector.value !== planIdParam) {
+                        selector.value = planIdParam;
+                        // Trigger the onchange event to load the plan with proper bubbling
+                        const event = new Event('change', { bubbles: true });
+                        selector.dispatchEvent(event);
+                    }
+                }, 100);
                 // Clean up URL (remove parameter)
                 window.history.replaceState({}, '', '/ui/index.html');
             } else {
@@ -1501,16 +1507,16 @@
     // Plan selector change handler
     elements.planSelector.onchange = async function () {
         const selectedPlanId = this.value;
-        if (!selectedPlanId) return;
+        if (!selectedPlanId || selectedPlanId === state.currentPlanId) return;
 
-        state.currentPlanId = selectedPlanId;
         state.lastLogIndex = 0;
         state.shownStepIds = new Set();
         elements.systemLogs.innerHTML = '';
         elements.stepLogs.innerHTML = '';
         elements.chat.innerHTML = '';
-
-        addChatMessage('ai', `🔄 Wissel naar plan: ${selectedPlanId}`);
+        if (state.currentPlanId)
+            addChatMessage('ai', `🔄 Wissel naar plan: ${selectedPlanId}`);
+        state.currentPlanId = selectedPlanId;
         startMonitoring();
     };
 
