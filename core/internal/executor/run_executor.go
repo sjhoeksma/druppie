@@ -146,7 +146,7 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 		// Node
 		imageRef = "node:20-alpine"
 		// If we ran build, maybe main is in dist/index.js? Or start script?
-		cmd = []string{"npm", "start"}
+		cmd = []string{"npm", "start", "--silent"}
 	} else {
 		// Fallback: Check for *.js
 		jsFiles, _ := filepath.Glob(filepath.Join(artifactPath, "*.js"))
@@ -160,6 +160,22 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 			if cmdStr != "" {
 				imageRef = "ubuntu:latest"
 				cmd = strings.Fields(cmdStr)
+				// Clean up npm command log noise
+				if len(cmd) > 0 && cmd[0] == "npm" {
+					if len(cmd) > 1 && (cmd[1] == "start" || cmd[1] == "run") {
+						// Add --silent if not present
+						hasSilent := false
+						for _, arg := range cmd {
+							if arg == "--silent" || arg == "-s" {
+								hasSilent = true
+								break
+							}
+						}
+						if !hasSilent {
+							cmd = append(cmd, "--silent")
+						}
+					}
+				}
 			} else {
 				return fmt.Errorf("could not detect run strategy for artifact in %s", artifactPath)
 			}
