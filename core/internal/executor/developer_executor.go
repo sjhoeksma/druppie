@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
@@ -73,6 +74,27 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 			}
 			if c, ok := step.Params["code"].(string); ok {
 				content = c
+			}
+
+			// Check for Language hint
+			lang := ""
+			if l, ok := step.Params["language"].(string); ok {
+				lang = strings.ToLower(l)
+			}
+
+			// Auto-Infer Path if missing but content exists
+			if path == "" && content != "" {
+				if lang == "nodejs" || lang == "javascript" || lang == "js" {
+					path = "src/app.js"
+				} else if lang == "python" || lang == "py" {
+					path = "src/main.py"
+				} else if lang == "go" || lang == "golang" {
+					path = "src/main.go"
+				} else {
+					// Generic
+					path = "src/script.txt"
+				}
+				outputChan <- fmt.Sprintf("Auto-inferred filename: %s (from language: %s)", path, lang)
 			}
 
 			if path != "" && content != "" {
