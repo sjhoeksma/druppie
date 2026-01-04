@@ -38,7 +38,12 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 	}
 
 	// Default to plan directory if internal context is present
-	planID, _ := step.Params["_plan_id"].(string)
+	planID := ""
+	if p, ok := step.Params["plan_id"].(string); ok {
+		planID = p
+	} else if p, ok := step.Params["_plan_id"].(string); ok {
+		planID = p
+	}
 
 	if repoURL == "" || repoURL == "." || repoURL == "./" {
 		if planID != "" {

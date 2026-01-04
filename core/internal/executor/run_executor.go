@@ -39,7 +39,13 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 
 	buildID, _ := step.Params["build_id"].(string)
 	cmdStr, _ := step.Params["command"].(string)
-	planID, _ := step.Params["_plan_id"].(string) // We injected this in TaskManager
+
+	planID := ""
+	if p, ok := step.Params["plan_id"].(string); ok {
+		planID = p
+	} else if p, ok := step.Params["_plan_id"].(string); ok {
+		planID = p
+	}
 
 	if buildID == "" && cmdStr == "" {
 		return fmt.Errorf("run_code requires 'build_id' or 'command'")

@@ -541,7 +541,46 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						if step.Params == nil {
 							step.Params = make(map[string]interface{})
 						}
-						step.Params["_plan_id"] = task.ID
+						step.Params["plan_id"] = task.ID
+
+						// Parameter Variable Substitution
+						// Resolve ${VAR} using results from previous steps
+						// 1. Collect results map
+						resultsMap := make(map[string]string)
+						tm.mu.Lock()
+						currentP, _ := tm.planner.Store.GetPlan(task.ID)
+						tm.mu.Unlock()
+
+						for _, prevStep := range currentP.Steps {
+							if prevStep.ID < step.ID && prevStep.Status == "completed" {
+								// Parse result string (Key: Value\nKey:Value)
+								lines := strings.Split(prevStep.Result, "\n")
+								for _, line := range lines {
+									parts := strings.SplitN(line, ":", 2)
+									if len(parts) == 2 {
+										k := strings.TrimSpace(parts[0])
+										v := strings.TrimSpace(parts[1])
+										resultsMap[k] = v
+									}
+								}
+							}
+						}
+
+						// Inject Context Variables
+						resultsMap["PLAN_ID"] = task.ID
+
+						// Replace in Params
+						for k, v := range step.Params {
+							if strVal, ok := v.(string); ok && strings.Contains(strVal, "${") {
+								for rk, rv := range resultsMap {
+									placeholder := "${" + rk + "}"
+									if strings.Contains(strVal, placeholder) {
+										strVal = strings.ReplaceAll(strVal, placeholder, rv)
+									}
+								}
+								step.Params[k] = strVal
+							}
+						}
 						execErr = exec.Execute(task.Ctx, *step, outputBridge)
 					} else {
 						execErr = tm.executeStep(task.Ctx, step)

@@ -20,9 +20,14 @@ func (e *DeveloperExecutor) CanHandle(action string) bool {
 func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
 	outputChan <- "DeveloperExecutor: Processing request..."
 
-	planID, ok := step.Params["_plan_id"].(string)
-	if !ok || planID == "" {
-		// Fallback if not injected, though it should be
+	planID := ""
+	if p, ok := step.Params["plan_id"].(string); ok {
+		planID = p
+	} else if p, ok := step.Params["_plan_id"].(string); ok {
+		planID = p
+	}
+
+	if planID == "" {
 		return fmt.Errorf("missing plan ID in context")
 	}
 
@@ -84,13 +89,14 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 
 			// Auto-Infer Path if missing but content exists
 			if path == "" && content != "" {
-				if lang == "nodejs" || lang == "javascript" || lang == "js" {
+				switch lang {
+				case "nodejs", "javascript", "js":
 					path = "src/app.js"
-				} else if lang == "python" || lang == "py" {
+				case "python", "py":
 					path = "src/main.py"
-				} else if lang == "go" || lang == "golang" {
+				case "go", "golang":
 					path = "src/main.go"
-				} else {
+				default:
 					// Generic
 					path = "src/script.txt"
 				}

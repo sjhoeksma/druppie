@@ -61,6 +61,7 @@ Strategies:
    - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een', 'plaats', 'bij'), NO diff characters (`+`, `-`). NO 'scene_number', 'scene/CID' (use 'scene_id'). NO 'haar' field (use 'duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
    - **Verification**: Ensure every object ends cleanly with `}`.
    - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S', 'qa-expert', or invalid IDs.
+   - **Paths**: Do NOT hardcode paths like `.druppie/plans/1/...`. ALWAYS use `${PLAN_ID}` variable for dynamic paths (e.g. `.druppie/plans/${PLAN_ID}/src`).
    - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
    - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects. **Do NOT use 'script_outline' or 'scenes_draft' keys. Use 'av_script' ONLY.**
    - **Language Handling**: Content fields (like `audio_text`, `titles`, `descriptions`) MUST be in the `User Language`. Technical Prompts (like `visual_prompt`) MUST be in ENGLISH.

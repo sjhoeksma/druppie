@@ -33,7 +33,7 @@ When asked to build, you should output a plan step with action "build_code" and 
 {
   "action": "build_code",
   "params": {
-    "repo_url": ".druppie/plans/<YOUR_PLAN_ID>/src"
+    "repo_url": ".druppie/plans/${PLAN_ID}/src"
   }
 }
 ```
