@@ -109,7 +109,7 @@ If you’ve made changes to the code or UI and want to update your running `drup
 
 3.  **Plan Generation**: Generate a plan for a specific intent.
     ```bash
-    ./druppie plan "create a new project with golang"
+    ./druppie run "create a new project with golang"
     ```
     
 
@@ -183,7 +183,7 @@ For quick testing without login, use the `--demo` flag. This forces the applicat
 
 # Use CLI tools in demo mode (skip login)
 ./druppie chat --demo
-./druppie plan "deploy database" --demo
+./druppie run "deploy database" --demo
 ```
 
 ### 4. RBAC & Filtering

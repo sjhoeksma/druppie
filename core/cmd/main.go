@@ -1424,9 +1424,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		},
 	}
 
-	var planCmd = &cobra.Command{
-		Use:   "plan [prompt]",
-		Short: "Generate a plan for a given prompt",
+	var runCmd = &cobra.Command{
+		Use:   "run [prompt]",
+		Short: "Run a plan for a given prompt",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			_, _, router, planner, _, iamProv, err := setup(cmd)
@@ -1619,7 +1619,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(chatCmd)
-	rootCmd.AddCommand(planCmd)
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(serveCmd)
 
 	// Default to server mode

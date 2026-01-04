@@ -23,7 +23,9 @@
 - [x] Add authentication groups
 - [ ] Secret management
 - [ ] Finish the admin UI
-- [ ] Version number by checking git tags
+- [x] Version number by checking git tags
+- [ ] Cost management, tokens used by month
+- [ ] Build plane
 
 # TESTING
 
