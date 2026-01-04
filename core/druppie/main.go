@@ -643,7 +643,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
-					id, err := buildEngine.TriggerBuild(r.Context(), req.RepoURL, req.CommitHash, "")
+					id, err := buildEngine.TriggerBuild(r.Context(), req.RepoURL, req.CommitHash, "", nil)
 					if err != nil {
 						http.Error(w, fmt.Sprintf("Build failed: %v", err), http.StatusInternalServerError)
 						return
@@ -1707,29 +1707,47 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				tm.OutputChan <- responseOutput
 			}
 
-			// Execution Loop
-			done := false
-			for !done {
-				select {
-				case log := <-tm.OutputChan:
-					fmt.Println(log)
-				case <-time.After(500 * time.Millisecond):
-					// Check status periodically
-					// Note: Direct access is slightly racy but acceptable for this CLI tool
-					switch task.Status {
-					case TaskStatusWaitingInput:
-						fmt.Println("[Auto-Pilot] Input required. Auto-accepting defaults...")
-						// Simulate user verify/accept delay
-						time.Sleep(1 * time.Second)
-						task.InputChan <- "/accept"
-					case TaskStatusCompleted:
-						fmt.Println("[Auto-Pilot] Plan execution completed successfully.")
-						done = true
-					case TaskStatusError:
-						fmt.Println("[Auto-Pilot] Plan execution failed.")
-						done = true
+			// Initialize Logging to File
+			logDir := filepath.Join(".druppie", "plans", currentPlan.ID, "logs")
+			if err := os.MkdirAll(logDir, 0755); err == nil {
+				logPath := filepath.Join(logDir, "execution.log")
+				if f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+					defer f.Close()
+					// Wrap output handling to write to file
+					// We can't easily replace tm.OutputChan logic, but we can intercept the read loop below.
+
+					// Execution Loop with File Logging
+					done := false
+					for !done {
+						select {
+						case log := <-tm.OutputChan:
+							fmt.Println(log)
+							if _, err := f.WriteString(log + "\n"); err != nil {
+								fmt.Printf("Error writing to log: %v\n", err)
+							}
+						case <-time.After(500 * time.Millisecond):
+							// Check status periodically
+							// Note: Direct access is slightly racy but acceptable for this CLI tool
+							switch task.Status {
+							case TaskStatusWaitingInput:
+								fmt.Println("[Auto-Pilot] Input required. Auto-accepting defaults...")
+								// Simulate user verify/accept delay
+								time.Sleep(1 * time.Second)
+								task.InputChan <- "/accept"
+							case TaskStatusCompleted:
+								fmt.Println("[Auto-Pilot] Plan execution completed successfully.")
+								done = true
+							case TaskStatusError:
+								fmt.Println("[Auto-Pilot] Plan execution failed.")
+								done = true
+							}
+						}
 					}
+				} else {
+					fmt.Printf("Failed to open execution log: %v\n", err)
 				}
+			} else {
+				fmt.Printf("Failed to create log dir: %v\n", err)
 			}
 
 			// Fetch final state

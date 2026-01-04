@@ -513,14 +513,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 								parts := strings.SplitN(msg, "=", 2)
 								if len(parts) == 2 {
 									key := strings.TrimPrefix(parts[0], "RESULT_")
-									resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
+									if key == "CONSOLE_OUTPUT" {
+										resultBuilder.WriteString(parts[1] + "\n")
+									} else {
+										resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
+									}
 								}
-								// Do NOT log functional results to user console to keep clean?
-								// Or log them? The user example showed RESULT_VIDEO_FILE...
-								// Let's keep logging them but buffered.
-								logMu.Lock()
-								logBuffer = append(logBuffer, msg)
-								logMu.Unlock()
+								// Do NOT log result lines to console/logBuffer.
+								// They are internal protocol for result passing.
 							} else {
 								logMu.Lock()
 								logBuffer = append(logBuffer, msg)

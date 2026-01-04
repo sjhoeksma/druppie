@@ -29,7 +29,7 @@ func NewLocalClient(workingDir string) (*LocalClient, error) {
 }
 
 // TriggerBuild executes a local build script or command
-func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string) (string, error) {
+func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string, logWriter io.Writer) (string, error) {
 	// 1. Validate Input (Sandbox Check)
 	targetDir := repoURL
 	if !filepath.IsAbs(targetDir) {
@@ -133,16 +133,23 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 			return "", err
 		}
 	} else {
-		logFile, err = os.Create(filepath.Join(outputDir, "build.log"))
-		if err != nil {
-			return "", err
-		}
+		// Just a dummy file or fallback
 	}
-	defer logFile.Close()
 
-	// MultiWriter to stdout for visibility
-	cmd.Stdout = io.MultiWriter(logFile, os.Stdout)
-	cmd.Stderr = io.MultiWriter(logFile, os.Stderr)
+	// Prepare Writers
+	var writers []io.Writer
+	writers = append(writers, os.Stdout)
+	if logFile != nil {
+		writers = append(writers, logFile)
+		defer logFile.Close()
+	}
+	if logWriter != nil {
+		writers = append(writers, logWriter)
+	}
+
+	multiWriter := io.MultiWriter(writers...)
+	cmd.Stdout = multiWriter
+	cmd.Stderr = multiWriter
 
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("build failed: %w", err)

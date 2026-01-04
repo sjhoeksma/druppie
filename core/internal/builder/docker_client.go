@@ -43,7 +43,7 @@ func NewDockerClient(workingDir string) (*DockerClient, error) {
 }
 
 // TriggerBuild runs a build inside a container
-func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string) (string, error) {
+func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string, logWriter io.Writer) (string, error) {
 	// 1. Path Resolution & Security
 	targetDir := repoURL
 	if !filepath.IsAbs(targetDir) {
@@ -141,23 +141,23 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 			return "", err
 		}
 	} else {
-		logFile, err = os.Create(filepath.Join(outputDir, "build.log"))
-		if err != nil {
-			return "", err
-		}
+		// Just a dummy file or fallback
 	}
-	defer logFile.Close()
+
+	// Create MultiWriter: File + Stdout + Provided Writer
+	var writers []io.Writer
+	writers = append(writers, os.Stdout)
+	if logFile != nil {
+		writers = append(writers, logFile)
+		defer logFile.Close()
+	}
+	if logWriter != nil {
+		writers = append(writers, logWriter)
+	}
 
 	out, err := c.Client.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true})
 	if err == nil {
-		// Docker logs are multiplexed, use stdcopy
-		// Create a pipe to stream to memory/channel as well if we could pass it down?
-		// For now, let's just make sure we capture it.
-		// Use a MultiWriter to write to file AND stdout (which is captured by current process, but better if we could stream to channel)
-		// But TriggerBuild doesn't accept a channel.
-		// Let's just write to stdout so the CLI sees it (DockerClient runs in same process)
-
-		mw := io.MultiWriter(logFile, os.Stdout)
+		mw := io.MultiWriter(writers...)
 		stdcopy.StdCopy(mw, mw, out)
 		out.Close()
 	}

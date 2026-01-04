@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -59,7 +60,7 @@ func NewTektonClient(namespace string) (*TektonClient, error) {
 }
 
 // TriggerBuild creates a PipelineRun to build the repo
-func (c *TektonClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string) (string, error) {
+func (c *TektonClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string, logWriter io.Writer) (string, error) {
 	// Name generation
 	runName := fmt.Sprintf("build-%s", filepath.Base(repoURL))
 	// Sanitize name if needed, simple version for now

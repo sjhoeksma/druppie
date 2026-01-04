@@ -3,6 +3,7 @@ package executor
 import (
 	"bufio"
 	"context"
+
 	"fmt"
 	"io"
 	"os"
@@ -213,13 +214,35 @@ func (e *RunExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 		// BUT outputChan expects strings.
 
 		// Proper way:
+		// Use bufio scanner on the read end
 		go func() {
+			var sb strings.Builder
 			scanner := bufio.NewScanner(r)
+			count := 0
+			// Limit capture to avoid excessive memory usage for long running processes
+			const maxLines = 100
+
 			for scanner.Scan() {
-				outputChan <- scanner.Text()
+				line := scanner.Text()
+				outputChan <- line
+
+				if count < maxLines {
+					if count > 0 {
+						sb.WriteString("\n")
+					}
+					sb.WriteString(line)
+					count++
+				}
 			}
 			if err := scanner.Err(); err != nil {
 				outputChan <- fmt.Sprintf("Error reading stream: %v", err)
+			}
+
+			// Emit accumulated output as result (if small enough/clean)
+			// We emit it at the end
+			result := sb.String()
+			if result != "" {
+				outputChan <- fmt.Sprintf("RESULT_CONSOLE_OUTPUT=%s", result)
 			}
 		}()
 	}
