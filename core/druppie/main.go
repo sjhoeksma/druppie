@@ -1632,9 +1632,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	}
 
 	var runCmd = &cobra.Command{
-		Use:   "run [prompt]",
-		Short: "Run a plan for a given prompt",
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "run [prompt]",
+		Aliases: []string{"plan"},
+		Short:   "Run a plan for a given prompt",
+		Args:    cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			_, _, router, planner, buildEngine, iamProv, err := setup(cmd)
 			if err != nil {
@@ -1729,7 +1730,26 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 			var responseOutput string
 
-			if intent.Action != "create_project" {
+			if intent.Action == "create_project" || intent.Action == "orchestrate_complex" || intent.Action == "update_project" {
+				// Update intent for planner
+				intent.InitialPrompt = effectivePrompt
+				intent.Prompt = effectivePrompt
+
+				var err error
+				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
+				if err != nil {
+					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
+				// Log router step to plan log
+				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", prompt, rawRouterResp)
+				// Explicitly save the plan to disk so TaskManager can find it
+				if err := planner.Store.SavePlan(currentPlan); err != nil {
+					fmt.Printf("[%s] Failed to save plan: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
+			} else {
+				// General Chat or Query Registry - No Plan
 				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", effectivePrompt, rawRouterResp)
 
 				answer := intent.Answer
@@ -1752,24 +1772,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					responseOutput = fmt.Sprintf("[%s]\n ** AI Response:**\n%s", currentPlan.ID, intent.Answer)
 				} else {
 					responseOutput = fmt.Sprintf("[%s] Intent was '%s', which doesn't trigger a planner in this CLI.\n", currentPlan.ID, intent.Action)
-				}
-			} else {
-				// Update intent for planner
-				intent.InitialPrompt = effectivePrompt
-				intent.Prompt = effectivePrompt
-
-				var err error
-				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
-				if err != nil {
-					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
-					os.Exit(1)
-				}
-				// Log router step to plan log
-				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", prompt, rawRouterResp)
-				// Explicitly save the plan to disk so TaskManager can find it
-				if err := planner.Store.SavePlan(currentPlan); err != nil {
-					fmt.Printf("[%s] Failed to save plan: %v\n", currentPlan.ID, err)
-					os.Exit(1)
 				}
 			}
 
