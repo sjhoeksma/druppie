@@ -981,12 +981,21 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// Stop the task via TaskManager but mark as finished/completed per user request
 					tm.FinishTask(id)
 
-					// Force update plan status to completed.
+					// Force update plan status to cancelled.
 					// Note: Finishtask runs async cancellation which also updates the plan.
 					// But we update here specifically to handle cases where the task wasn't running in memory.
 					plan, err := plannerService.Store.GetPlan(id)
 					if err == nil {
-						plan.Status = "completed"
+						plan.Status = "cancelled"
+						// Also mark pending steps as cancelled here to handle non-running tasks
+						// or ensure consistency if TaskManager didn't catch it.
+						for i := range plan.Steps {
+							s := &plan.Steps[i]
+							if s.Status == "pending" || s.Status == "running" || s.Status == "waiting_input" {
+								s.Status = "cancelled"
+								s.Result = "Cancelled by user"
+							}
+						}
 						_ = plannerService.Store.SavePlan(plan)
 					}
 
