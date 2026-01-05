@@ -40,6 +40,6 @@ iam: # ProviderOptions: local, keycloak, demo
     provider: local
 
 approval_groups:
-    security: ["ciso", "admin"]
-    legal: ["dpo", "admin"]
-    compliance: ["compliance","admin"]
+    security: ["ciso", "group-admin"]
+    legal: ["dpo", "group-admin"]
+    compliance: ["compliance","group-admin"]

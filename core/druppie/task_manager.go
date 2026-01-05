@@ -210,6 +210,9 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				Dispatcher: tm.dispatcher,
 				Store:      tm.planner.Store,
 				PlanID:     task.ID,
+				GetAgent: func(id string) (model.AgentDefinition, error) {
+					return tm.planner.Registry.GetAgent(id)
+				},
 				OutputChan: proxyLogChan,
 				InputChan:  task.InputChan,
 				UpdateStatus: func(status string) {
