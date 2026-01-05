@@ -1773,6 +1773,69 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		},
 	}
 
+	var resumeCmd = &cobra.Command{
+		Use:   "resume [plan-id]",
+		Short: "Resume a specific plan",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			_, _, _, planner, buildEngine, iamProv, err := setup(cmd)
+			if err != nil {
+				fmt.Printf("Startup failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			ctx := getAuthContext(context.Background(), iamProv, demo)
+			if user, _ := iam.GetUserFromContext(ctx); user == nil {
+				fmt.Println("You need to login first.")
+				loginCmd.Run(cmd, args)
+				if lp, ok := iamProv.(*iam.LocalProvider); ok {
+					_ = lp.ReloadSessions()
+				}
+				ctx = getAuthContext(context.Background(), iamProv, demo)
+				if user, _ := iam.GetUserFromContext(ctx); user == nil {
+					fmt.Println("Login failed or cancelled.")
+					os.Exit(1)
+				}
+			}
+
+			planID := args[0]
+			if !strings.HasPrefix(planID, "plan-") {
+				planID = "plan-" + planID
+			}
+
+			plan, err := planner.Store.GetPlan(planID)
+			if err != nil {
+				fmt.Printf("Plan %s not found\n", planID)
+				os.Exit(1)
+			}
+
+			plan.Status = "running"
+			_ = planner.Store.SavePlan(plan)
+
+			tm := NewTaskManager(planner, buildEngine)
+			task := tm.StartTask(ctx, plan)
+			fmt.Printf("Resuming plan %s...\n", plan.ID)
+
+			done := false
+			for !done {
+				select {
+				case log := <-tm.OutputChan:
+					fmt.Println(log)
+				case <-time.After(500 * time.Millisecond):
+					if task.Status == TaskStatusCompleted || task.Status == TaskStatusError || task.Status == TaskStatusCancelled {
+						fmt.Printf("Plan finished: %s\n", task.Status)
+						done = true
+					}
+					if task.Status == TaskStatusWaitingInput {
+						fmt.Println("Waiting for input... (Interaction in CLI resume not fully supported yet, use chat/UI)")
+						// Simple sleep to avoid busy loop spam
+						time.Sleep(2 * time.Second)
+					}
+				}
+			}
+		},
+	}
+
 	rootCmd.PersistentFlags().StringVar(&planID, "plan-id", "", "ID of an existing plan to resume or manage")
 	rootCmd.PersistentFlags().StringVar(&llmProviderOverride, "llm-provider", "", "Override default LLM provider")
 	rootCmd.PersistentFlags().StringVar(&buildProviderOverride, "build-provider", "", "Override default Build provider")
@@ -1784,6 +1847,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(serveCmd)
 
 	// Default to server mode
