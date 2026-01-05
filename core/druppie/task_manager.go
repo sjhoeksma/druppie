@@ -114,6 +114,18 @@ func (tm *TaskManager) StopTask(id string) {
 	}
 }
 
+// FinishTask stops the task but marks it as successfully completed (User request)
+func (tm *TaskManager) FinishTask(id string) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if t, ok := tm.tasks[id]; ok {
+		t.Status = TaskStatusCompleted // Mark as completed BEFORE cancelling
+		t.Cancel()
+		delete(tm.tasks, id)
+		tm.OutputChan <- fmt.Sprintf("[Task Manager] Finished task %s (User Requested)", id)
+	}
+}
+
 // runTaskLoop is the background worker for a single plan
 func (tm *TaskManager) runTaskLoop(task *Task) {
 	defer func() {
@@ -345,6 +357,20 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 	for {
 		select {
 		case <-task.Ctx.Done():
+			// Check if it was manually completed
+			if task.Status == TaskStatusCompleted {
+				tm.OutputChan <- fmt.Sprintf("[%s] Task completed by user request.", task.ID)
+
+				tm.mu.Lock()
+				if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+					p.Status = "completed"
+					// We do NOT reset steps to pending, as we are assuming 'done' means done.
+					_ = tm.planner.Store.SavePlan(p)
+				}
+				tm.mu.Unlock()
+				return
+			}
+
 			tm.OutputChan <- fmt.Sprintf("[%s] Task cancelled.", task.ID)
 			task.Status = TaskStatusError
 

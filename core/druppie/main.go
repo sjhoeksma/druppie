@@ -100,11 +100,13 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry path error: %w", err)
 		}
 
-		fmt.Printf("Loading registry from: %s\n", rootDir)
 		reg, err := registry.LoadRegistry(rootDir)
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
+		stats := reg.Stats()
+		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents) from: %s\n",
+			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], rootDir)
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
@@ -142,7 +144,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("llm init error: %w", err)
 		}
 
-		r := router.NewRouter(llmManager, druppieStore, debug)
+		r := router.NewRouter(llmManager, druppieStore, reg, debug)
 		p := planner.NewPlanner(llmManager, reg, druppieStore, debug)
 
 		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
@@ -975,13 +977,15 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						id = "plan-" + id
 					}
 
-					// Stop the task via TaskManager
-					tm.StopTask(id)
+					// Stop the task via TaskManager but mark as finished/completed per user request
+					tm.FinishTask(id)
 
-					// Force update plan status to stopped
+					// Force update plan status to completed.
+					// Note: Finishtask runs async cancellation which also updates the plan.
+					// But we update here specifically to handle cases where the task wasn't running in memory.
 					plan, err := plannerService.Store.GetPlan(id)
 					if err == nil {
-						plan.Status = "stopped"
+						plan.Status = "completed"
 						_ = plannerService.Store.SavePlan(plan)
 					}
 
@@ -1301,10 +1305,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				fmt.Printf("Error: %v\n", err)
 				os.Exit(1)
 			}
-			stats := reg.Stats()
-			fmt.Printf("Loaded: %d Building Blocks, %d Skills, %d MCP Servers, %d Agents\n",
-				stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"])
-
 			// Admin has all access
 			adminGroups := []string{"root", "admin"}
 

@@ -7,21 +7,23 @@ import (
 
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/registry"
 	"github.com/sjhoeksma/druppie/core/internal/store"
 )
 
 type Router struct {
-	llm    llm.Provider
-	store  store.Store
-	PlanID string
-	Debug  bool
+	llm      llm.Provider
+	store    store.Store
+	registry *registry.Registry
+	PlanID   string
+	Debug    bool
 }
 
-func NewRouter(llm llm.Provider, store store.Store, debug bool) *Router {
-	return &Router{llm: llm, store: store, Debug: debug}
+func NewRouter(llm llm.Provider, store store.Store, reg *registry.Registry, debug bool) *Router {
+	return &Router{llm: llm, store: store, registry: reg, Debug: debug}
 }
 
-const systemPrompt = `You are the Router Agent of the Druppie Platform.
+const defaultSystemPrompt = `You are the Router Agent of the Druppie Platform.
 Your job is to analyze the User's input and determine their Intent.
 You must output a JSON object adhering to this schema:
 {
@@ -39,7 +41,15 @@ IMPORTANT: The "prompt" field MUST be in the correct language as detected in "la
 Output ONLY valid JSON.`
 
 func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, string, error) {
-	resp, err := r.llm.Generate(ctx, input, systemPrompt)
+	// Try to load prompt from Registry
+	sysPrompt := defaultSystemPrompt
+	if r.registry != nil {
+		if agent, err := r.registry.GetAgent("router"); err == nil && agent.Instructions != "" {
+			sysPrompt = agent.Instructions
+		}
+	}
+
+	resp, err := r.llm.Generate(ctx, input, sysPrompt)
 	if err != nil {
 		return model.Intent{}, "", fmt.Errorf("llm generation failed: %w", err)
 	}
