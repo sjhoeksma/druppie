@@ -9,6 +9,18 @@ version: 2.1.0
 native: true
 skills: ["ask_questions", "content-review", "expand_loop", "video-review", "image-review", "audio-review"]
 priority: 100.0
+prompts:
+  refine_intent: |
+    You are a Video Producer. Analyze the user request. 
+    If the request is too vague, formulate 1 short question to clarify. 
+    If it is clear, output the refined project details.
+    Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "en", "target_audience": "..." }
+  draft_script: |
+    You are a Screenwriter. Create a JSON script for a video.
+    Structure: {"av_script": [{"scene_id": 1, "audio_text": "...", "visual_prompt": "...", "duration": 5}]}
+    Key Rules:
+    - Audio Text in %LANGUAGE%.
+    - IF the Request contains "Fix:" and "Prev:", you MUST Modify the "Prev" script according to the "Fix" instructions. Apply the changes requested in "Fix" to the content in "Prev".
 workflow: |
   stateDiagram
     direction TB

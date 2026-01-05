@@ -21,6 +21,7 @@ type WorkflowContext struct {
 	UpdateStatus      func(status string)
 	AppendStep        func(step model.Step) int // Callback to add a executed step to the plan log
 	FindCompletedStep func(action string, paramKey string, paramValue interface{}) *model.Step
+	GetAgent          func(id string) (model.AgentDefinition, error)
 }
 
 // Workflow defines the interface for a hard-coded process

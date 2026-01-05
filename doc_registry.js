@@ -42,6 +42,7 @@ const DOC_REGISTRY = {
         { name: "Data Scientist", path: "agents/data_scientist.md" },
 
         { name: "Infrastructure Engineer", path: "agents/infrastructure-engineer.md" },
+        { name: "Skill Dispatcher", path: "agents/skill_executor.md" },
         { name: "Tester", path: "agents/tester.md" },
         { name: "Video Content Creator", path: "agents/video-content-creator.md" },
         { name: "Native Workflow Engineer", path: "agents/native-converter.md" },

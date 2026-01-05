@@ -3,6 +3,7 @@ package workflows
 // List of all Native Workflows to be registered
 var availableWorkflows = []Workflow{
 	&VideoCreationWorkflow{},
+	&SkillExecutionWorkflow{},
 	// [AUTO-REGISTER] Add new workflows here
 }
 

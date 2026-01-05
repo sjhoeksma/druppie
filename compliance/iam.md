@@ -1,3 +1,13 @@
+---
+id: iam
+name: "IAM"
+type: compliance-policy
+description: "Identity & Access Management voor AI"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # Identity & Access Management (IAM) voor AI
 
 ## 🎯 Doelstelling

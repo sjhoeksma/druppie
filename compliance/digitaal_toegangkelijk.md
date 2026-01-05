@@ -1,3 +1,13 @@
+---
+id: accessibility
+name: "Digitaal Toegankelijk"
+type: policy
+description: "Wettelijke verplichtingen voor digitale toegankelijkheid"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # Ontwerp voor digitaal toegankelijkheid
 ## 🎯 Doel
 Dit document een **samenvatting van de wettelijke verplichtingen voor digitale toegankelijkheid in Nederland**, gebaseerd op informatie van digitoegankelijk.nl.

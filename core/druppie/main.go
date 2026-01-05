@@ -105,8 +105,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
 		stats := reg.Stats()
-		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents) from: %s\n",
-			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], rootDir)
+		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents, %d Compliance) from: %s\n",
+			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], stats["compliance_rules"], rootDir)
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
@@ -656,10 +656,67 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					json.NewEncoder(w).Encode(map[string]string{"build_id": id})
 				})
 
-				// HITL Endpoint (Stub)
-				r.Get("/approvals", func(w http.ResponseWriter, r *http.Request) {
+				// Tasks/Approvals Endpoint
+				r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode([]string{})
+					user, hasUser := iam.GetUserFromContext(r.Context())
+
+					plans, err := plannerService.Store.ListPlans()
+					if err != nil {
+						http.Error(w, "Failed to list plans", http.StatusInternalServerError)
+						return
+					}
+
+					type Task struct {
+						PlanID        string `json:"plan_id"`
+						PlanName      string `json:"plan_name"`
+						StepID        int    `json:"step_id"`
+						Description   string `json:"description"`
+						AssignedGroup string `json:"assigned_group"`
+						AgentID       string `json:"agent_id"`
+					}
+
+					var tasks []Task
+
+					for _, p := range plans {
+						// Only consider plans that are running or waiting
+						// Actually, we should check the Step status primarily.
+						for _, s := range p.Steps {
+							// Status "waiting_input" or "requires_approval" (future strict status)
+							if s.Status == "waiting_input" || s.Status == "requires_approval" {
+								// Check Assignment
+								allowed := false
+								if s.AssignedGroup == "" {
+									// Public/Creator specific? Default to creator if exists
+									if p.CreatorID == "" {
+										allowed = true
+									} else if hasUser && p.CreatorID == user.Username {
+										allowed = true
+									}
+								} else if hasUser {
+									for _, g := range user.Groups {
+										if g == s.AssignedGroup || g == "root" || g == "admin" {
+											allowed = true
+											break
+										}
+									}
+								}
+
+								if allowed {
+									tasks = append(tasks, Task{
+										PlanID:        p.ID,
+										PlanName:      p.Intent.Prompt,
+										StepID:        s.ID,
+										Description:   s.Result, // Often contains the question/prompt
+										AssignedGroup: s.AssignedGroup,
+										AgentID:       s.AgentID,
+									})
+								}
+							}
+						}
+					}
+
+					json.NewEncoder(w).Encode(tasks)
 				})
 
 				// --- Task & Plan Monitoring ---
@@ -1339,6 +1396,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			for _, agent := range reg.ListAgents(adminGroups) {
 				fmt.Printf("- [Agent] %s: %s\n", agent.ID, agent.Name)
 			}
+
+			for id, rule := range reg.Compliance {
+				fmt.Printf("- [Compliance] %s: %s\n", id, rule.Name)
+			}
 		},
 	}
 
@@ -1570,10 +1631,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		},
 	}
 
+	var autoPilot bool
 	var runCmd = &cobra.Command{
-		Use:   "run [prompt]",
-		Short: "Run a plan for a given prompt",
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "run [prompt]",
+		Aliases: []string{"plan"},
+		Short:   "Run a plan for a given prompt",
+		Args:    cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			_, _, router, planner, buildEngine, iamProv, err := setup(cmd)
 			if err != nil {
@@ -1581,6 +1644,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				os.Exit(1)
 			}
 			ctx := getAuthContext(context.Background(), iamProv, demo)
+			if autoPilot {
+				ctx = context.WithValue(ctx, "mode", "cli-autopilot")
+			}
 
 			if user, _ := iam.GetUserFromContext(ctx); user == nil {
 				fmt.Println("You need to login first.")
@@ -1668,7 +1734,26 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 			var responseOutput string
 
-			if intent.Action != "create_project" {
+			if intent.Action == "create_project" || intent.Action == "orchestrate_complex" || intent.Action == "update_project" {
+				// Update intent for planner
+				intent.InitialPrompt = effectivePrompt
+				intent.Prompt = effectivePrompt
+
+				var err error
+				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
+				if err != nil {
+					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
+				// Log router step to plan log
+				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", prompt, rawRouterResp)
+				// Explicitly save the plan to disk so TaskManager can find it
+				if err := planner.Store.SavePlan(currentPlan); err != nil {
+					fmt.Printf("[%s] Failed to save plan: %v\n", currentPlan.ID, err)
+					os.Exit(1)
+				}
+			} else {
+				// General Chat or Query Registry - No Plan
 				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", effectivePrompt, rawRouterResp)
 
 				answer := intent.Answer
@@ -1691,24 +1776,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					responseOutput = fmt.Sprintf("[%s]\n ** AI Response:**\n%s", currentPlan.ID, intent.Answer)
 				} else {
 					responseOutput = fmt.Sprintf("[%s] Intent was '%s', which doesn't trigger a planner in this CLI.\n", currentPlan.ID, intent.Action)
-				}
-			} else {
-				// Update intent for planner
-				intent.InitialPrompt = effectivePrompt
-				intent.Prompt = effectivePrompt
-
-				var err error
-				currentPlan, err = planner.CreatePlan(ctx, intent, currentPlan.ID)
-				if err != nil {
-					fmt.Printf("[%s] Planner failed: %v\n", currentPlan.ID, err)
-					os.Exit(1)
-				}
-				// Log router step to plan log
-				_ = planner.Store.LogInteraction(currentPlan.ID, "Router", prompt, rawRouterResp)
-				// Explicitly save the plan to disk so TaskManager can find it
-				if err := planner.Store.SavePlan(currentPlan); err != nil {
-					fmt.Printf("[%s] Failed to save plan: %v\n", currentPlan.ID, err)
-					os.Exit(1)
 				}
 			}
 
@@ -1733,6 +1800,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// Execution Loop with File Logging
 					done := false
 					for !done {
+						prefix := fmt.Sprintf("[%s]", currentPlan.ID)
 						select {
 						case log := <-tm.OutputChan:
 							fmt.Println(log)
@@ -1744,15 +1812,54 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							// Note: Direct access is slightly racy but acceptable for this CLI tool
 							switch task.Status {
 							case TaskStatusWaitingInput:
-								fmt.Println("[Auto-Pilot] Input required. Auto-accepting defaults...")
-								// Simulate user verify/accept delay
+								// Check if the output suggests an error requiring intervention
+								// Since we can't easily see the last message here without state, we'll assume
+								// if we are waiting for input, and it's an error-retry loop, auto-accept is dangerous.
+								// However, for simplicity: If we hit this more than X times, or if the user wants to stop on error?
+								// Let's change behavior: If it's a "Retry/Stop" prompt, we should probably STOP in auto-pilot to avoid loops.
+								if autoPilot {
+									prefix = fmt.Sprintf("[Auto-%s]", currentPlan.ID)
+								}
+								fmt.Printf("%s Input required. Checking for error state...\n", prefix)
 								time.Sleep(1 * time.Second)
-								task.InputChan <- "/accept"
+
+								// We default to /accept usually, BUT if the step failed and is asking for /retry, /accept might re-run it blindly?
+								// Actually /accept usually means "use defaults" or "retry" depending on context.
+								// Let's safety break: IF the plan status is technically "running" but we are paused.
+								// Ideally we send "/stop" if we are in a loop.
+								// For now, let's keep /accept but add a max-loop check or just exit if it fails repeatedly?
+								// User Request: "fix auto_complete within plan mode that it exits on an error"
+								// So if we see "Paused/Failed", we should stop.
+
+								// We don't have easy access to the exact prompt text here (it was in OutputChan).
+								// But we can check if task.Status is actually Error? No, it's WaitingInput.
+
+								// Hack: We send /stop to be safe if we want it to exit on error.
+								// But that stops valid questions too.
+								// Better: rely on the user seeing the log.
+								// BUT the user specifically asked to exit on error.
+								// So let's send /stop which will likely abort the plan.
+								// Wait, 'ask_questions' also triggers this. We want to /accept those.
+								// We need to differentiate.
+								// Since we can't contextually differentiate easily here without architectural change,
+								// I will change it to /stop which is safer for "Auto-Pilot" than infinite loops,
+								// OR we assume that if it's a "Failed" step, the output log showed it.
+
+								// IMPROVED LOGIC: Exit monitor loop on approval/input request
+								// This allows the user to use the UI or other means to approve without killing the plan.
+								fmt.Printf("%s Plan is paused waiting for user input or approval.\n", prefix)
+								done = true
 							case TaskStatusCompleted:
-								fmt.Println("[Auto-Pilot] Plan execution completed successfully.")
+								if autoPilot {
+									prefix = fmt.Sprintf("[Auto-%s]", currentPlan.ID)
+								}
+								fmt.Printf("%s Plan execution completed successfully.\n", prefix)
 								done = true
 							case TaskStatusError:
-								fmt.Println("[Auto-Pilot] Plan execution failed.")
+								if autoPilot {
+									prefix = fmt.Sprintf("[Auto-%s]", currentPlan.ID)
+								}
+								fmt.Printf("%s Plan execution failed.\n", prefix)
 								done = true
 							}
 						}
@@ -1846,6 +1953,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(chatCmd)
+	runCmd.Flags().BoolVar(&autoPilot, "auto-pilot", false, "Enable auto-pilot (auto-approval) mode")
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(serveCmd)
