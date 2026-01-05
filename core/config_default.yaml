@@ -38,3 +38,8 @@ git:
     token: ""
 iam: # ProviderOptions: local, keycloak, demo
     provider: local
+
+approval_groups:
+    security: ["ciso", "admin"]
+    legal: ["dpo", "admin"]
+    compliance: ["compliance","admin"]

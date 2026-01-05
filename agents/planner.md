@@ -58,6 +58,11 @@ Strategies:
    - **STOP Condition**: When the lead agent reaches the terminal state (`[*]`), you **MUST** return an empty JSON array `[]` to signal completion.
    - **Anti-Pattern**: Do NOT generate steps like "orchestration", "quality-check", or "summary" after the final state. If the workflow is done, STOP.
 
+61. **Compliance Workflow**:
+   - If generating a step for `compliance` -> `audit_request`, you MUST set `"status": "requires_approval"` (instead of pending) and `"assigned_group": "compliance"`. This ensures the step pauses for valid approval.
+   - For `compliance_check`, ALWAYS use standard parameter names: `region` (NOT `deployment_region` or `target_region`) and `access_level`.
+   - If the request involves sensitive data or public access, schedule a blocking `audit_request` IMMEDIATELY after the `compliance_check` step (Step 2), before any infrastructure provisioning.
+
 7. **Structure Rules**:
    - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een', 'plaats', 'bij'), NO diff characters (`+`, `-`). NO 'scene_number', 'scene/CID' (use 'scene_id'). NO 'haar' field (use 'duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
    - **Verification**: Ensure every object ends cleanly with `}`.

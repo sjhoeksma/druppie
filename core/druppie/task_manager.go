@@ -2,16 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
+	"github.com/sjhoeksma/druppie/core/internal/config"
 	"github.com/sjhoeksma/druppie/core/internal/executor"
+	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 	"github.com/sjhoeksma/druppie/core/internal/workflows"
+	"gopkg.in/yaml.v2"
 )
 
 // TaskStatus definition
@@ -490,7 +494,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		// Check for interactive steps
 		for _, idx := range batchIndices {
 			step := &task.Plan.Steps[idx]
-			isReview := step.Action == "content-review" || step.Action == "draft_scenes"
+			isReview := step.Action == "content-review" || step.Action == "draft_scenes" || step.Action == "audit_request"
 			if step.Action == "ask_questions" || isReview {
 				// Stop batching, prioritize this interactive step alone
 				batchIndices = []int{idx}
@@ -633,13 +637,11 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					}
 
 					// Flush Logs Atomically
-					tm.OutputChan <- fmt.Sprintf("--- Step %d: %s (%s) ---", step.ID, step.Action, step.AgentID)
 					logMu.Lock()
 					for _, line := range logBuffer {
 						tm.OutputChan <- line
 					}
 					logMu.Unlock()
-					tm.OutputChan <- "--------------------------------"
 
 					if execErr != nil {
 						// FAILURE HANDLING: Set to Waiting Input
@@ -698,6 +700,131 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		}
 
 		// INTERACTIVE STEP
+		// Check for Auto-Approval for "audit_request"
+		if activeStep.Action == "audit_request" {
+			// Extract parameters
+			justification, _ := activeStep.Params["justification"].(string)
+			stakeholders, _ := activeStep.Params["stakeholders"].([]interface{})
+
+			// Justification Fallback
+			if justification == "" {
+				if viol, ok := activeStep.Params["violation"].(string); ok {
+					justification = fmt.Sprintf("VIOLATION DETECTED: %s", viol)
+				} else if intent, ok := activeStep.Params["intent"].(string); ok {
+					justification = fmt.Sprintf("Review required for: %s", intent)
+				}
+			}
+
+			// Load Real Config for Groups (Unconditional)
+			var cfg config.Config
+			if cfgBytes, err := tm.planner.Store.LoadConfig(); err == nil {
+				_ = yaml.Unmarshal(cfgBytes, &cfg)
+			}
+
+			// Stakeholders Fallback logic using Config
+			var requiredGroups []string
+			if len(stakeholders) > 0 {
+				for _, s := range stakeholders {
+					val := fmt.Sprintf("%v", s)
+					// Resolve key against config map (e.g. "security" -> ["ciso", ...])
+					if expanded, ok := cfg.ApprovalGroups[strings.ToLower(val)]; ok {
+						requiredGroups = append(requiredGroups, expanded...)
+					} else {
+						requiredGroups = append(requiredGroups, val)
+					}
+				}
+			} else {
+				// Fallback Logic with Config Map
+				lowerJust := strings.ToLower(justification)
+				var groupKey string
+
+				if strings.Contains(lowerJust, "security") || strings.Contains(lowerJust, "access") || strings.Contains(lowerJust, "residency") {
+					groupKey = "security"
+				} else if strings.Contains(lowerJust, "legal") {
+					groupKey = "legal"
+				} else {
+					groupKey = "compliance" // Default assumption
+				}
+
+				// Look up in config, fallback to defaults if missing in config
+				if groups, ok := cfg.ApprovalGroups[groupKey]; ok && len(groups) > 0 {
+					requiredGroups = groups
+				} else {
+					// Hard defaults if config is empty for that key
+					switch groupKey {
+					case "security":
+						requiredGroups = []string{"ciso", "security-admin"}
+					case "legal":
+						requiredGroups = []string{"legal-counsel"}
+					default:
+						requiredGroups = []string{"Compliance-Admin"}
+					}
+				}
+			}
+
+			// Validate: Update params so downstream logs see the resolved groups
+			resolvedInterface := make([]interface{}, len(requiredGroups))
+			for i, v := range requiredGroups {
+				resolvedInterface[i] = v
+			}
+			activeStep.Params["stakeholders"] = resolvedInterface
+
+			// Only verify auto-approval if running in CLI Auto-Pilot mode
+			mode, _ := task.Ctx.Value("mode").(string)
+			if mode == "cli-autopilot" {
+				// Check User Permissions
+				if user, ok := iam.GetUserFromContext(task.Ctx); ok {
+					authorized := false
+					for _, g := range user.Groups {
+						for _, req := range requiredGroups {
+							if strings.EqualFold(g, req) || g == "admin" || g == "group-admin" { // admin override
+								authorized = true
+								break
+							}
+						}
+						if authorized {
+							break
+						}
+					}
+
+					if authorized {
+						// PRINT AUDIT DETALS FOR VISIBILITY
+						tm.OutputChan <- fmt.Sprintf("\n[%s] 🛡️ COMPLIANCE AUDIT REQUIRED", task.ID)
+						tm.OutputChan <- fmt.Sprintf("Justification: %s", justification)
+						approversJSON, _ := json.Marshal(requiredGroups)
+						tm.OutputChan <- fmt.Sprintf("Approvers: %s", string(approversJSON))
+						tm.OutputChan <- "Options: '/approve' | '/reject'"
+
+						tm.OutputChan <- fmt.Sprintf("[%s] ⚡️ Auto-Approving Audit Step (User '%s' authorized for %v)", task.ID, user.Username, requiredGroups)
+
+						// Mark Completed
+						activeStep.Status = "completed"
+						activeStep.Result = fmt.Sprintf("Auto-Approved by %s (Groups: %v)", user.Username, user.Groups)
+
+						// Update params to reflect auto-resolution if needed
+						// Persist
+						tm.mu.Lock()
+						if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+							// Update step in persistent plan
+							for i := range p.Steps {
+								if p.Steps[i].ID == activeStep.ID {
+									p.Steps[i] = *activeStep
+									break
+								}
+							}
+							_ = tm.planner.Store.SavePlan(p)
+						}
+						tm.mu.Unlock()
+
+						// Continue Loop (Skip Waiting Input)
+						continue
+					} else {
+						tm.OutputChan <- fmt.Sprintf("[%s] 🔒 Auto-Approval Failed: User '%s' groups %v do not match required %v", task.ID, user.Username, user.Groups, requiredGroups)
+					}
+				}
+			}
+		}
+
 		// We must pause and ask for input
 		task.Status = TaskStatusWaitingInput
 
@@ -761,6 +888,43 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.OutputChan <- fmt.Sprintf("\n[%s] Review content (%s):", task.ID, activeStep.AgentID)
 			tm.OutputChan <- formatStepParams(activeStep.Params)
 			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
+
+		case "audit_request":
+			justification, _ := activeStep.Params["justification"].(string)
+			stakeholders, _ := activeStep.Params["stakeholders"].([]interface{})
+
+			// 1. Justification Fallback
+			if justification == "" {
+				if viol, ok := activeStep.Params["violation"].(string); ok {
+					justification = fmt.Sprintf("VIOLATION DETECTED: %s", viol)
+				} else if intent, ok := activeStep.Params["intent"].(string); ok {
+					justification = fmt.Sprintf("Review required for: %s", intent)
+				} else {
+					justification = "Manual review required by compliance policy."
+				}
+			}
+
+			// 2. Stakeholders Fallback (Infer from Config/Context)
+			if len(stakeholders) == 0 {
+				// Simple heuristic mapping based on keywords in justification/violation to typical groups
+				lowerJust := strings.ToLower(justification)
+				if strings.Contains(lowerJust, "security") || strings.Contains(lowerJust, "access") || strings.Contains(lowerJust, "residency") {
+					// Assume CISO/Security
+					stakeholders = []interface{}{"ciso", "security-admin"}
+				} else if strings.Contains(lowerJust, "legal") || strings.Contains(lowerJust, "contract") {
+					stakeholders = []interface{}{"legal-counsel"}
+				} else {
+					stakeholders = []interface{}{"Compliance-Admin"}
+				}
+			}
+
+			tm.OutputChan <- fmt.Sprintf("\n[%s] 🛡️ COMPLIANCE AUDIT REQUIRED", task.ID)
+			tm.OutputChan <- fmt.Sprintf("Justification: %s", justification)
+
+			approversJSON, _ := json.Marshal(stakeholders)
+			tm.OutputChan <- fmt.Sprintf("Approvers: %s", string(approversJSON))
+
+			tm.OutputChan <- "Options: '/approve' | '/reject'"
 
 		default:
 			// Generic or Error Handling

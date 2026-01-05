@@ -21,6 +21,7 @@ func NewDispatcher(buildEngine builder.BuildEngine) *Dispatcher {
 			&DeveloperExecutor{},                 // Developer (Code Creator)
 			&BuildExecutor{Builder: buildEngine}, // Helper for building code
 			&RunExecutor{Builder: buildEngine},   // Helper for running code
+			&ComplianceExecutor{},                // Compliance/Approval Handler
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},

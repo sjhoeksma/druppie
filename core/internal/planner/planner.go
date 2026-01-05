@@ -91,9 +91,11 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 	for _, a := range agents {
 		detailedList = append(detailedList, fmt.Sprintf("%s: %s", a.ID, a.Description))
 	}
-	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator' ONLY (it replaces business-analyst).\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For architecture, use 'architect'.\n- For other VAGUE goals, include 'business-analyst'.\nExample: [\"video-content-creator\"]", intent.Prompt, detailedList)
+	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator' ONLY (it replaces business-analyst).\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For compliance/policy/verification, use 'compliance'.\n- For architecture, use 'architect'.\n- For other VAGUE goals, include 'business-analyst'.\nExample: [\"video-content-creator\"]", intent.Prompt, detailedList)
+
 	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
+		fmt.Printf("[Planner] Agent selection failed: %v\n", err)
 		return nil
 	}
 
@@ -186,8 +188,7 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if plannerAgent, err := p.registry.GetAgent("planner"); err == nil && plannerAgent.Instructions != "" {
 		sysTemplate = plannerAgent.Instructions
 	} else {
-		fmt.Println("[Planner] Planner agent not found or no instructions")
-		os.Exit(1)
+		return model.ExecutionPlan{}, fmt.Errorf("Planner agent not found or no instructions in registry. Ensure agents/planner.md exists")
 	}
 
 	replacer := strings.NewReplacer(
@@ -212,9 +213,15 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		}
 
 		var err error
+		if p.Debug {
+			fmt.Printf("[Planner] Generating Plan (Attempt %d)...\n", attempt+1)
+		}
 		resp, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
 		if err != nil {
 			return model.ExecutionPlan{}, err
+		}
+		if p.Debug {
+			fmt.Println("[Planner] Plan Generated. Parsing...")
 		}
 
 		// 3. Parse Response
