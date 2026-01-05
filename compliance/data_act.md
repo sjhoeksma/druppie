@@ -1,3 +1,13 @@
+---
+id: data-act
+name: "Data Act"
+type: compliance-policy
+description: "Kader voor de Data Verordening"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # De Data Act (Dataverordening)
 
 ## 📜 Wetgevend Kader

@@ -1,3 +1,13 @@
+---
+id: bio-nis2
+name: "BIO & NIS2"
+type: compliance-policy
+description: "Strategie voor BIO en NIS2 compliance"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # BIO & NIS2 Compliance Strategie
 
 Druppie is ontworpen om te voldoen aan strikte overheids- en EU-regelgeving. Dit document beschrijft hoe de architectuur concrete invulling geeft aan de **Baseline Informatiebeveiliging Overheid (BIO)** en de **Network and Information Security Directive (NIS2)**.

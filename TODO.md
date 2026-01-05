@@ -28,7 +28,7 @@
 - [x] Build plane
 - [ ] Plugin system
 - [ ] Git saving of plans
-- [ ] Resume command
+- [x] Resume command
 
 # TESTING
 

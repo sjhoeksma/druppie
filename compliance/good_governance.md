@@ -1,3 +1,13 @@
+---
+id: good-governance
+name: "Goed Bestuur"
+type: compliance-policy
+description: "Code Goed Openbaar Bestuur"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # Goed Bestuur (Code Goed Openbaar Bestuur)
 
 ## 📘 Context en Kader

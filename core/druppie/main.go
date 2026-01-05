@@ -105,8 +105,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			return nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
 		stats := reg.Stats()
-		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents) from: %s\n",
-			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], rootDir)
+		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents, %d Compliance) from: %s\n",
+			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], stats["compliance_rules"], rootDir)
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
@@ -656,10 +656,67 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					json.NewEncoder(w).Encode(map[string]string{"build_id": id})
 				})
 
-				// HITL Endpoint (Stub)
-				r.Get("/approvals", func(w http.ResponseWriter, r *http.Request) {
+				// Tasks/Approvals Endpoint
+				r.Get("/tasks", func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode([]string{})
+					user, hasUser := iam.GetUserFromContext(r.Context())
+
+					plans, err := plannerService.Store.ListPlans()
+					if err != nil {
+						http.Error(w, "Failed to list plans", http.StatusInternalServerError)
+						return
+					}
+
+					type Task struct {
+						PlanID        string `json:"plan_id"`
+						PlanName      string `json:"plan_name"`
+						StepID        int    `json:"step_id"`
+						Description   string `json:"description"`
+						AssignedGroup string `json:"assigned_group"`
+						AgentID       string `json:"agent_id"`
+					}
+
+					var tasks []Task
+
+					for _, p := range plans {
+						// Only consider plans that are running or waiting
+						// Actually, we should check the Step status primarily.
+						for _, s := range p.Steps {
+							// Status "waiting_input" or "requires_approval" (future strict status)
+							if s.Status == "waiting_input" || s.Status == "requires_approval" {
+								// Check Assignment
+								allowed := false
+								if s.AssignedGroup == "" {
+									// Public/Creator specific? Default to creator if exists
+									if p.CreatorID == "" {
+										allowed = true
+									} else if hasUser && p.CreatorID == user.Username {
+										allowed = true
+									}
+								} else if hasUser {
+									for _, g := range user.Groups {
+										if g == s.AssignedGroup || g == "root" || g == "admin" {
+											allowed = true
+											break
+										}
+									}
+								}
+
+								if allowed {
+									tasks = append(tasks, Task{
+										PlanID:        p.ID,
+										PlanName:      p.Intent.Prompt,
+										StepID:        s.ID,
+										Description:   s.Result, // Often contains the question/prompt
+										AssignedGroup: s.AssignedGroup,
+										AgentID:       s.AgentID,
+									})
+								}
+							}
+						}
+					}
+
+					json.NewEncoder(w).Encode(tasks)
 				})
 
 				// --- Task & Plan Monitoring ---
@@ -1338,6 +1395,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// ListAgents was added in Phase 2
 			for _, agent := range reg.ListAgents(adminGroups) {
 				fmt.Printf("- [Agent] %s: %s\n", agent.ID, agent.Name)
+			}
+
+			for id, rule := range reg.Compliance {
+				fmt.Printf("- [Compliance] %s: %s\n", id, rule.Name)
 			}
 		},
 	}
