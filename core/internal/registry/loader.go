@@ -121,6 +121,32 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 		return nil, fmt.Errorf("error loading mcp: %w", err)
 	}
 
+	// 5. Load Compliance Policies
+	err = walkAndLoad(filepath.Join(rootDir, "compliance"), []string{".md"}, func(path string, fm []byte, body []byte) error {
+		var rule model.ComplianceRule
+		if err := yaml.Unmarshal(fm, &rule); err != nil {
+			return fmt.Errorf("failed to parse compliance rule %s: %w", path, err)
+		}
+		if rule.ID == "" {
+			rule.ID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		}
+
+		// Use body as description extension or policy details if needed
+		// For now, we assume rego_policy might be in FM or body?
+		// If body is present and rego_policy is empty, maybe treat body as text policy?
+		if len(body) > 0 && rule.RegoPolicy == "" {
+			rule.RegoPolicy = string(body)
+		}
+
+		reg.mu.Lock()
+		reg.Compliance[rule.ID] = rule
+		reg.mu.Unlock()
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("error loading compliance: %w", err)
+	}
+
 	return reg, nil
 }
 

@@ -28,7 +28,7 @@
 - [x] Build plane
 - [ ] Plugin system
 - [ ] Git saving of plans
-- [ ] Resume command
+- [x] Resume command
 
 # TESTING
 
@@ -38,3 +38,5 @@
 - [x] BUILD NodeJs: Maak een node.js hello world script, bouw het en draai het.
 - [x] BUILD Python: Maak een python hello world script, bouw het en draai het.
 - [x] BUILD Go: Maak een go hello world script, bouw het en draai het.
+- [ ] COMPLIANCE: I want to deploy a new public healthcare database on AWS us-east-1 containing patient records."
+

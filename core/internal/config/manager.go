@@ -11,11 +11,12 @@ import (
 
 // Config holds the runtime configuration
 type Config struct {
-	LLM    LLMConfig    `yaml:"llm" json:"llm"`
-	Server ServerConfig `yaml:"server" json:"server"`
-	Build  BuildConfig  `yaml:"build" json:"build"`
-	Git    GitConfig    `yaml:"git" json:"git"`
-	IAM    IAMConfig    `yaml:"iam" json:"iam"`
+	LLM            LLMConfig           `yaml:"llm" json:"llm"`
+	Server         ServerConfig        `yaml:"server" json:"server"`
+	Build          BuildConfig         `yaml:"build" json:"build"`
+	Git            GitConfig           `yaml:"git" json:"git"`
+	IAM            IAMConfig           `yaml:"iam" json:"iam"`
+	ApprovalGroups map[string][]string `yaml:"approval_groups" json:"approval_groups"`
 }
 
 type IAMConfig struct {

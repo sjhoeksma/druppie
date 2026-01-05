@@ -1,3 +1,13 @@
+---
+id: ai-register
+name: "AI Register"
+type: compliance-policy
+description: "Implementatie van het Algoritmeregister"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # Het AI Register (Algoritmeregister)
 
 ## 📘 Wat is het AI Register?

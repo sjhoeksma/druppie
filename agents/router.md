@@ -26,6 +26,10 @@ You must output a JSON object adhering to this schema:
 
 ### Guidelines
 * Ensure the `action` is one of the allowed values.
+* **Orchestration Rules**:
+    * If the user asks to **Check**, **Validate**, **Audit**, or **Verify** a design or compliance, use `orchestrate_complex`.
+    * If the request involves **multiple steps** or **agents**, use `orchestrate_complex`.
+    * If the user wants to **create**, **deploy**, or **build** something, use `create_project`.
 * Use `language` code to detect the user's input language.
 * **IMPORTANT**: The `prompt` field MUST be in the correct language as detected in `language` code. Do NOT translate it to English.
 * Output **ONLY** valid JSON.

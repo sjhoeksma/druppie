@@ -1,3 +1,13 @@
+---
+id: ai-act
+name: "AI Act"
+type: compliance-policy
+description: "Kader voor AI Act implementatie bij Waterschappen"
+native: false
+version: 1.0.0
+priority: 50.0
+---
+
 # De AI Act & Implementatie Waterschappen
 
 ## 📜 Wetgevend & Sector Kader
