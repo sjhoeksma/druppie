@@ -99,6 +99,12 @@ func (w *SkillExecutionWorkflow) analyzeSkillIntent(wc *WorkflowContext, prompt 
 Available Actions likely include: "text-to-speech", "image-generation", "video-generation", "read_file", "write_file", "search_web".
 Output JSON: { "action": "action_name", "params": { "key": "value" } }`
 
+	if agent, err := wc.GetAgent("skill-executor"); err == nil {
+		if p, ok := agent.Prompts["analyze_skill"]; ok && p != "" {
+			sysPrompt = p
+		}
+	}
+
 	resp, err := wc.LLM.Generate(wc.Ctx, "Analyze Skill", sysPrompt+"\nRequest: "+prompt)
 	if err != nil {
 		return "", nil, err

@@ -1939,8 +1939,9 @@
 
 
 
-    <!-- Markdown & Mermaid -->
+    <!-- Markdown & Mermaid & YAML -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <!-- Highlight.js for Syntax Highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
@@ -2193,77 +2194,7 @@
 
 
 
-        // Simple YAML Parser (Good Enough for our use case)
-        function parseYAML(text) {
-            const lines = text.split('\n');
-            const data = {};
-            let currentKey = null;
-            let inBlock = false;
-            let blockContent = [];
-            let blockIndent = 0;
 
-            for (let line of lines) {
-                // handle block continuation
-                if (inBlock) {
-                    if (line.trim().length === 0) {
-                        blockContent.push("");
-                        continue;
-                    }
-                    const indent = line.search(/\S|$/);
-                    // If indent is less than blockIndent, end of block
-                    if (indent < blockIndent && line.trim() !== '') {
-                        inBlock = false;
-                        data[currentKey] = blockContent.join('\n').trim();
-                    } else {
-                        // Strip base indent
-                        blockContent.push(line.substring(blockIndent));
-                        continue;
-                    }
-                }
-
-                // Skip comments/empty
-                if (line.trim().startsWith('#') || line.trim() === '' || line.trim() === '---') continue;
-
-                // Key: Value
-                const colonIdx = line.indexOf(':');
-                if (colonIdx !== -1) {
-                    const key = line.substring(0, colonIdx).trim();
-                    let val = line.substring(colonIdx + 1).trim();
-
-                    if (val === '|') {
-                        currentKey = key;
-                        inBlock = true;
-                        blockContent = [];
-                        // Determine indent from next line (conceptually) - next non-empty line sets it
-                        // For now assume standard 2 or 4 spaces? 
-                        // We'll peek or just set a safe default. 
-                        // Actually, just wait for next line to set blockIndent.
-                        blockIndent = -1;
-                        continue;
-                    }
-
-                    // Simple cleaning for arrays [a, b] or strings
-                    if (val.startsWith('[') && val.endsWith(']')) {
-                        // naive array parse
-                        const inner = val.substring(1, val.length - 1).trim();
-                        if (inner === '') {
-                            val = [];
-                        } else {
-                            val = inner.split(',').map(s => s.trim().replace(/^['"]|['"]$/g, ''));
-                        }
-                    } else {
-                        // remove quotes
-                        val = val.replace(/^['"]|['"]$/g, '');
-                    }
-                    data[key] = val;
-                }
-            }
-            // End of file block check
-            if (inBlock) {
-                data[currentKey] = blockContent.join('\n').trim();
-            }
-            return data;
-        }
 
         // Render Frontmatter Card
         function renderFrontmatter(data) {
@@ -2341,51 +2272,95 @@
                 `;
             }
 
-            // Other fields
-            let extraFields = '';
-            for (let [k, v] of Object.entries(data)) {
-                if (['name', 'title', 'version', 'type', 'category', 'id', 'description', 'system_prompt', 'instructions', 'model', 'provider', 'auth_group', 'url', 'transport', 'native'].includes(k)) continue;
+            // Explicit Prompts & Workflow Handling
+            let promptsHtml = '';
+            let workflowHtml = '';
 
-                // Skip empty values to prevent rendering empty headers
+            // Render Prompts
+            if (data.prompts && typeof data.prompts === 'object') {
+                const promptItems = Object.entries(data.prompts).map(([pk, pv]) => `
+                    <div class="mb-3 last:mb-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i data-lucide="message-square" class="w-3.5 h-3.5 text-indigo-500"></i>
+                            <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">${pk}</span>
+                        </div>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 w-1 bg-indigo-500 rounded-l"></div>
+                            <div class="bg-slate-50 border border-slate-200 border-l-0 rounded-r p-2.5 font-mono text-[10px] text-slate-700 whitespace-pre-wrap leading-relaxed shadow-sm group-hover:shadow-md transition-shadow">${typeof pv === 'string' ? pv.replace(/</g, '&lt;').replace(/>/g, '&gt;') : JSON.stringify(pv, null, 2)}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+                promptsHtml = `
+                    <div class="mt-4 border-t border-slate-200 pt-3">
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Prompts</h3>
+                        <div class="pl-0.5">
+                            ${promptItems}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Render Workflow
+            if (data.workflow) {
+                let cleanWorkflow = data.workflow;
+                if (typeof cleanWorkflow === 'string') {
+                    // Remove YAML block indicator if present and leading newlines
+                    cleanWorkflow = cleanWorkflow.trim();
+                    if (cleanWorkflow.startsWith('|')) cleanWorkflow = cleanWorkflow.substring(1).trim();
+                }
+
+                workflowHtml = `
+                    <div class="mt-4 border-t border-slate-200 pt-3">
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Workflow Diagram</h3>
+                        <div class="mermaid bg-slate-50 border border-slate-200 rounded p-2 overflow-x-auto">
+                            ${cleanWorkflow}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Other fields (Generic Loop)
+            let extraFields = '';
+            const ignoreKeys = ['name', 'title', 'version', 'type', 'category', 'id', 'description', 'system_prompt', 'instructions', 'model', 'provider', 'auth_group', 'url', 'transport', 'native', 'prompts', 'workflow'];
+
+            for (let [k, v] of Object.entries(data)) {
+                if (ignoreKeys.includes(k)) continue;
+
+                // Skip empty values
                 if (v === null || v === undefined || v === '') continue;
                 if (Array.isArray(v) && v.length === 0) continue;
                 if (typeof v === 'object' && Object.keys(v).length === 0) continue;
 
                 let valueHtml = v;
-                if (k === 'workflow') {
-                    valueHtml = `<div class="mermaid">${v.replace(/\\n/g, '<br/>')}</div>`;
-                } else if (Array.isArray(v)) {
+
+                if (Array.isArray(v)) {
                     if (k === 'skills' || k === 'subagents' || k === 'sub_agents' || k === 'capabilities') {
-                        valueHtml = `<div class="flex flex-wrap gap-1 mt-1">` +
-                            v.map(item => `<span class="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-300">${item}</span>`).join('') +
+                        valueHtml = `<div class="flex flex-wrap gap-1 mt-0.5">` +
+                            v.map(item => `<span class="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0.5 rounded border border-slate-300">${item}</span>`).join('') +
                             `</div>`;
                     } else {
                         valueHtml = v.join(', ');
                     }
-                } else if (k === 'headers' && typeof v === 'object' && v !== null) { // Check for object and not null
-                    // Render Headers as a mini table
+                } else if (k === 'headers' && typeof v === 'object' && v !== null) {
                     const rows = Object.entries(v).map(([hk, hv]) =>
-                        `<div class="flex justify-between text-[10px] border-b border-slate-100 last:border-0 py-1">
+                        `<div class="flex justify-between text-[10px] border-b border-slate-100 last:border-0 py-0.5">
                             <span class="font-mono font-bold text-slate-600">${hk}:</span>
                             <span class="font-mono text-slate-500 truncate ml-2" title="${hv}">${hv}</span>
                          </div>`
                     ).join('');
-
-                    valueHtml = `
-                        <div class="mt-1 bg-slate-50 border border-slate-200 rounded px-2">
-                            ${rows}
-                        </div>
-                     `;
+                    valueHtml = `<div class="mt-0.5 bg-slate-50 border border-slate-200 rounded px-2">${rows}</div>`;
+                } else if (typeof v === 'object') {
+                    valueHtml = `<pre class="text-[10px] bg-slate-100 p-1 rounded">${JSON.stringify(v, null, 2)}</pre>`;
                 }
 
-
-                extraFields += `<div class="text-xs mt-1"><span class="font-bold text-slate-500 uppercase text-[10px] mr-2 block mb-0.5">${k}:</span> <div class="text-slate-700">${valueHtml}</div></div>`;
+                extraFields += `<div class="text-xs mt-1.5 border-b border-slate-100 pb-1.5 last:border-0"><span class="font-bold text-slate-500 uppercase text-[9px] mr-2 block mb-0.5">${k}:</span> <div class="text-slate-700 leading-snug">${valueHtml}</div></div>`;
             }
 
             return `
                 <div class="mb-6 bg-white border border-slate-200 rounded-lg shadow-sm p-4 border-l-4 border-l-blue-500">
-                    <div class="flex items-center mb-2">
-                         <h1 class="text-xl font-bold text-slate-800 m-0 border-none p-0">${title}</h1>
+                    <div class="flex items-center flex-wrap gap-y-1 mb-2">
+                         <h1 class="text-xl font-bold text-slate-800 m-0 border-none p-0 mr-2">${title}</h1>
                          ${version}
                          ${type}
                          ${category}
@@ -2395,9 +2370,14 @@
                          ${id}
                     </div>
                     ${mcpDetails}
-                    ${desc ? `<p class="text-sm text-slate-600 mb-2 italic">${desc}</p>` : ''}
-                    ${extraFields ? `<div class="mt-3 pt-3 border-t border-slate-100 space-y-1">${extraFields}</div>` : ''}
+                    ${desc ? `<p class="text-xs text-slate-600 mb-2 leading-relaxed">${desc}</p>` : ''}
+                    
+                    ${extraFields ? `<div class="mt-2 pt-2 border-t border-slate-100">${extraFields}</div>` : ''}
+                    
+                    ${promptsHtml}
+                    ${workflowHtml}
                 </div>
+
             `;
         }
 
@@ -2429,8 +2409,13 @@
 
                 // Handle .yaml Agents
                 if (path.endsWith('.yaml') || path.endsWith('.yml')) {
-                    // Parse entire YAML
-                    frontmatterData = parseYAML(text);
+                    // Parse entire content as YAML using safeLoad
+                    try {
+                        frontmatterData = jsyaml.load(text);
+                    } catch (e) {
+                        console.error("YAML Parse Error", e);
+                        frontmatterData = { instructions: "Error parsing YAML file." };
+                    }
                     // Body is Instructions
                     markdownBody = frontmatterData.instructions || frontmatterData.system_prompt || "_No instructions provided._";
 
@@ -2440,7 +2425,11 @@
                 else if (path.endsWith('.md')) {
                     const fmMatch = text.match(/^---\n([\s\S]*?)\n---\n/);
                     if (fmMatch) {
-                        frontmatterData = parseYAML(fmMatch[1]);
+                        try {
+                            frontmatterData = jsyaml.load(fmMatch[1]);
+                        } catch (e) {
+                            console.error("Frontmatter Parse Error", e);
+                        }
                         markdownBody = text.substring(fmMatch[0].length);
                     }
                 }

@@ -344,6 +344,13 @@ If the request is too vague, formulate 1 short question to clarify.
 If it is clear, output the refined project details.
 Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "en", "target_audience": "..." }`
 
+	// Try to load prompt from agent definition
+	if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+		if p, ok := agent.Prompts["refine_intent"]; ok && p != "" {
+			sysPrompt = p
+		}
+	}
+
 	for {
 		// Register running step
 		stepID := wc.AppendStep(model.Step{
@@ -482,8 +489,18 @@ func (w *VideoCreationWorkflow) draftScript(wc *WorkflowContext, intent ProjectI
 		sysPrompt := `You are a Screenwriter. Create a JSON script for a video.
 Structure: {"av_script": [{"scene_id": 1, "audio_text": "...", "visual_prompt": "...", "duration": 5}]}
 Key Rules:
-- Audio Text in ` + intent.Language + `.
+- Audio Text in %LANGUAGE%.
 - IF the Request contains "Fix:" and "Prev:", you MUST Modify the "Prev" script according to the "Fix" instructions. Apply the changes requested in "Fix" to the content in "Prev".`
+
+		// Try to load prompt from agent definition
+		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+			if p, ok := agent.Prompts["draft_script"]; ok && p != "" {
+				sysPrompt = p
+			}
+		}
+
+		// Replace placeholders
+		sysPrompt = strings.ReplaceAll(sysPrompt, "%LANGUAGE%", intent.Language)
 
 		resp, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
 		if err != nil {
