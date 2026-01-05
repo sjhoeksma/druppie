@@ -462,7 +462,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 2. Analyze Intent
-						intent, rawRouterResp, err := routerService.Analyze(ctx, effectivePrompt)
+						intent, _, err := routerService.Analyze(ctx, planID, effectivePrompt)
 						if err != nil {
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
@@ -572,8 +572,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 							tm.OutputChan <- fmt.Sprintf("[%s] Plan created. Starting task...", planID)
 
-							// Log router step
-							_ = plannerService.Store.LogInteraction(currentPlan.ID, "Router", req.Prompt, rawRouterResp)
+							// Log router step - MOVED TO ROUTER INTERNALLY
+							// _ = plannerService.Store.LogInteraction(currentPlan.ID, "Router", req.Prompt, rawRouterResp)
 
 							// Save updated plan
 							_ = plannerService.Store.SavePlan(currentPlan)
@@ -583,13 +583,14 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						} else {
 							tm.OutputChan <- fmt.Sprintf("[%s] Request handled by Router (no plan needed).", planID)
 
-							// Log to plan-specific log so UI sees it
-							_ = plannerService.Store.LogInteraction(planID, "Router", effectivePrompt, rawRouterResp)
+							// Log to plan-specific log so UI sees it - MOVED TO ROUTER INTERNALLY
+							// _ = plannerService.Store.LogInteraction(planID, "Router", effectivePrompt, rawRouterResp)
 
 							// Determine result to show
 							resultText := intent.Answer
 							if resultText == "" {
-								resultText = rawRouterResp
+								// Fallback to the summary/prompt if no direct answer
+								resultText = intent.Prompt
 							}
 
 							// Output the response to the console
@@ -1523,7 +1524,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// If not handled by task, treat as new Router Request
 					if !strings.HasPrefix(input, "/") {
 						fmt.Println("[Router - Analyzing]")
-						intent, rawRouterResp, err := router.Analyze(ctx, input)
+						intent, rawRouterResp, err := router.Analyze(ctx, "", input)
 						if err != nil {
 							fmt.Printf("[Error] Router failed: %v\n> ", err)
 							continue
@@ -1650,7 +1651,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			// Initialize TaskManager early to unify output
 			tm := NewTaskManager(planner, buildEngine)
 
-			intent, rawRouterResp, err := router.Analyze(ctx, effectivePrompt)
+			intent, rawRouterResp, err := router.Analyze(ctx, planID, effectivePrompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)

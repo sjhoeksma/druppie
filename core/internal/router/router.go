@@ -40,7 +40,7 @@ Use "language" code to detect the user's input language.
 IMPORTANT: The "prompt" field MUST be in the correct language as detected in "language" code. Do NOT translate it to English.
 Output ONLY valid JSON.`
 
-func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, string, error) {
+func (r *Router) Analyze(ctx context.Context, planID string, input string) (model.Intent, string, error) {
 	// Try to load prompt from Registry
 	sysPrompt := defaultSystemPrompt
 	if r.registry != nil {
@@ -52,6 +52,13 @@ func (r *Router) Analyze(ctx context.Context, input string) (model.Intent, strin
 	resp, err := r.llm.Generate(ctx, input, sysPrompt)
 	if err != nil {
 		return model.Intent{}, "", fmt.Errorf("llm generation failed: %w", err)
+	}
+
+	// Persistent Logging "Like Planner"
+	if r.store != nil && planID != "" {
+		_ = r.store.LogInteraction(planID, "Router Analyze",
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---\n--- INPUT ---\n%s\n--- END INPUT ---", sysPrompt, input),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---", resp))
 	}
 
 	// Simple cleanup if LLM adds markdown blocks
