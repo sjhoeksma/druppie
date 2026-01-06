@@ -152,6 +152,10 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			task.Status = TaskStatusCompleted
 		}
 		tm.TaskDoneChan <- task.ID
+		// Remove from active tasks map
+		tm.mu.Lock()
+		delete(tm.tasks, task.ID)
+		tm.mu.Unlock()
 	}()
 
 	task.Status = TaskStatusRunning
@@ -704,7 +708,7 @@ Do NOT return YAML or Markdown blocks.
 							}
 						}
 					} else {
-						execErr = tm.executeStep(task.Ctx, step, task.ID)
+						execErr = tm.executeStep(task.Ctx, step, task.ID, outputBridge)
 					}
 					close(outputBridge)
 					msgWG.Wait() // Wait for all logs to be processed
@@ -1226,7 +1230,7 @@ Do NOT return YAML or Markdown blocks.
 // executeStep handles the actual execution logic for a step
 // executeStep handles the actual execution logic for a step
 // executeStep handles the actual execution logic for a step
-func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID string) error {
+func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID string, outputChan chan<- string) error {
 	if step.Params == nil {
 		step.Params = make(map[string]interface{})
 	}
@@ -1238,14 +1242,14 @@ func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID
 	// 1. Try Dispatcher directly
 	if tm.dispatcher != nil {
 		if exec, err := tm.dispatcher.GetExecutor(action); err == nil {
-			return exec.Execute(ctx, *step, tm.OutputChan)
+			return exec.Execute(ctx, *step, outputChan)
 		}
 	}
 
 	// 2. Handle "tool_usage" wrapper pattern (used by mcp-agent)
 	if action == "tool_usage" {
 		if toolName, ok := step.Params["tool_name"].(string); ok {
-			tm.OutputChan <- fmt.Sprintf("🔧 Unwrapping tool_usage: %s", toolName)
+			outputChan <- fmt.Sprintf("🔧 Unwrapping tool_usage: %s", toolName)
 			// Try finding executor for the specific tool name
 			if tm.dispatcher != nil {
 				if exec, err := tm.dispatcher.GetExecutor(toolName); err == nil {
@@ -1266,7 +1270,7 @@ func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID
 						}
 					}
 
-					return exec.Execute(ctx, proxyStep, tm.OutputChan)
+					return exec.Execute(ctx, proxyStep, outputChan)
 				}
 			}
 			return fmt.Errorf("no executor found for tool: %s", toolName)

@@ -149,17 +149,17 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 	}
 
 	// Capture stderr to prefix logs
-	stderr, err := t.cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	// Start a goroutine to log stderr with prefix
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			fmt.Printf("[Transport] %s\n", scanner.Text())
-		}
-	}()
+	// stderr, err := t.cmd.StderrPipe()
+	// if err != nil {
+	// 	return err
+	// }
+	// // Start a goroutine to log stderr with prefix
+	// go func() {
+	// 	scanner := bufio.NewScanner(stderr)
+	// 	for scanner.Scan() {
+	// 		fmt.Printf("[Transport] %s\n", scanner.Text())
+	// 	}
+	// }()
 
 	if err := t.cmd.Start(); err != nil {
 		return err

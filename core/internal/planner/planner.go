@@ -236,17 +236,10 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		}
 
 		var err error
-		if p.Debug {
-			fmt.Printf("[Planner] Generating Plan ...\n")
-		}
 		resp, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
 		if err != nil {
 			return model.ExecutionPlan{}, err
 		}
-		if p.Debug {
-			fmt.Println("[Planner] Plan Generated. Parsing...")
-		}
-
 		// 3. Parse Response
 		cleanResp := p.cleanJSONResponse(resp)
 
@@ -399,9 +392,6 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		lastStep := completedSteps[len(completedSteps)-1]
 		if lastStep.Action == "expand_loop" {
 			// Perform Micro-Expansion logic internally
-			if p.Debug {
-				fmt.Printf("[Planner] Auto-expanding loop for step %d\n", lastStep.ID)
-			}
 			newSteps, err := p.expandLoop(lastStep, completedSteps, plan.Steps)
 			if err == nil {
 				// Append and Return immediately -> SKIP LLM
@@ -519,7 +509,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			"2. STATUS CHECK: Review 'Current Steps'. If 'content-review' is pending, WAITING for user feedback. If 'scene-creator' is pending, WAITING for execution.\n"+
 			"3. GENERATE: Provide NEXT steps (starting from id %d). Follow the Strategies defined above.\n"+
 			"4. AVOID LOOPS: If the last completed step was an interactive agent (e.g. business-analyst) and the result was a confirmation/answer, DO NOT immediately schedule the same agent for the same task. Proceed to execution or the next phase.\n"+
-			"5. OUTPUT: Return a JSON array of Step objects.",
+			"5. COMPLETION CHECK: If the 'current steps' have successfully achieved the 'Goal', you MUST return an empty JSON array `[]`. This will stop the plan.\n"+
+			"6. OUTPUT: Return a JSON array of Step objects.",
 		string(stepsJSON),
 		plan.Files,
 		feedback,
@@ -560,13 +551,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			if err3 := json.Unmarshal([]byte(cleanResp), &single); err3 == nil {
 				if single.Action != "" {
 					parsingSteps = []ParsingStep{single}
-				} else if p.Debug {
-					fmt.Printf("[Planner] Single object parsed but Action is empty. Struct: %+v. RAW JSON: %s\n", single, cleanResp)
 				}
 			} else {
-				if p.Debug {
-					fmt.Printf("[Planner] Single object parse failed: %v\n", err3)
-				}
 				// Attempt 4: Error Object
 				var errorResp struct {
 					Error string `json:"error"`
@@ -615,10 +601,6 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		}
 
 		newSteps = append(newSteps, s)
-	}
-
-	if len(newSteps) == 0 && p.Debug {
-		// fmt.Printf("[Planner] No new steps generated. Raw response:\n%s\n", resp)
 	}
 
 	// Adjust IDs using existing startID

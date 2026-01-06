@@ -163,6 +163,7 @@ const DOC_REGISTRY = {
         { name: "Project Readme", path: "README.md" },
         { name: "Het Verhaal Druppie", path: "story/story.md" },
         { name: "Project Brief", path: "story/project_brief.md" },
+        { name: "Testing Prompts", path: "story/test.md" },
         { name: "License (MIT)", path: "LICENSE.md" },
     ]
 };

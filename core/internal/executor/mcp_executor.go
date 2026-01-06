@@ -93,8 +93,13 @@ func (e *MCPExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	}
 
 	if len(texts) == 0 {
-		outputChan <- "Tool executed successfully (no text output)."
+		texts = append(texts, "Tool executed successfully.")
+		outputChan <- "Tool executed successfully."
 	}
+
+	// Capture result for Plan History
+	finalOutput := strings.Join(texts, "\n")
+	outputChan <- fmt.Sprintf("RESULT_CONSOLE_OUTPUT=%s", finalOutput)
 
 	return nil
 }
