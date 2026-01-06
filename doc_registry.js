@@ -37,6 +37,7 @@ const DOC_REGISTRY = {
         { name: "Overview", path: "agents/overview.md" },
         { name: "Router", path: "agents/router.md" },
         { name: "Planner", path: "agents/planner.md" },
+        { name: "Compliance", path: "agents/compliance.md" },
         { name: "Architect", path: "agents/architect.md" },
         { name: "Business Analyst", path: "agents/business_analyst.md" },
         { name: "Data Scientist", path: "agents/data_scientist.md" },
@@ -48,7 +49,10 @@ const DOC_REGISTRY = {
         { name: "Native Workflow Engineer", path: "agents/native-converter.md" },
         { name: "Build Agent", path: "agents/build_agent.md" },
         { name: "Run Agent", path: "agents/run_agent.md" },
-        { name: "Developer", path: "agents/developer.md" }
+        { name: "Developer", path: "agents/developer.md" },
+        { name: "Audio Creator", path: "agents/audio-creator.md" },
+        { name: "Image Creator", path: "agents/image-creator.md" },
+        { name: "Video Creator", path: "agents/video-creator.md" }
     ],
     "skills": [
         { name: "Overview", path: "skills/overview.md" },
@@ -59,6 +63,17 @@ const DOC_REGISTRY = {
         { name: "Python", path: "skills/python.md" },
         { name: "Check Block Status", path: "skills/check-block-status.md" },
         { name: "WCAG 2.1 AA", path: "skills/WCAG-2-1-AA.md" },
+        { name: "Ask Questions", path: "skills/ask_questions.md" },
+        { name: "Audio Review", path: "skills/audio-review.md" },
+        { name: "Content Merge", path: "skills/content-merge.md" },
+        { name: "Content Review", path: "skills/content-review.md" },
+        { name: "Creative Writing", path: "skills/creative-writing.md" },
+        { name: "Expand Loop", path: "skills/expand_loop.md" },
+        { name: "Image Review", path: "skills/image-review.md" },
+        { name: "Main Agent Logic", path: "skills/main-agent.md" },
+        { name: "Orchestration", path: "skills/orchestration.md" },
+        { name: "Sub-Agent Logic", path: "skills/sub-agent.md" },
+        { name: "Video Review", path: "skills/video-review.md" }
     ],
     "research": [
         { name: "Overview", path: "research/overview.md" },
