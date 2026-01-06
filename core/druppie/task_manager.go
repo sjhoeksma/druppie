@@ -913,11 +913,11 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				lowerJust := strings.ToLower(justification)
 				if strings.Contains(lowerJust, "security") || strings.Contains(lowerJust, "access") || strings.Contains(lowerJust, "residency") {
 					// Assume CISO/Security
-					stakeholders = []interface{}{"ciso", "security-admin"}
+					stakeholders = []interface{}{"ciso", "group-admin"}
 				} else if strings.Contains(lowerJust, "legal") || strings.Contains(lowerJust, "contract") {
-					stakeholders = []interface{}{"legal-counsel"}
+					stakeholders = []interface{}{"legal", "group-admin"}
 				} else {
-					stakeholders = []interface{}{"Compliance-Admin"}
+					stakeholders = []interface{}{"compliance", "group-admin"}
 				}
 			}
 
