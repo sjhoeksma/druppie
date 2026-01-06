@@ -60,7 +60,7 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 		for path, content := range fileMap {
 			strContent, ok := content.(string)
 			if !ok {
-				outputChan <- fmt.Sprintf("Skipping %s: content is not string", path)
+				outputChan <- fmt.Sprintf("[developer] skipping %s: content is not string", path)
 				continue
 			}
 
