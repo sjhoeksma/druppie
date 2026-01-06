@@ -2356,8 +2356,15 @@
                 if (waitingStep) {
                     label = waitingStep.action.replace(/_/g, ' ');
                     label = label.charAt(0).toUpperCase() + label.slice(1);
+
                     if (waitingStep.result) {
                         content = waitingStep.result;
+                    } else if (waitingStep.params) {
+                        if (waitingStep.params.justification) {
+                            content = "Justification: " + waitingStep.params.justification;
+                        } else if (waitingStep.params.reason) {
+                            content = "Reason: " + waitingStep.params.reason;
+                        }
                     }
                 }
 
