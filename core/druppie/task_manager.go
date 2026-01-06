@@ -704,7 +704,7 @@ Do NOT return YAML or Markdown blocks.
 							}
 						}
 					} else {
-						execErr = tm.executeStep(task.Ctx, step)
+						execErr = tm.executeStep(task.Ctx, step, task.ID)
 					}
 					close(outputBridge)
 					msgWG.Wait() // Wait for all logs to be processed
@@ -1224,19 +1224,69 @@ Do NOT return YAML or Markdown blocks.
 }
 
 // executeStep handles the actual execution logic for a step
-func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step) error {
+// executeStep handles the actual execution logic for a step
+// executeStep handles the actual execution logic for a step
+func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID string) error {
+	if step.Params == nil {
+		step.Params = make(map[string]interface{})
+	}
+	// Inject Plan ID for context-aware executors (e.g. MCP path resolution)
+	step.Params["plan_id"] = planID
+
+	action := step.Action
+
+	// 1. Try Dispatcher directly
+	if tm.dispatcher != nil {
+		if exec, err := tm.dispatcher.GetExecutor(action); err == nil {
+			return exec.Execute(ctx, *step, tm.OutputChan)
+		}
+	}
+
+	// 2. Handle "tool_usage" wrapper pattern (used by mcp-agent)
+	if action == "tool_usage" {
+		if toolName, ok := step.Params["tool_name"].(string); ok {
+			tm.OutputChan <- fmt.Sprintf("🔧 Unwrapping tool_usage: %s", toolName)
+			// Try finding executor for the specific tool name
+			if tm.dispatcher != nil {
+				if exec, err := tm.dispatcher.GetExecutor(toolName); err == nil {
+					// Create a proxy step with the specific action
+					proxyStep := *step
+					proxyStep.Action = toolName
+
+					// Flatten "parameters" if present (common in tool_usage schema)
+					if innerParams, ok := step.Params["parameters"].(map[string]interface{}); ok {
+						for k, v := range innerParams {
+							proxyStep.Params[k] = v
+						}
+					}
+					// Also support "params" key just in case
+					if innerParams, ok := step.Params["params"].(map[string]interface{}); ok {
+						for k, v := range innerParams {
+							proxyStep.Params[k] = v
+						}
+					}
+
+					return exec.Execute(ctx, proxyStep, tm.OutputChan)
+				}
+			}
+			return fmt.Errorf("no executor found for tool: %s", toolName)
+		}
+		return fmt.Errorf("tool_usage action requires 'tool_name' parameter")
+	}
+
+	// 3. Agent-specific Legacy Handling
 	switch step.AgentID {
 	case "scene-creator":
 		return tm.executeSceneCreation(ctx, step)
 	default:
-		// Default behavior for other agents: Just verify/simulate
-		// If tools were specified, we'd handle them here.
-		// Check for known tool actions in general
+		// Default: Check for known prefix
 		if strings.HasPrefix(step.Action, "generate_") {
 			tm.OutputChan <- fmt.Sprintf("[%s] executing generic generation action: %s", step.AgentID, step.Action)
 			time.Sleep(1 * time.Second)
+			return nil
 		}
-		return nil
+		// If explicit "tool_usage" failed above, or unknown action:
+		return fmt.Errorf("unknown action '%s' for agent '%s' (no executor found)", step.Action, step.AgentID)
 	}
 }
 

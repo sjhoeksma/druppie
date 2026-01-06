@@ -135,11 +135,22 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		blockNames = append(blockNames, b.Name)
 	}
 
-	// Add MCP Tools
+	// Add MCP Tools from Registry (Templates & Static Definitions)
+	// This allows the planner to see tools from servers that aren't running yet (like plan-scoped templates).
+	mcpServers := p.Registry.ListMCPServers(userGroups)
+	for _, s := range mcpServers {
+		for _, t := range s.Tools {
+			blockNames = append(blockNames, fmt.Sprintf("%s (%s)", t.Name, t.Description))
+		}
+	}
+
+	// Add MCP Tools from Running Servers (Dynamic Discovery)
 	if p.MCPManager != nil {
 		mcpTools := p.MCPManager.ListAllTools()
 		for _, t := range mcpTools {
-			// Format: "mcp_tool_name (Description)"
+			// Avoid duplicates if possible?
+			// For now, listing again is harmless or we can dedup.
+			// Simple dedup by checking suffix? Or just append.
 			blockNames = append(blockNames, fmt.Sprintf("%s (%s)", t.Name, t.Description))
 		}
 	}

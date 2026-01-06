@@ -7,6 +7,17 @@ args:
   - "@modelcontextprotocol/server-filesystem"
   - "./.druppie/plans/{{plan_id}}"
 transport: stdio
+tools:
+  - name: read_file
+    description: Read contents of a file
+  - name: write_file
+    description: Write content to a file
+  - name: list_directory
+    description: List files in a directory
+  - name: create_directory
+    description: Create a new directory
+  - name: move_file
+    description: Move or rename a file
 ---
 # Plan Filesystem Template
 
