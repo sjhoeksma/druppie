@@ -517,6 +517,11 @@
             border-left: 3px solid #ef4444;
         }
 
+        .task-card.status-skipped {
+            opacity: 0.5;
+            border-left: 3px solid #64748b;
+        }
+
         .task-header {
             display: flex;
             justify-content: space-between;
@@ -2458,6 +2463,7 @@
         } catch (e) { }
     }
 
+    let lastAutoScrollSignature = '';
     function renderPlan(plan) {
         plan.steps = plan.steps || [];
         // Update Kanban background based on plan state
@@ -2582,44 +2588,53 @@
         // 1. Scroll on new plan (placeholder)
         // 2. Scroll on active plan progress
         // 3. STOP scroll if plan is completed/stopped/failed
+        // Auto-scroll logic: Only scroll if state changed
+        let lastStep = null;
+        if (plan.steps.length > 0) lastStep = plan.steps[plan.steps.length - 1];
+
+        const currentSignature = `${plan.plan_id}-${plan.status}-${lastStep ? lastStep.step_id : '0'}-${lastStep ? lastStep.status : 'none'}`;
+
         let scrollTarget = null;
 
-        if (['completed', 'failed'].includes(plan.status)) {
-            // Do not auto-scroll
-        } else if (plan.steps.length === 0) {
-            // New Plan Placeholder Case
-            if (plan.status === 'running') {
-                scrollTarget = elements.cols.running.querySelector('.col-cards');
-            } else {
-                scrollTarget = elements.cols.pending.querySelector('.col-cards');
-            }
-        } else {
-            // Existing Steps Case
-            const lastStep = plan.steps[plan.steps.length - 1];
-            if (lastStep.status === 'waiting_input') {
-                scrollTarget = elements.cols.interaction.querySelector('.col-cards');
-            } else if (lastStep.status === 'running') {
-                scrollTarget = elements.cols.running.querySelector('.col-cards');
-            } else if (['completed', 'failed', 'stopped', 'error', 'cancelled'].includes(lastStep.status)) {
-                scrollTarget = elements.cols.completed.querySelector('.col-cards');
-            } else {
-                scrollTarget = elements.cols.pending.querySelector('.col-cards');
-            }
-        }
-
-        if (scrollTarget) {
-            requestAnimationFrame(() => {
-                // Vertical scroll of the card list
-                if (scrollTarget.scrollHeight > scrollTarget.clientHeight) {
-                    scrollTarget.scrollTop = scrollTarget.scrollHeight;
+        if (currentSignature !== lastAutoScrollSignature) {
+            if (['completed', 'failed'].includes(plan.status)) {
+                // Do not auto-scroll
+            } else if (plan.steps.length === 0) {
+                // New Plan Placeholder Case
+                if (plan.status === 'running') {
+                    scrollTarget = elements.cols.running.querySelector('.col-cards');
+                } else {
+                    scrollTarget = elements.cols.pending.querySelector('.col-cards');
                 }
-
-                // Horizontal scroll of the entire Kanban board (for Mobile/Overflow)
-                const col = scrollTarget.parentElement;
-                if (col) {
-                    col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            } else {
+                // Existing Steps Case
+                // Use the same logic as before to find target column
+                if (lastStep.status === 'waiting_input') {
+                    scrollTarget = elements.cols.interaction.querySelector('.col-cards');
+                } else if (lastStep.status === 'running') {
+                    scrollTarget = elements.cols.running.querySelector('.col-cards');
+                } else if (['completed', 'failed', 'stopped', 'error', 'cancelled', 'skipped'].includes(lastStep.status)) {
+                    scrollTarget = elements.cols.completed.querySelector('.col-cards');
+                } else {
+                    scrollTarget = elements.cols.pending.querySelector('.col-cards');
                 }
-            });
+            }
+
+            if (scrollTarget) {
+                lastAutoScrollSignature = currentSignature;
+                requestAnimationFrame(() => {
+                    // Vertical scroll of the card list
+                    if (scrollTarget.scrollHeight > scrollTarget.clientHeight) {
+                        scrollTarget.scrollTop = scrollTarget.scrollHeight;
+                    }
+
+                    // Horizontal scroll of the entire Kanban board
+                    const col = scrollTarget.parentElement;
+                    if (col) {
+                        col.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }
+                });
+            }
         }
     }
 

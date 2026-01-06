@@ -143,19 +143,24 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 	task.Status = TaskStatusRunning
 
-	// Prune unfinished trailing steps to allow clean restart/resume
-	// (e.g. if we were waiting for input, remove that step so it is regenerated/re-executed fresh)
+	// Resurrect 'cancelled', 'skipped', or 'failed' steps to allow resume.
 	tm.mu.Lock()
 	if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
-		if len(p.Steps) > 0 {
-			lastIdx := len(p.Steps) - 1
-			last := p.Steps[lastIdx]
-			if last.Status == "waiting_input" || last.Status == "running" || last.Status == "stopped" || last.Status == "failed" {
-				tm.OutputChan <- fmt.Sprintf("[%s] 🧹 Pruning incomplete step %d (%s) for resume...", task.ID, last.ID, last.Action)
-				p.Steps = p.Steps[:lastIdx]
-				_ = tm.planner.Store.SavePlan(p)
-				task.Plan = &p
+		modified := false
+		for i := range p.Steps {
+			s := &p.Steps[i]
+			// Check for states that indicate a stopped/interrupted execution
+			if s.Status == "cancelled" || s.Status == "skipped" || s.Status == "stopped" || s.Status == "failed" || s.Status == "waiting_input" {
+				tm.OutputChan <- fmt.Sprintf("[%s] 🔄 Resuming step %d (%s) - Reset status to pending.", task.ID, s.ID, s.Action)
+				s.Status = "pending"
+				s.Result = "" // Clear previous interruptions (but maybe we lose history? acceptable for resume)
+				s.Error = ""
+				modified = true
 			}
+		}
+		if modified {
+			_ = tm.planner.Store.SavePlan(p)
+			task.Plan = &p // Update local reference to fresh plan
 		}
 	}
 	tm.mu.Unlock()
@@ -379,9 +384,13 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Mark active/pending steps as cancelled/completed
 					for i := range p.Steps {
 						s := &p.Steps[i]
-						if s.Status == "pending" || s.Status == "running" || s.Status == "waiting_input" {
+						switch s.Status {
+						case "running", "waiting_input":
 							s.Status = "cancelled"
 							s.Result = "Cancelled by user"
+						case "pending":
+							s.Status = "skipped"
+							s.Result = "Skipped due to cancellation"
 						}
 					}
 					_ = tm.planner.Store.SavePlan(p)
@@ -626,7 +635,61 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 								step.Params[k] = strVal
 							}
 						}
-						execErr = exec.Execute(task.Ctx, *step, outputBridge)
+						// Retry / Healing Loop
+						maxRetries := 0
+						if cfgBytes, err := tm.planner.Store.LoadConfig(); err == nil {
+							var cfg config.Config
+							if yaml.Unmarshal(cfgBytes, &cfg) == nil && cfg.LLM.Retries > 0 {
+								maxRetries = cfg.LLM.Retries
+							}
+						}
+
+						for attempt := 0; attempt <= maxRetries; attempt++ {
+							execErr = exec.Execute(task.Ctx, *step, outputBridge)
+
+							if execErr == nil {
+								break
+							}
+
+							// Self-Healing Logic for create_code
+							if attempt < maxRetries && step.Action == "create_code" {
+								logMu.Lock()
+								logBuffer = append(logBuffer, fmt.Sprintf("⚠️ Step failed: %v. Attempting Self-Healing (%d/%d)...", execErr, attempt+1, maxRetries))
+								logMu.Unlock()
+
+								fixPrompt := fmt.Sprintf(`
+The execution of 'create_code' failed.
+Error: %v
+Current Params: %v
+
+Please FIX the parameters to satisfy the error requirements (e.g. provide missing 'files' map).
+Return ONLY a valid JSON object representing the FIXED 'params' object.
+Do NOT return YAML or Markdown blocks.
+`, execErr, step.Params)
+
+								fixedJSON, err := tm.planner.GetLLM().Generate(task.Ctx, fixPrompt, "You are a JSON repair agent. Output raw JSON only.")
+								if err != nil {
+									continue
+								}
+
+								// Clean JSON
+								fixedJSON = strings.TrimSpace(fixedJSON)
+								fixedJSON = strings.TrimPrefix(fixedJSON, "```json")
+								fixedJSON = strings.TrimPrefix(fixedJSON, "```")
+								fixedJSON = strings.TrimSuffix(fixedJSON, "```")
+
+								var newParams map[string]interface{}
+								if err := json.Unmarshal([]byte(fixedJSON), &newParams); err == nil {
+									step.Params = newParams
+									step.Params["plan_id"] = task.ID // Ensure ID persists
+									logMu.Lock()
+									logBuffer = append(logBuffer, "✅ Parameters self-healed. Retrying...")
+									logMu.Unlock()
+								}
+							} else {
+								break
+							}
+						}
 					} else {
 						execErr = tm.executeStep(task.Ctx, step)
 					}
@@ -1117,6 +1180,25 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 
 			// Standard update
+
+			// Detect if we are in a failed state and user wants to retry
+			isFailedStep := activeStep.Status == "waiting_input" && activeStep.Error != ""
+			if isFailedStep {
+				lowerAnswer := strings.ToLower(answer)
+				if strings.Contains(lowerAnswer, "retry") || strings.Contains(lowerAnswer, "fix") {
+					task.Plan.Steps[activeStepIdx].Status = "pending"
+					task.Plan.Steps[activeStepIdx].Error = ""
+					// Append hint to params? For now just retry.
+					tm.OutputChan <- fmt.Sprintf("[%s] Resetting step %d to PENDING via User Action.", task.ID, activeStep.ID)
+					_ = tm.planner.Store.SavePlan(*task.Plan)
+
+					// If "fix", we might want to try to use the input as params?
+					// But relying on "UpdatePlan" for a single step retry is hard.
+					// We will assume the user fixed the environment or config and wants a plain retry.
+					continue
+				}
+			}
+
 			tm.OutputChan <- fmt.Sprintf("[%s] [Planner] Processing feedback/input...", task.ID)
 			updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, answer)
 			if err != nil {
