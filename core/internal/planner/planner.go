@@ -304,25 +304,6 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		}
 	}
 
-	// Final check
-	if validationErr != nil {
-		fmt.Printf("[Planner] Validation failed after retries: %v\n", validationErr)
-		// Fallback: Inject a placeholder script to prevent crash
-		for i := range steps {
-			if strings.Contains(steps[i].Action, "content-review") {
-				steps[i].Params["av_script"] = []map[string]interface{}{
-					{
-						"scene_id":      1,
-						"audio_text":    "Placeholder Scene 1 (Auto-injected due to generation failure)",
-						"visual_prompt": "Placeholder Visual",
-						"duration":      5,
-					},
-				}
-				fmt.Printf("[Planner] INJECTED PLACEHOLDER AV_SCRIPT for Step %d\n", steps[i].ID)
-			}
-		}
-	}
-
 	// 4. Construct Plan
 	if planID == "" {
 		planID = fmt.Sprintf("plan-%d", time.Now().Unix())
@@ -332,10 +313,8 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if u, ok := iam.GetUserFromContext(ctx); ok {
 		creatorID = u.ID
 	}
-
 	plan := model.ExecutionPlan{
-		// Use a UUID or timestamp.
-		// Note: The Caller (main.go) dictates the ID in the async flow, but for synchronous creation we generate one.
+		// ...
 		ID:             planID,
 		CreatorID:      creatorID,
 		Intent:         intent,
@@ -345,7 +324,6 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	}
 
 	// Persistent Logging
-	// NOTE: Plan is NOT saved here - caller is responsible for saving with correct ID
 	if p.Store != nil {
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")
 		_ = p.Store.LogInteraction(plan.ID, "Planner Create",

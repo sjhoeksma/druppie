@@ -148,6 +148,19 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 		return err
 	}
 
+	// Capture stderr to prefix logs
+	stderr, err := t.cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	// Start a goroutine to log stderr with prefix
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			fmt.Printf("[Transport] %s\n", scanner.Text())
+		}
+	}()
+
 	if err := t.cmd.Start(); err != nil {
 		return err
 	}
@@ -176,12 +189,29 @@ func (t *StdioTransport) Send(ctx context.Context, req JSONRPCMessage) (*JSONRPC
 			return nil, err
 		}
 
+		// fmt.Printf("[StdioTransport] Received: %s", line)
+
 		var msg JSONRPCMessage
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			// Check if it's logging or headers
+			fmt.Printf("[Transport] Ignored non-json line: %s", line)
 			continue // Skip logs or invalid lines
 		}
 
-		if msg.ID == req.ID {
+		// Robust ID comparison (handle int vs float64 json unmarshal)
+		matches := false
+		if req.ID == msg.ID {
+			matches = true
+		} else {
+			// Try comparing as strings to handle int vs float64 mismatch (common in JSON)
+			reqIDStr := fmt.Sprintf("%v", req.ID)
+			msgIDStr := fmt.Sprintf("%v", msg.ID)
+			if reqIDStr == msgIDStr {
+				matches = true
+			}
+		}
+
+		if matches {
 			return &msg, nil
 		}
 	}
