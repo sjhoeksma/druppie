@@ -214,7 +214,7 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 
 		var err error
 		if p.Debug {
-			fmt.Printf("[Planner] Generating Plan (Attempt %d)...\n", attempt+1)
+			fmt.Printf("[Planner] Generating Plan ...\n")
 		}
 		resp, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
 		if err != nil {

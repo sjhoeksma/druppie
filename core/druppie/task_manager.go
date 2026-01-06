@@ -711,10 +711,28 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 			// Justification Fallback
 			if justification == "" {
-				if viol, ok := activeStep.Params["violation"].(string); ok {
+				if r, ok := activeStep.Params["reason"].(string); ok {
+					justification = r
+				} else if viol, ok := activeStep.Params["violation"].(string); ok {
 					justification = fmt.Sprintf("VIOLATION DETECTED: %s", viol)
 				} else if intent, ok := activeStep.Params["intent"].(string); ok {
 					justification = fmt.Sprintf("Review required for: %s", intent)
+				} else {
+					// Try Dependency Results
+					for _, depID := range activeStep.DependsOn {
+						for _, s := range task.Plan.Steps {
+							if s.ID == depID && strings.Contains(s.Result, "[VIOLATION]") {
+								justification = fmt.Sprintf("Audit Triggered by: %s", strings.TrimSpace(s.Result))
+								break
+							}
+						}
+						if justification != "" {
+							break
+						}
+					}
+					if justification == "" {
+						justification = "Manual review required by compliance policy."
+					}
 				}
 			}
 
@@ -828,6 +846,56 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 		}
 
+		// Check for Auto-Accept for "ask_questions"
+		if activeStep.Action == "ask_questions" || activeStep.Action == "ask-questions" {
+			mode, _ := task.Ctx.Value("mode").(string)
+			if mode == "cli-autopilot" {
+				tm.OutputChan <- fmt.Sprintf("[%s] ⚡️ Auto-Accepting Questions with Defaults in Auto-Pilot Mode", task.ID)
+
+				// Reconstruct defaults
+				var assumptions []interface{}
+				if as, ok := activeStep.Params["assumptions"]; ok {
+					if listAs, isListAs := as.([]interface{}); isListAs {
+						assumptions = listAs
+					}
+				}
+				var questions []interface{}
+				if qs, ok := activeStep.Params["questions"]; ok {
+					if list, isList := qs.([]interface{}); isList {
+						questions = list
+					} else {
+						questions = []interface{}{qs}
+					}
+				}
+				var details strings.Builder
+				details.WriteString("Auto-Accepted Defaults:\n")
+				for i, q := range questions {
+					assumption := "Unknown"
+					if i < len(assumptions) {
+						assumption = fmt.Sprintf("%v", assumptions[i])
+					}
+					details.WriteString(fmt.Sprintf("%d. %v -> %s\n", i+1, q, assumption))
+				}
+
+				activeStep.Status = "completed"
+				activeStep.Result = details.String()
+
+				// Persist
+				tm.mu.Lock()
+				if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+					for i := range p.Steps {
+						if p.Steps[i].ID == activeStep.ID {
+							p.Steps[i] = *activeStep
+							break
+						}
+					}
+					_ = tm.planner.Store.SavePlan(p)
+				}
+				tm.mu.Unlock()
+				continue
+			}
+		}
+
 		// We must pause and ask for input
 		task.Status = TaskStatusWaitingInput
 
@@ -898,12 +966,28 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 			// 1. Justification Fallback
 			if justification == "" {
-				if viol, ok := activeStep.Params["violation"].(string); ok {
+				if r, ok := activeStep.Params["reason"].(string); ok {
+					justification = r
+				} else if viol, ok := activeStep.Params["violation"].(string); ok {
 					justification = fmt.Sprintf("VIOLATION DETECTED: %s", viol)
 				} else if intent, ok := activeStep.Params["intent"].(string); ok {
 					justification = fmt.Sprintf("Review required for: %s", intent)
 				} else {
-					justification = "Manual review required by compliance policy."
+					// Try Dependency Results
+					for _, depID := range activeStep.DependsOn {
+						for _, s := range task.Plan.Steps {
+							if s.ID == depID && strings.Contains(s.Result, "[VIOLATION]") {
+								justification = fmt.Sprintf("Audit Triggered by: %s", strings.TrimSpace(s.Result))
+								break
+							}
+						}
+						if justification != "" {
+							break
+						}
+					}
+					if justification == "" {
+						justification = "Manual review required by compliance policy."
+					}
 				}
 			}
 

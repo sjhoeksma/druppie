@@ -18,8 +18,6 @@ func (e *DeveloperExecutor) CanHandle(action string) bool {
 }
 
 func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
-	outputChan <- "DeveloperExecutor: Processing request..."
-
 	planID := ""
 	if p, ok := step.Params["plan_id"].(string); ok {
 		planID = p
