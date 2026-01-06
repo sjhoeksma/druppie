@@ -704,7 +704,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 		// INTERACTIVE STEP
 		// Check for Auto-Approval for "audit_request"
-		if activeStep.Action == "audit_request" {
+		if activeStep.Action == "audit_request" || activeStep.Action == "audit-request" {
 			// Extract parameters
 			justification, _ := activeStep.Params["justification"].(string)
 			stakeholders, _ := activeStep.Params["stakeholders"].([]interface{})
@@ -853,7 +853,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 
 		// Send prompt to OutputChan
 		switch activeStep.Action {
-		case "ask_questions":
+		case "ask_questions", "ask-questions":
 			tm.OutputChan <- fmt.Sprintf("[%s] [%s] Input required: %s", task.ID, activeStep.AgentID, activeStep.Action)
 
 			// Format questions
@@ -887,12 +887,12 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.OutputChan <- sb.String()
 			tm.OutputChan <- "Options: [Type answer] | '/accept' (defaults) | '/stop'"
 
-		case "content-review", "draft_scenes":
+		case "content-review", "draft_scenes", "content_review", "draft-scenes":
 			tm.OutputChan <- fmt.Sprintf("\n[%s] Review content (%s):", task.ID, activeStep.AgentID)
 			tm.OutputChan <- formatStepParams(activeStep.Params)
 			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
 
-		case "audit_request":
+		case "audit_request", "audit-request":
 			justification, _ := activeStep.Params["justification"].(string)
 			stakeholders, _ := activeStep.Params["stakeholders"].([]interface{})
 

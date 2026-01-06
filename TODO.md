@@ -29,6 +29,11 @@
 - [ ] Plugin system
 - [ ] Git saving of plans
 - [x] Resume command
+- [ ] MCP support
+- [ ] Optimize LLM context loading, remove headers
+- [ ] LLM Memory : https://medium.com/@sonitanishk2003/the-ultimate-guide-to-llm-memory-from-context-windows-to-advanced-agent-memory-systems-3ec106d2a345
+- [ ] Deep rescearch the core of druppie to get new spec
+
 
 # TESTING
 
@@ -38,5 +43,5 @@
 - [x] BUILD NodeJs: Maak een node.js hello world script, bouw het en draai het.
 - [x] BUILD Python: Maak een python hello world script, bouw het en draai het.
 - [x] BUILD Go: Maak een go hello world script, bouw het en draai het.
-- [ ] COMPLIANCE: I want to deploy a new public healthcare database on AWS us-east-1 containing patient records."
+- [x] COMPLIANCE: Ik wil een nieuwe publieke zorg database op AWS us-east-1 deployen met patiënt gegevens
 
