@@ -11,28 +11,31 @@ import (
 
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
+	"github.com/sjhoeksma/druppie/core/internal/mcp"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
 	"github.com/sjhoeksma/druppie/core/internal/store"
 )
 
 type Planner struct {
-	llm      llm.Provider
-	Registry *registry.Registry
-	Store    store.Store
-	Debug    bool
+	llm        llm.Provider
+	Registry   *registry.Registry
+	Store      store.Store
+	Debug      bool
+	MCPManager *mcp.Manager
 }
 
 func (p *Planner) GetLLM() llm.Provider {
 	return p.llm
 }
 
-func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, debug bool) *Planner {
+func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcpMgr *mcp.Manager, debug bool) *Planner {
 	return &Planner{
-		llm:      llm,
-		Registry: reg,
-		Store:    store,
-		Debug:    debug,
+		llm:        llm,
+		Registry:   reg,
+		Store:      store,
+		MCPManager: mcpMgr,
+		Debug:      debug,
 	}
 }
 
@@ -130,6 +133,15 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
 		blockNames = append(blockNames, b.Name)
+	}
+
+	// Add MCP Tools
+	if p.MCPManager != nil {
+		mcpTools := p.MCPManager.ListAllTools()
+		for _, t := range mcpTools {
+			// Format: "mcp_tool_name (Description)"
+			blockNames = append(blockNames, fmt.Sprintf("%s (%s)", t.Name, t.Description))
+		}
 	}
 
 	allAgents := p.Registry.ListAgents(userGroups)

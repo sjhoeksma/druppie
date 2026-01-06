@@ -29,7 +29,7 @@
 - [ ] Plugin system
 - [ ] Git saving of plans
 - [x] Resume command
-- [ ] MCP support
+- [x] MCP support
 - [ ] Optimize LLM context loading, remove headers
 - [ ] LLM Memory : https://medium.com/@sonitanishk2003/the-ultimate-guide-to-llm-memory-from-context-windows-to-advanced-agent-memory-systems-3ec106d2a345
 - [ ] Deep rescearch the core of druppie to get new spec

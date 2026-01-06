@@ -75,7 +75,9 @@ type ExecutionPlan struct {
 type MCPServer struct {
 	ID         string   `json:"id" yaml:"id"`
 	Name       string   `json:"name" yaml:"name"`
-	URL        string   `json:"url" yaml:"url"`
+	URL        string   `json:"url,omitempty" yaml:"url,omitempty"`
+	Command    string   `json:"command,omitempty" yaml:"command,omitempty"`
+	Args       []string `json:"args,omitempty" yaml:"args,omitempty"`
 	Transport  string   `json:"transport" yaml:"transport"` // sse, stdio
 	AuthGroups []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }

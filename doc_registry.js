@@ -52,7 +52,8 @@ const DOC_REGISTRY = {
         { name: "Developer", path: "agents/developer.md" },
         { name: "Audio Creator", path: "agents/audio-creator.md" },
         { name: "Image Creator", path: "agents/image-creator.md" },
-        { name: "Video Creator", path: "agents/video-creator.md" }
+        { name: "Video Creator", path: "agents/video-creator.md" },
+        { name: "MCP Specialist", path: "agents/mcp_agent.md" }
     ],
     "skills": [
         { name: "Overview", path: "skills/overview.md" },
@@ -94,7 +95,8 @@ const DOC_REGISTRY = {
         { name: "Overview", path: "mcp/overview.md" },
         { name: "Microsoft & Azure", path: "mcp/microsoft.md" },
         { name: "Open Source Tools", path: "mcp/opensource.md" },
-        { name: "Web Design", path: "mcp/shadcn.md" }
+        { name: "Web Design", path: "mcp/shadcn.md" },
+        { name: "Plan FS Template", path: "mcp/plan_fs_template.md" }
     ],
     "design": [
         { name: "Overview", path: "design/overview.md" },

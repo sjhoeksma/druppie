@@ -12,6 +12,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/config"
 	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/iam"
+	"github.com/sjhoeksma/druppie/core/internal/mcp"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 	"github.com/sjhoeksma/druppie/core/internal/workflows"
@@ -39,6 +40,7 @@ type TaskManager struct {
 	TaskDoneChan    chan string // Signals when a task is fully complete
 	dispatcher      *executor.Dispatcher
 	workflowManager *workflows.Manager
+	MCPManager      *mcp.Manager
 }
 
 type Task struct {
@@ -50,15 +52,19 @@ type Task struct {
 	Cancel    context.CancelFunc
 }
 
-func NewTaskManager(p *planner.Planner, buildEngine builder.BuildEngine) *TaskManager {
+func NewTaskManager(p *planner.Planner, mcpMgr *mcp.Manager, buildEngine builder.BuildEngine) *TaskManager {
+
 	tm := &TaskManager{
 		tasks:           make(map[string]*Task),
 		planner:         p,
 		OutputChan:      make(chan string, 100),
 		TaskDoneChan:    make(chan string, 10),
-		dispatcher:      executor.NewDispatcher(buildEngine),
+		dispatcher:      executor.NewDispatcher(buildEngine, mcpMgr),
 		workflowManager: workflows.NewManager(),
+		MCPManager:      mcpMgr,
 	}
+	// TODO: Load persistent MCP servers from config or disk here?
+
 	return tm
 }
 
@@ -66,6 +72,13 @@ func NewTaskManager(p *planner.Planner, buildEngine builder.BuildEngine) *TaskMa
 func (tm *TaskManager) StartTask(ctx context.Context, plan model.ExecutionPlan) *Task {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+
+	// Provision Plan-Specific MCP Server if template exists
+	if tm.MCPManager != nil {
+		if err := tm.MCPManager.EnsurePlanServer(ctx, plan.ID); err != nil {
+			fmt.Printf("[TaskManager] Warning: Failed to ensure plan server: %v\n", err)
+		}
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	task := &Task{
