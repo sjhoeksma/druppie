@@ -45,6 +45,9 @@ memory:
     max_window_tokens: 12000
     summarize_after: 20
 
+planner:
+    max_agent_selection: 3
+
 approval_groups:
     security: ["ciso", "group-admin"]
     legal: ["legal", "group-admin"]

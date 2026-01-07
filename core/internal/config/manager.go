@@ -17,7 +17,12 @@ type Config struct {
 	Git            GitConfig           `yaml:"git" json:"git"`
 	IAM            IAMConfig           `yaml:"iam" json:"iam"`
 	Memory         MemoryConfig        `yaml:"memory" json:"memory"`
+	Planner        PlannerConfig       `yaml:"planner" json:"planner"`
 	ApprovalGroups map[string][]string `yaml:"approval_groups" json:"approval_groups"`
+}
+
+type PlannerConfig struct {
+	MaxAgentSelection int `yaml:"max_agent_selection" json:"max_agent_selection"`
 }
 
 type MemoryConfig struct {
@@ -127,6 +132,9 @@ func NewManager(s store.Store) (*Manager, error) {
 			Memory: MemoryConfig{
 				MaxWindowTokens: 12000,
 				SummarizeAfter:  20,
+			},
+			Planner: PlannerConfig{
+				MaxAgentSelection: 3,
 			},
 		},
 	}

@@ -19,29 +19,34 @@ import (
 )
 
 type Planner struct {
-	llm        llm.Provider
-	Registry   *registry.Registry
-	Store      store.Store
-	Debug      bool
-	MCPManager *mcp.Manager
-	Memory     *memory.Manager
+	llm               llm.Provider
+	Registry          *registry.Registry
+	Store             store.Store
+	Debug             bool
+	MCPManager        *mcp.Manager
+	Memory            *memory.Manager
+	MaxAgentSelection int
 }
 
 func (p *Planner) GetLLM() llm.Provider {
 	return p.llm
 }
 
-func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcpMgr *mcp.Manager, memMgr *memory.Manager, debug bool) *Planner {
+func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcpMgr *mcp.Manager, memMgr *memory.Manager, maxAgentSelection int, debug bool) *Planner {
 	if memMgr == nil {
 		memMgr = memory.NewManager(12000, store)
 	}
+	if maxAgentSelection <= 0 {
+		maxAgentSelection = 3 // Default safety
+	}
 	return &Planner{
-		llm:        llm,
-		Registry:   reg,
-		Store:      store,
-		MCPManager: mcpMgr,
-		Memory:     memMgr,
-		Debug:      debug,
+		llm:               llm,
+		Registry:          reg,
+		Store:             store,
+		MCPManager:        mcpMgr,
+		Memory:            memMgr,
+		MaxAgentSelection: maxAgentSelection,
+		Debug:             debug,
 	}
 }
 
@@ -95,12 +100,32 @@ func (p *Planner) cleanJSONResponse(resp string) string {
 	return clean
 }
 
-func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent, agents []model.AgentDefinition) []string {
+func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent, agents []model.AgentDefinition, planID string) []string {
 	var detailedList []string
 	for _, a := range agents {
+		// Include ID and Description, maybe Skills?
 		detailedList = append(detailedList, fmt.Sprintf("%s: %s", a.ID, a.Description))
 	}
-	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator'.\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For compliance/policy/verification, use 'compliance'.\n- For architecture, use 'architect'.\n- For general questions, undefined goals, or if UNSURE, use 'business-analyst'.\nExample: [\"business-analyst\"]", intent.Prompt, detailedList)
+	// Prompt asks for sorted list by relevance
+	prompt := fmt.Sprintf(`Goal: %s
+
+Available Agents:
+%v
+
+Task: Select the most relevant agents for this goal.
+Rules:
+1. Return exactly one JSON array of strings containing Agent IDs.
+2. Sort the array by relevance (most relevant first).
+3. Be extremely restrictive. prefer single specialized agent over multiple.
+4. Guidelines:
+   - Video content -> 'video-content-creator'
+   - Research/Data -> 'data-scientist'
+   - Infrastructure/Ops -> 'infrastructure-engineer'
+   - Compliance/Policy -> 'compliance'
+   - Architecture -> 'architect'
+   - General/Ambiguous -> 'business-analyst'
+
+Example: ["business-analyst"]`, intent.Prompt, detailedList)
 
 	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
@@ -124,6 +149,17 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 			return nil
 		}
 	}
+
+	// Limit selection based on config
+	if len(selected) > p.MaxAgentSelection {
+		selected = selected[:p.MaxAgentSelection]
+	}
+
+	// Log interaction for visibility
+	if p.Store != nil {
+		_ = p.Store.LogInteraction(planID, "Planner", "Agent Selection", fmt.Sprintf("Goal: %s\nSelected: %v\n(Limited to Top %d)", intent.Prompt, selected, p.MaxAgentSelection))
+	}
+
 	return selected
 }
 
@@ -164,7 +200,7 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	allAgents := p.Registry.ListAgents(userGroups)
 
 	// Filter Agents
-	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents)
+	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents, planID)
 
 	// Expand Selection with Sub-Agents
 	selectedSet := make(map[string]bool)

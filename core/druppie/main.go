@@ -154,7 +154,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		memManager := memory.NewManager(cfg.Memory.MaxWindowTokens, druppieStore)
 
 		r := router.NewRouter(llmManager, druppieStore, reg, debug)
-		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, memManager, debug)
+		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, memManager, cfg.Planner.MaxAgentSelection, debug)
 
 		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
 		if err != nil {
