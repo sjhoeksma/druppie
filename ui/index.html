@@ -2227,7 +2227,7 @@
     }
 
     async function updatePlan() {
-        if (!state.currentPlanId) return;
+        if (!state.currentPlanId || !state.token) return;
         try {
             const resp = await fetch(`/v1/plans/${state.currentPlanId}`);
             if (!resp.ok) return;
@@ -2407,6 +2407,7 @@
     }
 
     async function updateLogs() {
+        if (!state.currentPlanId || !state.token) return;
         if (!state.currentPlanId) return;
         if (!state.currentPlanId) return;
         try {
