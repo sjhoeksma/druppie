@@ -28,6 +28,8 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager) *Di
 			&BuildExecutor{Builder: buildEngine}, // Helper for building code
 			&RunExecutor{Builder: buildEngine},   // Helper for running code
 			&ComplianceExecutor{},                // Compliance/Approval Handler
+			&InfrastructureExecutor{},            // Infra Handler
+			&ArchitectExecutor{},                 // Architect Handler
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},

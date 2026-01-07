@@ -241,10 +241,29 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	agentList := make([]string, 0, len(activeAgents))
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
-		agentList = append(agentList, fmt.Sprintf(
-			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s\n  Directives & Structure:\n%s",
-			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow, a.Instructions,
-		))
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("ID: %s\n", a.ID))
+		sb.WriteString(fmt.Sprintf("  Name: %s\n", a.Name))
+		sb.WriteString(fmt.Sprintf("  Type: %s\n", a.Type))
+		if a.Condition != "" {
+			sb.WriteString(fmt.Sprintf("  Condition: %s\n", a.Condition))
+		}
+		if len(a.SubAgents) > 0 {
+			sb.WriteString(fmt.Sprintf("  Sub-Agents: %v\n", a.SubAgents))
+		}
+		if len(a.Skills) > 0 {
+			sb.WriteString(fmt.Sprintf("  Skills: %v\n", a.Skills))
+		}
+		sb.WriteString(fmt.Sprintf("  Priority: %.1f\n", a.Priority))
+		sb.WriteString(fmt.Sprintf("  Description: %s\n", a.Description))
+		if a.Workflow != "" {
+			sb.WriteString(fmt.Sprintf("  Workflow:\n%s\n", a.Workflow))
+		}
+		if a.Instructions != "" {
+			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+		}
+		agentList = append(agentList, sb.String())
 	}
 	//fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
 
@@ -263,6 +282,11 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		"%tools%", fmt.Sprintf("%v", blockNames),
 		"%agents%", fmt.Sprintf("%v", agentList),
 	)
+
+	if p.Store != nil {
+		_ = p.Store.LogInteraction(planID, "Planner", "Context Assembly", fmt.Sprintf("Selected Tools/Blocks: %v", blockNames))
+	}
+
 	sysPrompt := replacer.Replace(sysTemplate)
 
 	var steps []model.Step
@@ -501,11 +525,28 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	for _, a := range activeAgents {
 		sortedIDs = append(sortedIDs, a.ID)
 
-		// Create the detailed description string for the prompt
-		updatedAgentList = append(updatedAgentList, fmt.Sprintf(
-			"ID: %s\n  Name: %s\n  Type: %s\n  Condition: %s\n  Sub-Agents: %v\n  Skills: %v\n  Priority: %.1f\n  Description: %s\n  Workflow:\n%s",
-			a.ID, a.Name, a.Type, a.Condition, a.SubAgents, a.Skills, a.Priority, a.Description, a.Workflow,
-		))
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("ID: %s\n", a.ID))
+		sb.WriteString(fmt.Sprintf("  Name: %s\n", a.Name))
+		sb.WriteString(fmt.Sprintf("  Type: %s\n", a.Type))
+		if a.Condition != "" {
+			sb.WriteString(fmt.Sprintf("  Condition: %s\n", a.Condition))
+		}
+		if len(a.SubAgents) > 0 {
+			sb.WriteString(fmt.Sprintf("  Sub-Agents: %v\n", a.SubAgents))
+		}
+		if len(a.Skills) > 0 {
+			sb.WriteString(fmt.Sprintf("  Skills: %v\n", a.Skills))
+		}
+		sb.WriteString(fmt.Sprintf("  Priority: %.1f\n", a.Priority))
+		sb.WriteString(fmt.Sprintf("  Description: %s\n", a.Description))
+		if a.Workflow != "" {
+			sb.WriteString(fmt.Sprintf("  Workflow:\n%s\n", a.Workflow))
+		}
+		if a.Instructions != "" {
+			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+		}
+		updatedAgentList = append(updatedAgentList, sb.String())
 	}
 	// Backward compatibility link if needed, or just use updatedAgentList in prompt
 	// agentList := updatedAgentList

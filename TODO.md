@@ -34,5 +34,9 @@
 - [ ] LLM Memory : https://medium.com/@sonitanishk2003/the-ultimate-guide-to-llm-memory-from-context-windows-to-advanced-agent-memory-systems-3ec106d2a345
 - [ ] Deep rescearch the core of druppie to get new spec
 
-
+"usage": {
+    "prompt_tokens": 4400,
+    "completion_tokens": 503,
+    "total_tokens": 4903
+  },
 

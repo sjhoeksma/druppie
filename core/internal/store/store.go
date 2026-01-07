@@ -71,12 +71,6 @@ func (s *FileStore) SavePlan(plan model.ExecutionPlan) error {
 		return fmt.Errorf("failed to create plan directory: %w", err)
 	}
 
-	// Create vector_store directory by default
-	vectorStoreDir := filepath.Join(planDir, "vector_store")
-	if err := os.MkdirAll(vectorStoreDir, 0755); err != nil {
-		return fmt.Errorf("failed to create vector_store directory: %w", err)
-	}
-
 	filename := filepath.Join(planDir, "plan.json")
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write plan file: %w", err)
