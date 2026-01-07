@@ -16,7 +16,13 @@ type Config struct {
 	Build          BuildConfig         `yaml:"build" json:"build"`
 	Git            GitConfig           `yaml:"git" json:"git"`
 	IAM            IAMConfig           `yaml:"iam" json:"iam"`
+	Memory         MemoryConfig        `yaml:"memory" json:"memory"`
 	ApprovalGroups map[string][]string `yaml:"approval_groups" json:"approval_groups"`
+}
+
+type MemoryConfig struct {
+	MaxWindowTokens int `yaml:"max_window_tokens" json:"max_window_tokens"` // e.g. 128000
+	SummarizeAfter  int `yaml:"summarize_after" json:"summarize_after"`     // Turn count
 }
 
 type IAMConfig struct {
@@ -117,6 +123,10 @@ func NewManager(s store.Store) (*Manager, error) {
 			},
 			IAM: IAMConfig{
 				Provider: "local",
+			},
+			Memory: MemoryConfig{
+				MaxWindowTokens: 12000,
+				SummarizeAfter:  20,
 			},
 		},
 	}

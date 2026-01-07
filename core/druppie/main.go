@@ -20,6 +20,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
+	"github.com/sjhoeksma/druppie/core/internal/memory"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
@@ -149,8 +150,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		// Initialize MCP Manager
 		mcpManager := mcp.NewManager(context.Background(), druppieStore, reg)
 
+		// Initialize Memory Manager
+		memManager := memory.NewManager(cfg.Memory.MaxWindowTokens, druppieStore)
+
 		r := router.NewRouter(llmManager, druppieStore, reg, debug)
-		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, debug)
+		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, memManager, debug)
 
 		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
 		if err != nil {
@@ -422,6 +426,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
+					// Log User Input to Memory
+					if plannerService.Memory != nil {
+						plannerService.Memory.AddEntry(planID, "user", req.Prompt)
+					}
+
 					// Return plan ID immediately to UI
 					w.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(w).Encode(map[string]interface{}{
@@ -445,25 +454,30 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						effectivePrompt := req.Prompt
 						if !isNewPlan {
 							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Loading plan %s. Steps found: %d", planID, len(currentPlan.Steps))
-							// 1. Build Context
-							history := ""
-							// Exclude the last step (current request) which was already appended
-							priorSteps := currentPlan.Steps[:len(currentPlan.Steps)-1]
+							// 1. Build Context obtained from Memory
+							if plannerService.Memory != nil {
+								effectivePrompt = plannerService.Memory.GetContext(planID) + "\nRequest: " + req.Prompt
+							} else {
+								// Legacy simplistic history fallback (optional, but Memory should be available)
+								// ... keeping logic simple, relying on Memory primarily
+								history := ""
+								// Exclude the last step (current request) which was already appended
+								priorSteps := currentPlan.Steps[:len(currentPlan.Steps)-1]
 
-							startIdx := 0
-							if len(priorSteps) > 20 {
-								startIdx = len(priorSteps) - 20
-							}
-							for _, s := range priorSteps[startIdx:] {
-								switch s.Action {
-								case "user_query":
-									history += fmt.Sprintf("User: %s\n", s.Result)
-								case "general_chat":
-									history += fmt.Sprintf("AI: %s\n", s.Result)
+								startIdx := 0
+								if len(priorSteps) > 20 {
+									startIdx = len(priorSteps) - 20
 								}
+								for _, s := range priorSteps[startIdx:] {
+									switch s.Action {
+									case "user_query":
+										history += fmt.Sprintf("User: %s\n", s.Result)
+									case "general_chat":
+										history += fmt.Sprintf("AI: %s\n", s.Result)
+									}
+								}
+								effectivePrompt = fmt.Sprintf("History:\n%s\nRequest: %s", history, req.Prompt)
 							}
-							effectivePrompt = fmt.Sprintf("History:\n%s\nRequest: %s", history, req.Prompt)
-							//tm.OutputChan <- fmt.Sprintf("[DEBUG] Constructed History: %s", history)
 						}
 
 						// 2. Analyze Intent
@@ -600,6 +614,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 							// Output the response to the console
 							tm.OutputChan <- fmt.Sprintf("[%s] Response: %s", planID, resultText)
+
+							// Log AI Response to Memory
+							if plannerService.Memory != nil {
+								plannerService.Memory.AddEntry(planID, "assistant", resultText)
+							}
 
 							// Update plan status to completed and store the answer as a step
 							currentPlan.Status = "completed"

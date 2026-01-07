@@ -12,6 +12,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
+	"github.com/sjhoeksma/druppie/core/internal/memory"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
 	"github.com/sjhoeksma/druppie/core/internal/store"
@@ -23,18 +24,23 @@ type Planner struct {
 	Store      store.Store
 	Debug      bool
 	MCPManager *mcp.Manager
+	Memory     *memory.Manager
 }
 
 func (p *Planner) GetLLM() llm.Provider {
 	return p.llm
 }
 
-func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcpMgr *mcp.Manager, debug bool) *Planner {
+func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcpMgr *mcp.Manager, memMgr *memory.Manager, debug bool) *Planner {
+	if memMgr == nil {
+		memMgr = memory.NewManager(12000, store)
+	}
 	return &Planner{
 		llm:        llm,
 		Registry:   reg,
 		Store:      store,
 		MCPManager: mcpMgr,
+		Memory:     memMgr,
 		Debug:      debug,
 	}
 }
@@ -94,7 +100,7 @@ func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent,
 	for _, a := range agents {
 		detailedList = append(detailedList, fmt.Sprintf("%s: %s", a.ID, a.Description))
 	}
-	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator' ONLY (it replaces business-analyst).\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For compliance/policy/verification, use 'compliance'.\n- For architecture, use 'architect'.\n- For other VAGUE goals, include 'business-analyst'.\nExample: [\"video-content-creator\"]", intent.Prompt, detailedList)
+	prompt := fmt.Sprintf("Goal: %s\nAvailable Agents:\n%v\n\nTask: Return exactly one JSON array of strings containing Agent IDs. Be extremely restrictive.\nGuidelines:\n- For video content, use 'video-content-creator'.\n- For research/data tasks, use 'data-scientist'.\n- For infrastructure/ops, use 'infrastructure-engineer'.\n- For compliance/policy/verification, use 'compliance'.\n- For architecture, use 'architect'.\n- For general questions, undefined goals, or if UNSURE, use 'business-analyst'.\nExample: [\"business-analyst\"]", intent.Prompt, detailedList)
 
 	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
@@ -313,6 +319,11 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		planID = fmt.Sprintf("plan-%d", time.Now().Unix())
 	}
 
+	// Initialize Memory Context
+	if p.Memory != nil {
+		p.Memory.AddEntry(planID, "user", fmt.Sprintf("Goal: %s\nAction: %s", intent.Prompt, intent.Action))
+	}
+
 	creatorID := ""
 	if u, ok := iam.GetUserFromContext(ctx); ok {
 		creatorID = u.ID
@@ -499,11 +510,24 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	stepsJSON, _ := json.MarshalIndent(plan.Steps, "", "  ")
+
+	// Manage Memory
+	if p.Memory != nil && feedback != "" {
+		p.Memory.AddEntry(plan.ID, "user", feedback)
+	}
+
+	chatHistory := ""
+	if p.Memory != nil {
+		chatHistory = p.Memory.GetContext(plan.ID)
+	} else {
+		chatHistory = "User Feedback: " + feedback
+	}
+
 	taskPrompt := fmt.Sprintf(
 		"--- HISTORY & PROGRESS ---\n"+
 			"Current Steps (with results): %s\n"+
 			"Uploaded Files: %v\n"+
-			"Latest User Input: %s\n\n"+
+			"Conversation History:\n%s\n\n"+
 			"--- TASK ---\n"+
 			"1. REPLAN: Review 'Objective' and 'Current Steps'. If a step has a 'result', that info is now known.\n"+
 			"2. STATUS CHECK: Review 'Current Steps'. If 'content-review' is pending, WAITING for user feedback. If 'scene-creator' is pending, WAITING for execution.\n"+
@@ -513,7 +537,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			"6. OUTPUT: Return a JSON array of Step objects.",
 		string(stepsJSON),
 		plan.Files,
-		feedback,
+		chatHistory,
 		startID+1, // Start ID for new steps
 	)
 

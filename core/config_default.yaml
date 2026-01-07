@@ -41,6 +41,10 @@ git:
 iam: # ProviderOptions: local, keycloak, demo
     provider: local
 
+memory:
+    max_window_tokens: 12000
+    summarize_after: 20
+
 approval_groups:
     security: ["ciso", "group-admin"]
     legal: ["legal", "group-admin"]
