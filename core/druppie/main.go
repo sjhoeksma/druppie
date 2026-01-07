@@ -298,6 +298,28 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				http.ServeFile(w, r, filepath.Join(root, "ui", "code.html"))
 			})
 
+			// Static assets for UI
+			r.Get("/common.css", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				w.Header().Set("Content-Type", "text/css")
+				http.ServeFile(w, r, filepath.Join(root, "ui", "common.css"))
+			})
+			r.Get("/common.js", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				w.Header().Set("Content-Type", "application/javascript")
+				http.ServeFile(w, r, filepath.Join(root, "ui", "common.js"))
+			})
+			r.Get("/druppie_logo.svg", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				w.Header().Set("Content-Type", "image/svg+xml")
+				http.ServeFile(w, r, filepath.Join(root, "druppie_logo.svg"))
+			})
+			r.Get("/druppie_logo.png", func(w http.ResponseWriter, r *http.Request) {
+				root, _ := findProjectRoot()
+				w.Header().Set("Content-Type", "image/png")
+				http.ServeFile(w, r, filepath.Join(root, "druppie_logo.png"))
+			})
+
 			// Public System Info
 			r.Get("/info", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -923,11 +945,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						id = "plan-" + id
 					}
 
-					// Find plan dir: .druppie/plans/<id>/src (source code only)
+					// Find plan dir: .druppie/plans/<id> (root of plan)
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
+					planDir := filepath.Join(root, ".druppie", "plans", id)
 
-					var files []string
+					var files = []string{} // Initialize as empty slice to ensure JSON [] vs null
 					// Walk relative
 					err := filepath.Walk(planDir, func(path string, info os.FileInfo, err error) error {
 						if err != nil {
@@ -963,7 +985,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
+					planDir := filepath.Join(root, ".druppie", "plans", id)
 					absPath := filepath.Join(planDir, pathParam)
 
 					// Security check
@@ -989,7 +1011,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					root, _ := findProjectRoot()
-					planDir := filepath.Join(root, ".druppie", "plans", id, "src")
+					planDir := filepath.Join(root, ".druppie", "plans", id)
 					absPath := filepath.Join(planDir, pathParam)
 
 					// Security check
