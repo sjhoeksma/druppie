@@ -61,7 +61,17 @@ func (e *MCPExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 						cwd = filepath.Dir(cwd)
 					}
 					// Construction: .druppie/plans/<id>
-					absPath := filepath.Join(cwd, ".druppie", "plans", planID, pathVal)
+					planRoot := filepath.Join(cwd, ".druppie", "plans", planID)
+					absPath := filepath.Join(planRoot, pathVal)
+
+					// Security Check: Prevent directory traversal
+					// Ensure the resulting path is still within the planRoot
+					cleanRoot := filepath.Clean(planRoot)
+					cleanPath := filepath.Clean(absPath)
+					if !strings.HasPrefix(cleanPath, cleanRoot) {
+						return fmt.Errorf("security violation: path %s escapes plan execution directory %s", pathVal, planID)
+					}
+
 					step.Params["path"] = absPath
 				}
 			}
