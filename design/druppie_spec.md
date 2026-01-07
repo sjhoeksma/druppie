@@ -63,45 +63,33 @@ Druppie is an **enterprise-grade Spec-Driven AI platform** with **Human-in-the-L
 
 ### 2.1 System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    HTTP REST API Server                      │
-│                   (Chi Router - Port 80)                     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│  IAM         │    │   Router     │   │  Task        │
-│  Provider    │    │   Service    │   │  Manager     │
-└──────────────┘    └──────────────┘   └──────────────┘
-        │                   │                   │
-        │                   ▼                   │
-        │           ┌──────────────┐            │
-        │           │   Planner    │            │
-        │           │   Service    │            │
-        │           └──────────────┘            │
-        │                   │                   │
-        │                   ▼                   │
-        │           ┌──────────────┐            │
-        └──────────▶│   Registry   │◀───────────┘
-                    │   (Loader)   │
-                    └──────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│  LLM         │    │   MCP        │   │  Builder     │
-│  Manager     │    │   Manager    │   │  Engine      │
-└──────────────┘    └──────────────┘   └──────────────┘
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐   ┌──────────────┐
-│  Store       │    │  Executor    │   │  Workflow    │
-│  (FileStore) │    │  Dispatcher  │   │  Manager     │
-└──────────────┘    └──────────────┘   └──────────────┘
+```mermaid
+graph TD
+    API[HTTP REST API Server<br>Chi Router - Port 80]
+    IAM[IAM Provider]
+    Router[Router Service]
+    TM[Task Manager]
+    Planner[Planner Service]
+    Registry[Registry<br>Loader]
+    LLM[LLM Manager]
+    MCP[MCP Manager]
+    Builder[Builder Engine]
+    Store[Store<br>FileStore]
+    Executor[Executor Dispatcher]
+    Workflow[Workflow Manager]
+
+    API --> IAM
+    API --> Router
+    API --> TM
+    Router --> Planner
+    Planner --> Registry
+    TM --> Registry
+    Registry --> LLM
+    Registry --> MCP
+    Registry --> Builder
+    LLM --> Store
+    MCP --> Executor
+    Builder --> Workflow
 ```
 
 ### 2.2 Design Patterns
@@ -139,43 +127,26 @@ All services receive their dependencies via constructor injection:
 
 ### 2.3 Component Relationships
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        User Request                          │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            ▼
-                    ┌──────────────┐
-                    │   Router     │───────┐
-                    │  (Analyze)   │       │
-                    └──────────────┘       │
-                            │              │
-                            ▼              ▼
-                ┌─────────────────┐  ┌──────────┐
-                │    Planner      │  │   LLM    │
-                │ (CreatePlan)    │◀─│ Manager  │
-                └─────────────────┘  └──────────┘
-                            │              ▲
-                            ▼              │
-                ┌─────────────────┐       │
-                │  Task Manager   │───────┘
-                │ (StartTask)     │
-                └─────────────────┘
-                            │
-                ┌───────────┴───────────┐
-                │                       │
-                ▼                       ▼
-        ┌──────────────┐       ┌──────────────┐
-        │  Executor    │       │  Workflow    │
-        │  Dispatcher  │       │  Engine      │
-        └──────────────┘       └──────────────┘
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-                    ┌──────────────┐
-                    │    Store     │
-                    │ (SavePlan)   │
-                    └──────────────┘
+```mermaid
+graph TD
+    User[User Request] --> Router[Router<br>Analyze]
+    
+    subgraph Core Services
+        Router --> Planner
+        Router --> LLM
+        Planner[Planner<br>CreatePlan] <--> LLM[LLM Manager]
+        Planner --> TM[Task Manager<br>StartTask]
+    end
+    
+    subgraph Execution
+        TM --> Executor[Executor<br>Dispatcher]
+        TM --> Workflow[Workflow<br>Engine]
+    end
+    
+    subgraph Persistence
+        Executor --> Store[Store<br>SavePlan]
+        Workflow --> Store
+    end
 ```
 
 ### 2.4 Data Flow
@@ -200,16 +171,33 @@ All services receive their dependencies via constructor injection:
 
 #### 2.4.2 Execution Step Flow
 
-```
-pending → isReady? → running → Execute → completed
-                                    ↓
-                               failed/error
-                                    ↓
-                             waiting_input
-                                    ↓
-                            User provides input
-                                    ↓
-                                  retry
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> isReady
+    state isReady <<choice>>
+    
+    isReady --> running: Yes
+    isReady --> pending: No
+    
+    running --> Execute
+    
+    state Execute {
+        [*] --> Executing
+        Executing --> Success
+        Executing --> Failure
+        Executing --> Suspend
+    }
+    
+    Execute --> completed: Success
+    Execute --> failed_error: Failure
+    Execute --> waiting_input: Suspend
+    
+    waiting_input --> retry: User Input
+    retry --> running
+    
+    completed --> [*]
+    failed_error --> [*]
 ```
 
 ---
@@ -2629,72 +2617,61 @@ type PluginConverter struct {
 
 ### 6.1 Intent Analysis Workflow
 
-```
-User Input
-    ↓
-Router.Analyze()
-    ↓
-LLM Classification
-    ↓
-Intent{action, category, language}
-    ↓
-Decision:
-    ├─ general_chat → Return Answer
-    └─ other → Continue to Planning
+```mermaid
+graph TD
+    User[User Input] --> Router[Router.Analyze]
+    Router --> LLM[LLM Classification]
+    LLM --> Intent[Intent<br>action, category, language]
+    Intent -- general_chat --> Answer[Return Answer]
+    Intent -- other --> Planning[Continue to Planning]
 ```
 
 ### 6.2 Plan Generation Workflow
 
-```
-Intent
-    ↓
-Planner.CreatePlan()
-    ↓
-1. Load Registry (Blocks, Skills, Agents, MCP)
-    ↓
-2. Filter by User Groups
-    ↓
-3. Select Relevant Agents (LLM)
-    ↓
-4. Expand to Sub-Agents
-    ↓
-5. Sort by Priority
-    ↓
-6. Build Context (Goal, Tools, Agents)
-    ↓
-7. Generate Steps (LLM)
-    ↓
-8. Validate Steps
-    ↓
-9. Create ExecutionPlan
-    ↓
-10. Save to Store
-    ↓
-Return Plan
+```mermaid
+graph TD
+    Intent --> Planner[Planner.CreatePlan]
+    Planner --> Load[1. Load Registry<br>Blocks, Skills, Agents, MCP]
+    Load --> Filter[2. Filter by User Groups]
+    Filter --> Select[3. Select Relevant Agents<br>LLM]
+    Select --> Expand[4. Expand to Sub-Agents]
+    Expand --> Sort[5. Sort by Priority]
+    Sort --> Context[6. Build Context<br>Goal, Tools, Agents]
+    Context --> Gen[7. Generate Steps<br>LLM]
+    Gen --> Validate[8. Validate Steps]
+    Validate --> Create[9. Create ExecutionPlan]
+    Create --> Save[10. Save to Store]
+    Save --> Return[Return Plan]
 ```
 
 ### 6.3 Step Execution Workflow
 
-```
-TaskManager.StartTask()
-    ↓
-runTaskLoop() [goroutine]
-    ↓
-Loop:
-    ├─ Check Cancellation
-    ├─ Check for Native Workflow Override
-    ├─ Load Plan from Store
-    ├─ Find Runnable Steps (dependencies satisfied)
-    ├─ Identify Interactive Steps
-    ├─ Execute Batch in Parallel
-    │   ├─ Dispatcher.GetExecutor()
-    │   ├─ Executor.Execute()
-    │   └─ Update Step Status
-    ├─ Wait for User Input (if interactive)
-    │   ├─ Validate User Permissions (for audit)
-    │   ├─ Apply Input to Step
-    │   └─ Planner.UpdatePlan()
-    └─ Repeat until All Steps Completed
+```mermaid
+graph TD
+    Start[TaskManager.StartTask] --> Loop[runTaskLoop<br>goroutine]
+    
+    subgraph Execution Loop
+        Loop --> CheckCancel[Check Cancellation]
+        CheckCancel --> Override[Check Native Workflow Override]
+        Override --> Load[Load Plan from Store]
+        Load --> Find[Find Runnable Steps]
+        Find --> Interactive{Is Interactive?}
+        
+        Interactive -- No --> Parallel[Execute Batch in Parallel]
+        Parallel --> Dispatch[Dispatcher.GetExecutor]
+        Dispatch --> Exec[Executor.Execute]
+        Exec --> Status[Update Step Status]
+        
+        Interactive -- Yes --> Wait[Wait for User Input]
+        Wait --> Perms[Validate User Permissions]
+        Perms --> Apply[Apply Input to Step]
+        Apply --> Replan[Planner.UpdatePlan]
+        Replan --> Repeat
+        Status --> Repeat
+        
+        Repeat{All Done?} -- No --> Loop
+        Repeat -- Yes --> End
+    end
 ```
 
 ### 6.4 Dependency Resolution Algorithm
