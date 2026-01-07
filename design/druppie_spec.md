@@ -77,6 +77,7 @@ graph TD
     Store[Store<br>FileStore]
     Executor[Executor Dispatcher]
     Workflow[Workflow Manager]
+    Memory[Memory Manager<br>RAG/Vector]
 
     API --> IAM
     API --> Router
@@ -87,9 +88,12 @@ graph TD
     Registry --> LLM
     Registry --> MCP
     Registry --> Builder
+    Registry --> Memory
     LLM --> Store
     MCP --> Executor
     Builder --> Workflow
+    Planner --> Memory
+    LLM --> Memory
 ```
 
 ### 2.2 Design Patterns
@@ -136,6 +140,8 @@ graph TD
         Router --> LLM
         Planner[Planner<br>CreatePlan] <--> LLM[LLM Manager]
         Planner --> TM[Task Manager<br>StartTask]
+        Planner <--> Memory[Memory Manager]
+        LLM <--> Memory
     end
     
     subgraph Execution
@@ -146,6 +152,7 @@ graph TD
     subgraph Persistence
         Executor --> Store[Store<br>SavePlan]
         Workflow --> Store
+        Memory --> Store
     end
 ```
 
@@ -449,6 +456,39 @@ type StoredGroup struct {
 
 **Default Admin**: username=`admin`, password=`admin`, groups=`["group-admin"]`
 
+#### 3.1.10 Memory & Context
+
+**Purpose**: Optimizing LLM context window usage
+
+```go
+type MemoryType string
+
+const (
+    MemoryShortTerm MemoryType = "short_term" // In-context sliding window within execution
+    MemoryLongTerm  MemoryType = "long_term"  // Vector/semantic search across plans
+)
+
+type HistoryEntry struct {
+    Timestamp time.Time `json:"timestamp"`
+    Role      string    `json:"role"`    // user, ai, system
+    Content   string    `json:"content"` // Full text
+    Summary   string    `json:"summary,omitempty"` // Compressed/summarized version
+    Tokens    int       `json:"tokens"`
+    PlanID    string    `json:"plan_id"`
+}
+
+type MemoryContext struct {
+    MaxTokens    int            `json:"max_tokens"`
+    Recent Turns []HistoryEntry `json:"recent_turns"`
+    RelevantFacts []string      `json:"relevant_facts"` // Retrived from long term memory
+}
+```
+
+**Strategy**:
+- **Sliding Window**: Keep last N turns full fidelity
+- **Summarization**: Summarize older turns into consolidated "facts"
+- **Vector Search**: Retrieve relevant past plan segments when context needed
+
 ### 3.2 Configuration Models
 
 #### 3.2.1 Config
@@ -461,8 +501,16 @@ type Config struct {
     Server         ServerConfig         `yaml:"server"`
     Build          BuildConfig          `yaml:"build"`
     Git            GitConfig            `yaml:"git"`
+    Git            GitConfig            `yaml:"git"`
     IAM            IAMConfig            `yaml:"iam"`
+    Memory         MemoryConfig         `yaml:"memory"`
     ApprovalGroups map[string][]string  `yaml:"approval_groups"`
+}
+
+type MemoryConfig struct {
+    MaxWindowTokens int  `yaml:"max_window_tokens"` // e.g. 128000
+    SummarizeAfter  int  `yaml:"summarize_after"`   // Turn count
+    VectorStorePath string `yaml:"vector_store_path"`
 }
 
 type LLMConfig struct {
@@ -4876,6 +4924,29 @@ golang.org/x/term v0.38.0
 - Drag-and-drop to change status
 - **Dependencies:** Story 22.1
 - **Acceptance:** Move plan from Running to Completed
+
+---
+
+#### EPIC 23: Memory System & Optimization
+**Story 23.1:** Short Term Memory Manager
+- Implement in-memory sliding window for active plan chat
+- Track token count per message
+- Prune oldest messages when limit reached
+- Preserver "System" messages
+- **Dependencies:** Story 3.1.10, Story 6.4
+- **Acceptance:** Chat remains within token limit
+
+**Story 23.2:** Long Term Memory Implementation (Vector)
+- Integrate basic vector store (e.g. slight/chroma-go or file-based)
+- Embed plan results and summaries upon completion
+- **Dependencies:** Story 23.1
+- **Acceptance:** Plan summaries stored as vectors
+
+**Story 23.3:** Context Retrieval
+- Query vector store during "CreatePlan" to find similar past plans
+- Inject relevant past successes/failures into Planner context
+- **Dependencies:** Story 23.2, Story 6.1
+- **Acceptance:** Planner creates better plans based on past history
 
 ---
 
