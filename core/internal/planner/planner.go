@@ -413,14 +413,21 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if p.Store != nil {
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")
 		_ = p.Store.LogInteraction(plan.ID, "Planner Create",
-			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", sysPrompt),
-			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
+fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", sysPrompt),
+fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
+	}
+
+	// Assign initial usage to the "generate_plan" step if it exists
+	for i := range plan.Steps {
+		if plan.Steps[i].Action == "generate_plan" {
+			plan.Steps[i].Usage = &totalUsage
+			break
+		}
 	}
 
 	return plan, nil
-}
 
-// UpdatePlan updates an existing plan based on user feedback or answers.
+}// UpdatePlan updates an existing plan based on user feedback or answers.
 func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, feedback string) (*model.ExecutionPlan, error) {
 	// 0. Handle Feedback
 	// Find the first non-completed step that matches the feedback category and mark it as completed

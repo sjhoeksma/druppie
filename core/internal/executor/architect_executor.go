@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // ArchitectExecutor handles high-level architectural design tasks
 type ArchitectExecutor struct {
+	LLM llm.Provider
 }
 
 func (e *ArchitectExecutor) CanHandle(action string) bool {
@@ -41,66 +43,26 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 	} else if p, ok := step.Params["_plan_id"].(string); ok {
 		planID = p
 	} else {
-		// Try context or just use "unknown_plan" (fallback, though less desired)
 		planID = "unknown_plan"
 		outputChan <- "Warning: plan_id not found in params"
 	}
 
 	var result string
+	var usage model.TokenUsage
 
-	switch action {
-	case "architectural-design", "target-modeling", "target_modeling":
-		// outputChan <- "Analyzing requirements..."
-		result = "Architecture Design Complete.\n\n" +
-			"### Proposed Solution\n" +
-			"- **Frontend**: React SPA\n" +
-			"- **Backend**: Go Microservices\n" +
-			"- **Database**: PostgreSQL\n" +
-			"- **Infrastructure**: Kubernetes (EKS)\n\n" +
-			"### Diagram\n" +
-			"```mermaid\n" +
-			"graph TD\n" +
-			"  Client --> Ingress\n" +
-			"  Ingress --> ServiceA\n" +
-			"  Ingress --> ServiceB\n" +
-			"  ServiceA --> DB\n" +
-			"```"
+	// Use LLM for architectural tasks
+	if e.LLM != nil {
+		prompt := fmt.Sprintf("You are an Enterprise Architect. Task: %s\n\nContext: %v\n\nProvide a structured architectural output in Markdown format.", action, step.Params)
 
-	case "documentation-assembly", "documentation_assembly":
-		// outputChan <- "Assembling documentation..."
-		result = "# Architecture Documentation\n\n" +
-			"## Executive Summary\n" +
-			"Following the architectural design, this document outlines the proposed solution.\n\n" +
-			"## Artifacts\n" +
-			"- System Context Diagram\n" +
-			"- Container Diagram\n" +
-			"- Deployment View\n\n" +
-			"## Decisions (ADRs)\n" +
-			"- ADR-001: Use Microservices\n" +
-			"- ADR-002: Use PostgreSQL\n"
-
-	case "intake":
-		// outputChan <- "Reviewing scope and stakeholders..."
-		result = "## Intake Summary\nScope verified. Stakeholders: Admin, Dev Team."
-
-	case "motivation-modeling", "motivation_modeling":
-		// outputChan <- "Modeling drivers and goals..."
-		result = "## Motivation Model\n**Driver**: Modernization\n**Goal**: Improve scalability."
-
-	case "roadmap-gaps", "roadmap_gaps", "roadmap-and-gaps", "roadmap_and_gaps":
-		// outputChan <- "Analyzing gaps..."
-		result = "## Roadmap\n1. Phase 1: Foundation\n2. Phase 2: Migration"
-
-	case "review-governance", "review_governance":
-		// outputChan <- "Conducting governance review..."
-		result = "## Governance Review\n**Status**: APPROVED\n\nAll architecture principles and compliance requirements have been met. Proceed to completion."
-
-	default:
-		// outputChan <- "Executing generic architecture task..."
-		result = fmt.Sprintf("## Output for %s\nTask completed successfully.", action)
+		var err error
+		result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+		if err != nil {
+			outputChan <- fmt.Sprintf("LLM generation failed: %v. Using fallback.", err)
+			result = e.getFallbackResult(action)
+		}
+	} else {
+		result = e.getFallbackResult(action)
 	}
-
-	// outputChan <- result
 
 	// Write to File
 	safeAction := strings.ReplaceAll(step.Action, "/", "-")
@@ -121,5 +83,58 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 	}
 
 	outputChan <- fmt.Sprintf("Document saved to: %s", filePath)
+
+	// Report usage via special output format
+	if usage.TotalTokens > 0 {
+		outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+	}
+
 	return nil
+}
+
+func (e *ArchitectExecutor) getFallbackResult(action string) string {
+	switch action {
+	case "architectural-design", "target-modeling", "target_modeling":
+		return "Architecture Design Complete.\n\n" +
+			"### Proposed Solution\n" +
+			"- **Frontend**: React SPA\n" +
+			"- **Backend**: Go Microservices\n" +
+			"- **Database**: PostgreSQL\n" +
+			"- **Infrastructure**: Kubernetes (EKS)\n\n" +
+			"### Diagram\n" +
+			"```mermaid\n" +
+			"graph TD\n" +
+			"  Client --> Ingress\n" +
+			"  Ingress --> ServiceA\n" +
+			"  Ingress --> ServiceB\n" +
+			"  ServiceA --> DB\n" +
+			"```"
+
+	case "documentation-assembly", "documentation_assembly":
+		return "# Architecture Documentation\n\n" +
+			"## Executive Summary\n" +
+			"Following the architectural design, this document outlines the proposed solution.\n\n" +
+			"## Artifacts\n" +
+			"- System Context Diagram\n" +
+			"- Container Diagram\n" +
+			"- Deployment View\n\n" +
+			"## Decisions (ADRs)\n" +
+			"- ADR-001: Use Microservices\n" +
+			"- ADR-002: Use PostgreSQL\n"
+
+	case "intake":
+		return "## Intake Summary\nScope verified. Stakeholders: Admin, Dev Team."
+
+	case "motivation-modeling", "motivation_modeling":
+		return "## Motivation Model\n**Driver**: Modernization\n**Goal**: Improve scalability."
+
+	case "roadmap-gaps", "roadmap_gaps", "roadmap-and-gaps", "roadmap_and_gaps":
+		return "## Roadmap\n1. Phase 1: Foundation\n2. Phase 2: Migration"
+
+	case "review-governance", "review_governance":
+		return "## Governance Review\n**Status**: APPROVED\n\nAll architecture principles and compliance requirements have been met. Proceed to completion."
+
+	default:
+		return fmt.Sprintf("## Output for %s\nTask completed successfully.", action)
+	}
 }

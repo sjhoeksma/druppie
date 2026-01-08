@@ -59,7 +59,7 @@ func NewTaskManager(p *planner.Planner, mcpMgr *mcp.Manager, buildEngine builder
 		planner:         p,
 		OutputChan:      make(chan string, 100),
 		TaskDoneChan:    make(chan string, 10),
-		dispatcher:      executor.NewDispatcher(buildEngine, mcpMgr),
+		dispatcher:      executor.NewDispatcher(buildEngine, mcpMgr, p.GetLLM()),
 		workflowManager: workflows.NewManager(),
 		MCPManager:      mcpMgr,
 	}
@@ -268,6 +268,20 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 						p.Status = planStatus
 						_ = tm.planner.Store.SavePlan(p)
+					}
+				},
+				UpdateTokenUsage: func(usage model.TokenUsage) {
+					tm.mu.Lock()
+					defer tm.mu.Unlock()
+
+					if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+						p.TotalUsage.PromptTokens += usage.PromptTokens
+						p.TotalUsage.CompletionTokens += usage.CompletionTokens
+						p.TotalUsage.TotalTokens += usage.TotalTokens
+						_ = tm.planner.Store.SavePlan(p)
+						if task.Plan != nil {
+							task.Plan.TotalUsage = p.TotalUsage
+						}
 					}
 				},
 				AppendStep: func(s model.Step) int {
@@ -574,32 +588,49 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					var resultBuilder strings.Builder
 					var msgWG sync.WaitGroup
 
-					msgWG.Add(1)
-					go func() {
-						defer msgWG.Done()
-						for msg := range outputBridge {
-							// Check if it's a result or a log
-							if strings.HasPrefix(msg, "RESULT_") {
-								// Result processing remains same
-								parts := strings.SplitN(msg, "=", 2)
-								if len(parts) == 2 {
-									key := strings.TrimPrefix(parts[0], "RESULT_")
-									if key == "CONSOLE_OUTPUT" {
-										resultBuilder.WriteString(parts[1] + "\n")
-									} else {
-										resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
-									}
-								}
-								// Do NOT log result lines to console/logBuffer.
-								// They are internal protocol for result passing.
-							} else {
-								logMu.Lock()
-								logBuffer = append(logBuffer, msg)
-								logMu.Unlock()
-							}
-						}
-					}()
 
+				msgWG.Add(1)
+				go func() {
+					defer msgWG.Done()
+					for msg := range outputBridge {
+						// Check if it's a result or a log
+if strings.HasPrefix(msg, "RESULT_") {
+// Result processing remains same
+parts := strings.SplitN(msg, "=", 2)
+if len(parts) == 2 {
+key := strings.TrimPrefix(parts[0], "RESULT_")
+if key == "CONSOLE_OUTPUT" {
+resultBuilder.WriteString(parts[1] + "\n")
+} else if key == "TOKEN_USAGE" {
+// Parse: "prompt,completion,total"
+usageParts := strings.Split(parts[1], ",")
+if len(usageParts) == 3 {
+var prompt, completion, total int
+fmt.Sscanf(usageParts[0], "%d", &prompt)
+fmt.Sscanf(usageParts[1], "%d", &completion)
+fmt.Sscanf(usageParts[2], "%d", &total)
+
+// Initialize step usage if needed
+if step.Usage == nil {
+step.Usage = &model.TokenUsage{}
+}
+step.Usage.PromptTokens += prompt
+step.Usage.CompletionTokens += completion
+step.Usage.TotalTokens += total
+}
+} else {
+resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
+}
+}
+// Do NOT log result lines to console/logBuffer.
+// They are internal protocol for result passing.
+} else {
+logMu.Lock()
+logBuffer = append(logBuffer, msg)
+logMu.Unlock()
+}
+}
+}()
 					// Try matching by AgentID first (e.g. "audio-creator")
 					exec, err := tm.dispatcher.GetExecutor(step.AgentID)
 					if err != nil {
@@ -691,18 +722,40 @@ Do NOT return YAML or Markdown blocks.
 
 								// Update Usage
 								tm.mu.Lock()
+								tm.mu.Unlock()
 								if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 									p.TotalUsage.PromptTokens += usage.PromptTokens
 									p.TotalUsage.CompletionTokens += usage.CompletionTokens
 									p.TotalUsage.TotalTokens += usage.TotalTokens
+
+									// Also attribute usage to the step itself
+									for i := range p.Steps {
+										if p.Steps[i].ID == step.ID {
+											if p.Steps[i].Usage == nil {
+												p.Steps[i].Usage = &model.TokenUsage{}
+											}
+											p.Steps[i].Usage.PromptTokens += usage.PromptTokens
+											p.Steps[i].Usage.CompletionTokens += usage.CompletionTokens
+											p.Steps[i].Usage.TotalTokens += usage.TotalTokens
+											break
+										}
+									}
+
 									_ = tm.planner.Store.SavePlan(p)
 									if task.Plan != nil {
 										task.Plan.TotalUsage.PromptTokens += usage.PromptTokens
 										task.Plan.TotalUsage.CompletionTokens += usage.CompletionTokens
 										task.Plan.TotalUsage.TotalTokens += usage.TotalTokens
+										
+										// Update local step reference too
+										if step.Usage == nil {
+											step.Usage = &model.TokenUsage{}
+										}
+										step.Usage.PromptTokens += usage.PromptTokens
+										step.Usage.CompletionTokens += usage.CompletionTokens
+										step.Usage.TotalTokens += usage.TotalTokens
 									}
 								}
-								tm.mu.Unlock()
 
 								// Clean JSON
 								fixedJSON = strings.TrimSpace(fixedJSON)

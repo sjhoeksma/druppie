@@ -360,6 +360,9 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 		})
 
 		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Refine Intent", sysPrompt+"\nUser Request: "+prompt)
+		if wc.UpdateTokenUsage != nil {
+			wc.UpdateTokenUsage(usage)
+		}
 		if err != nil {
 			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: &usage})
 			return ProjectIntent{}, err
@@ -504,6 +507,9 @@ Key Rules:
 		sysPrompt = strings.ReplaceAll(sysPrompt, "%LANGUAGE%", intent.Language)
 
 		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
+		if wc.UpdateTokenUsage != nil {
+			wc.UpdateTokenUsage(usage)
+		}
 		if err != nil {
 			// Mark failed if LLM fails
 			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: &usage})

@@ -597,10 +597,19 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								return
 							}
 
+
 							// Mark generate_plan as completed
 							currentPlan.Steps[len(currentPlan.Steps)-1].Status = "completed"
 							currentPlan.Steps[len(currentPlan.Steps)-1].Result = "Plan generated."
+							
+							// Assign planner usage to this step
+							plannerUsage := fullPlan.TotalUsage
+							currentPlan.Steps[len(currentPlan.Steps)-1].Usage = &plannerUsage
 
+							// Add planner usage to currentPlan TotalUsage
+							currentPlan.TotalUsage.PromptTokens += plannerUsage.PromptTokens
+							currentPlan.TotalUsage.CompletionTokens += plannerUsage.CompletionTokens
+							currentPlan.TotalUsage.TotalTokens += plannerUsage.TotalTokens
 							// MERGE new steps into current plan
 							nextID := currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
 							for i := range fullPlan.Steps {
