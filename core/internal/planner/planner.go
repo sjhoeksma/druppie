@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+"gopkg.in/yaml.v3"
 
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
@@ -803,4 +804,36 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	return plan, nil
+}
+
+// updatePlanCost calculates and updates the cost for a plan based on current LLM pricing
+func (p *Planner) updatePlanCost(plan *model.ExecutionPlan) {
+	if plan == nil || p.Store == nil {
+		return
+	}
+
+	// Get current config
+	cfgBytes, err := p.Store.LoadConfig()
+	if err != nil {
+		return // Silently fail if config not available
+	}
+
+	var cfg struct {
+		LLM struct {
+			DefaultProvider string
+			Providers       map[string]struct {
+				PricePerPromptToken     float64 `yaml:"price_per_prompt_token"`
+				PricePerCompletionToken float64 `yaml:"price_per_completion_token"`
+			}
+		}
+	}
+	
+	if err := yaml.Unmarshal(cfgBytes, &cfg); err != nil {
+		return
+	}
+
+	// Get pricing for the default provider
+	if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+		plan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+	}
 }

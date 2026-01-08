@@ -69,6 +69,7 @@ type Step struct {
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent
 type ExecutionPlan struct {
+
 	ID             string     `json:"plan_id"`
 	CreatorID      string     `json:"creator_id,omitempty"`
 	Intent         Intent     `json:"intent"`
@@ -78,8 +79,8 @@ type ExecutionPlan struct {
 	Files          []string   `json:"files,omitempty"`
 	AllowedGroups  []string   `json:"allowed_groups,omitempty"`
 	TotalUsage     TokenUsage `json:"total_usage,omitempty"`
+	TotalCost      float64    `json:"total_cost,omitempty"` // Total cost in euros
 }
-
 // MCPServer represents an external tool server
 type MCPServer struct {
 	ID         string           `json:"id" yaml:"id"`

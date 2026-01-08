@@ -176,7 +176,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 		}
 		if modified {
-			_ = tm.planner.Store.SavePlan(p)
+			tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 			task.Plan = &p // Update local reference to fresh plan
 		}
 	}
@@ -203,7 +203,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				}
 				if len(newSteps) != len(p.Steps) {
 					p.Steps = newSteps
-					_ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 					task.Plan = &p
 				}
 			}
@@ -267,7 +267,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Update plan status in store
 					if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 						p.Status = planStatus
-						_ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 					}
 				},
 				UpdateTokenUsage: func(usage model.TokenUsage) {
@@ -278,7 +278,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						p.TotalUsage.PromptTokens += usage.PromptTokens
 						p.TotalUsage.CompletionTokens += usage.CompletionTokens
 						p.TotalUsage.TotalTokens += usage.TotalTokens
-						_ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 						if task.Plan != nil {
 							task.Plan.TotalUsage = p.TotalUsage
 						}
@@ -315,7 +315,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						storedPlan.Steps = append(storedPlan.Steps, s)
 					}
 
-					if err := tm.planner.Store.SavePlan(storedPlan); err != nil {
+					tm.updatePlanCost(&storedPlan); if err := tm.planner.Store.SavePlan(storedPlan); err != nil {
 						tm.OutputChan <- fmt.Sprintf("[%s] ⚠️ [TaskManager] Failed to save plan update: %v", task.ID, err)
 					}
 
@@ -373,7 +373,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 							storedPlan.Steps[i].Status = "pending"
 						}
 					}
-					_ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 			} else {
@@ -387,7 +387,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				storedPlan, err := tm.planner.Store.GetPlan(task.ID)
 				if err == nil {
 					storedPlan.Status = "completed"
-					_ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 			}
@@ -424,7 +424,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 							s.Result = "Skipped due to cancellation"
 						}
 					}
-					_ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 				}
 				tm.mu.Unlock()
 				return
@@ -442,7 +442,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						p.Steps[i].Status = "pending"
 					}
 				}
-				_ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 			}
 			tm.mu.Unlock()
 			return
@@ -513,7 +513,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				storedPlan, err := tm.planner.Store.GetPlan(task.ID)
 				if err == nil {
 					storedPlan.Status = "completed"
-					_ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 
@@ -527,7 +527,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "stopped"
-				_ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 			}
 			tm.mu.Unlock()
 			return
@@ -571,7 +571,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 								break
 							}
 						}
-						_ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 					}
 					step.Status = "running" // Update local copy
 					tm.mu.Unlock()
@@ -721,8 +721,6 @@ Do NOT return YAML or Markdown blocks.
 								}
 
 								// Update Usage
-								tm.mu.Lock()
-								tm.mu.Unlock()
 								if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 									p.TotalUsage.PromptTokens += usage.PromptTokens
 									p.TotalUsage.CompletionTokens += usage.CompletionTokens
@@ -741,7 +739,7 @@ Do NOT return YAML or Markdown blocks.
 										}
 									}
 
-									_ = tm.planner.Store.SavePlan(p)
+									tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 									if task.Plan != nil {
 										task.Plan.TotalUsage.PromptTokens += usage.PromptTokens
 										task.Plan.TotalUsage.CompletionTokens += usage.CompletionTokens
@@ -810,7 +808,7 @@ Do NOT return YAML or Markdown blocks.
 			}
 			execWG.Wait()
 
-			_ = tm.planner.Store.SavePlan(*task.Plan)
+			tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
 
 			// Check for auto-update triggers
 			lastIdx := len(task.Plan.Steps) - 1
@@ -981,7 +979,7 @@ Do NOT return YAML or Markdown blocks.
 									break
 								}
 							}
-							_ = tm.planner.Store.SavePlan(p)
+							tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 						}
 						tm.mu.Unlock()
 
@@ -1037,7 +1035,7 @@ Do NOT return YAML or Markdown blocks.
 							break
 						}
 					}
-					_ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 				}
 				tm.mu.Unlock()
 				continue
@@ -1060,7 +1058,7 @@ Do NOT return YAML or Markdown blocks.
 					break
 				}
 			}
-			_ = tm.planner.Store.SavePlan(p)
+			tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 			// Update local plan pointer
 			task.Plan.Status = "waiting_input"
 			activeStep.Status = "waiting_input"
@@ -1181,7 +1179,7 @@ Do NOT return YAML or Markdown blocks.
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "running"
-				_ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
 				task.Plan.Status = "running"
 				tm.OutputChan <- fmt.Sprintf("[%s] Status updated to RUNNING (Input received)", task.ID)
 			}
@@ -1242,7 +1240,7 @@ Do NOT return YAML or Markdown blocks.
 			if isAccept {
 				task.Plan.Steps[activeStepIdx].Status = "completed"
 				task.Plan.Steps[activeStepIdx].Result = answer
-				_ = tm.planner.Store.SavePlan(*task.Plan)
+				tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
 
 				if activeStepIdx == len(task.Plan.Steps)-1 {
 					tm.OutputChan <- fmt.Sprintf("[%s] Determining next steps...", task.ID)
@@ -1261,7 +1259,7 @@ Do NOT return YAML or Markdown blocks.
 			if activeStep.Action == "content-review" || activeStep.Action == "draft_scenes" || strings.Contains(strings.ToLower(activeStep.Action), "review") {
 				task.Plan.Steps[activeStepIdx].Status = "rejected"
 				task.Plan.Steps[activeStepIdx].Result = fmt.Sprintf("Rejected by user: %s", answer)
-				_ = tm.planner.Store.SavePlan(*task.Plan)
+				tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
 			}
 
 			// Standard update
@@ -1275,7 +1273,7 @@ Do NOT return YAML or Markdown blocks.
 					task.Plan.Steps[activeStepIdx].Error = ""
 					// Append hint to params? For now just retry.
 					tm.OutputChan <- fmt.Sprintf("[%s] Resetting step %d to PENDING via User Action.", task.ID, activeStep.ID)
-					_ = tm.planner.Store.SavePlan(*task.Plan)
+					tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
 
 					// If "fix", we might want to try to use the input as params?
 					// But relying on "UpdatePlan" for a single step retry is hard.
@@ -1480,3 +1478,5 @@ func formatStepParams(params map[string]interface{}) string {
 	}
 	return sb.String()
 }
+
+// savePlanWithCost saves a plan after updating its cost calculation

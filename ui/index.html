@@ -2228,7 +2228,7 @@
 
                     if (plan.total_usage) {
                         const u = plan.total_usage;
-                        const msg = `📊 Token Usage:\n• Prompt: ${u.prompt_tokens.toLocaleString()}\n• Completion: ${u.completion_tokens.toLocaleString()}\n• Total: ${u.total_tokens.toLocaleString()}`;
+                        const costLine = plan.total_cost ? `\n• Cost: €${plan.total_cost.toFixed(4)}` : ''; const msg = `📊 Token Usage:\n• Prompt: ${u.prompt_tokens.toLocaleString()}\n• Completion: ${u.completion_tokens.toLocaleString()}\n• Total: ${u.total_tokens.toLocaleString()}${costLine}`;
                         addChatMessage('ai', msg);
                     } else {
                         addChatMessage('ai', 'ℹ️ No token usage data available for this plan.');
@@ -2512,7 +2512,7 @@
             statsBar.style.display = 'flex';
             document.getElementById('stat-prompt').textContent = plan.total_usage.prompt_tokens.toLocaleString();
             document.getElementById('stat-completion').textContent = plan.total_usage.completion_tokens.toLocaleString();
-            document.getElementById('stat-total').textContent = plan.total_usage.total_tokens.toLocaleString();
+            const totalText = plan.total_usage.total_tokens.toLocaleString(); const costText = plan.total_cost ? ` (€${plan.total_cost.toFixed(4)})` : ''; document.getElementById('stat-total').textContent = totalText + costText;
         } else {
             statsBar.style.display = 'none';
         }
