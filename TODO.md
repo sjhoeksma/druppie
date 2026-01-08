@@ -34,6 +34,6 @@
 - [ ] LLM Memory : https://medium.com/@sonitanishk2003/the-ultimate-guide-to-llm-memory-from-context-windows-to-advanced-agent-memory-systems-3ec106d2a345
 - [x] Deep rescearch the core of druppie to get new spec
 - [ ] Add background job processing
-- [ ] Add common function for directory location
+- [x] Add common function for directory location
 
 

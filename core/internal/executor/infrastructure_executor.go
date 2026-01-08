@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // InfrastructureExecutor handles actions related to infrastructure provisioning and checks
@@ -59,8 +60,7 @@ func (e *InfrastructureExecutor) Execute(ctx context.Context, step model.Step, o
 			return fmt.Errorf("missing plan ID in context")
 		}
 
-		cwd, _ := os.Getwd()
-		projectRoot := filepath.Join(cwd, ".druppie", "plans", planID, "src")
+		projectRoot, _ := paths.ResolvePath(".druppie", "plans", planID, "src")
 
 		if err := os.MkdirAll(projectRoot, 0755); err != nil {
 			return fmt.Errorf("failed to create project root: %w", err)

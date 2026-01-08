@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // ArchitectExecutor handles high-level architectural design tasks
@@ -102,12 +103,10 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 	// outputChan <- result
 
 	// Write to File
-	cwd, _ := os.Getwd()
-	// Validation of input characters for safety
 	safeAction := strings.ReplaceAll(step.Action, "/", "-")
 	safeAction = strings.ReplaceAll(safeAction, "\\", "-")
 
-	filesDir := filepath.Join(cwd, ".druppie", "plans", planID, "files")
+	filesDir, _ := paths.ResolvePath(".druppie", "plans", planID, "files")
 	if err := os.MkdirAll(filesDir, 0755); err != nil {
 		outputChan <- fmt.Sprintf("Error creating files directory: %v", err)
 		return err

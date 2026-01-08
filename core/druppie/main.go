@@ -22,6 +22,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
 	"github.com/sjhoeksma/druppie/core/internal/memory"
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
 	"github.com/sjhoeksma/druppie/core/internal/router"
@@ -94,11 +95,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		}
 
 		// Ensure we are working from the project root (handles Chdir)
-		if err := ensureProjectRoot(); err != nil {
+		if err := paths.EnsureProjectRoot(); err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("root detection error: %w", err)
 		}
 
-		rootDir, err := findProjectRoot()
+		rootDir, err := paths.FindProjectRoot()
 		if err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("registry path error: %w", err)
 		}
@@ -178,9 +179,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 			// Start Cleanup Routine
 			go func() {
-				rootDir, _ := findProjectRoot()
-				if rootDir != "" {
-					storeDir := filepath.Join(rootDir, ".druppie")
+				storeDir, err := paths.ResolvePath(".druppie")
+				if err == nil {
 					cleanupDays := cfg.Server.CleanupDays
 					if cleanupDays <= 0 {
 						cleanupDays = 7 // Default fallback if config missing
@@ -289,35 +289,35 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 			// UI Route
 			r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
-				http.ServeFile(w, r, filepath.Join(root, "ui", "admin.html"))
+				path, _ := paths.ResolvePath("ui", "admin.html")
+				http.ServeFile(w, r, path)
 			})
 
 			r.Get("/code", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
-				http.ServeFile(w, r, filepath.Join(root, "ui", "code.html"))
+				path, _ := paths.ResolvePath("ui", "code.html")
+				http.ServeFile(w, r, path)
 			})
 
 			// Static assets for UI
 			r.Get("/common.css", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
+				path, _ := paths.ResolvePath("ui", "common.css")
 				w.Header().Set("Content-Type", "text/css")
-				http.ServeFile(w, r, filepath.Join(root, "ui", "common.css"))
+				http.ServeFile(w, r, path)
 			})
 			r.Get("/common.js", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
+				path, _ := paths.ResolvePath("ui", "common.js")
 				w.Header().Set("Content-Type", "application/javascript")
-				http.ServeFile(w, r, filepath.Join(root, "ui", "common.js"))
+				http.ServeFile(w, r, path)
 			})
 			r.Get("/druppie_logo.svg", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
+				path, _ := paths.ResolvePath("druppie_logo.svg")
 				w.Header().Set("Content-Type", "image/svg+xml")
-				http.ServeFile(w, r, filepath.Join(root, "druppie_logo.svg"))
+				http.ServeFile(w, r, path)
 			})
 			r.Get("/druppie_logo.png", func(w http.ResponseWriter, r *http.Request) {
-				root, _ := findProjectRoot()
+				path, _ := paths.ResolvePath("druppie_logo.png")
 				w.Header().Set("Content-Type", "image/png")
-				http.ServeFile(w, r, filepath.Join(root, "druppie_logo.png"))
+				http.ServeFile(w, r, path)
 			})
 
 			// Public System Info
@@ -946,7 +946,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					// Find plan dir: .druppie/plans/<id> (root of plan)
-					root, _ := findProjectRoot()
+					// Find plan dir: .druppie/plans/<id> (root of plan)
+					root, _ := paths.FindProjectRoot()
 					planDir := filepath.Join(root, ".druppie", "plans", id)
 
 					var files = []string{} // Initialize as empty slice to ensure JSON [] vs null
@@ -984,7 +985,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
-					root, _ := findProjectRoot()
+					root, _ := paths.FindProjectRoot()
 					planDir := filepath.Join(root, ".druppie", "plans", id)
 					absPath := filepath.Join(planDir, pathParam)
 
@@ -1010,7 +1011,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
-					root, _ := findProjectRoot()
+					root, _ := paths.FindProjectRoot()
 					planDir := filepath.Join(root, ".druppie", "plans", id)
 					absPath := filepath.Join(planDir, pathParam)
 
@@ -1052,7 +1053,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						return
 					}
 
-					root, _ := findProjectRoot()
+					root, _ := paths.FindProjectRoot()
 					conv := converter.NewPluginConverter(reg, root)
 
 					if err := conv.ConvertBuildToBlock(id, buildID, req.Name, req.Description); err != nil {
@@ -1228,7 +1229,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 					defer file.Close()
 
-					rootDir, _ := findProjectRoot()
+					rootDir, _ := paths.FindProjectRoot()
 					if rootDir == "" {
 						http.Error(w, "Project root not found", http.StatusInternalServerError)
 						return
