@@ -64,7 +64,7 @@ type Step struct {
 	DependsOn     []int                  `json:"depends_on,omitempty"`     // List of step IDs that must complete before this step starts
 	AssignedGroup string                 `json:"assigned_group,omitempty"` // The group (e.g. "compliance") that must approve this step
 	ApprovedBy    string                 `json:"approved_by,omitempty"`    // The user/agent that approved this step
-	Usage         TokenUsage             `json:"usage,omitempty"`          // Token usage for this step
+	Usage         *TokenUsage            `json:"usage,omitempty"`          // Token usage for this step
 }
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent

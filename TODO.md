@@ -24,7 +24,7 @@
 - [ ] Secret management
 - [ ] Finish the admin UI
 - [x] Version number by checking git tags
-- [ ] Cost management, tokens used by month
+- [x] Cost management, tokens used by plan
 - [x] Build plane
 - [ ] Plugin system
 - [ ] Git saving of plans
@@ -35,5 +35,6 @@
 - [x] Deep rescearch the core of druppie to get new spec
 - [ ] Add background job processing
 - [x] Add common function for directory location
+- [ ] Add common function to call a tool script or mcp from an internal agent
 
 

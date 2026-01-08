@@ -361,7 +361,7 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 
 		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Refine Intent", sysPrompt+"\nUser Request: "+prompt)
 		if err != nil {
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: usage})
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: &usage})
 			return ProjectIntent{}, err
 		}
 
@@ -506,7 +506,7 @@ Key Rules:
 		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
 		if err != nil {
 			// Mark failed if LLM fails
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: usage})
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: &usage})
 			return AVScript{}, err
 		}
 

@@ -503,7 +503,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						}
 
 						// 2. Analyze Intent
-						intent, _, err := routerService.Analyze(ctx, planID, effectivePrompt)
+						intent, _, usage, err := routerService.Analyze(ctx, planID, effectivePrompt)
 						if err != nil {
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
@@ -511,6 +511,12 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							_ = plannerService.Store.SavePlan(currentPlan)
 							return
 						}
+
+						// Update Usage
+						currentPlan.TotalUsage.PromptTokens += usage.PromptTokens
+						currentPlan.TotalUsage.CompletionTokens += usage.CompletionTokens
+						currentPlan.TotalUsage.TotalTokens += usage.TotalTokens
+						_ = plannerService.Store.SavePlan(currentPlan) // Checkpoint usage immediately
 
 						tm.OutputChan <- fmt.Sprintf("[%s] Intent: %s", planID, intent.Action)
 
@@ -526,6 +532,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						for i, s := range currentPlan.Steps {
 							if s.Action == "user_query" && s.Status == "running" {
 								currentPlan.Steps[i].Status = "completed"
+								currentPlan.Steps[i].Usage = &usage // Assign usage to specific step
 								///currentPlan.Status = "running" //We are now running
 								_ = plannerService.Store.SavePlan(currentPlan)
 							}
@@ -1680,7 +1687,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					// If not handled by task, treat as new Router Request
 					if !strings.HasPrefix(input, "/") {
 						fmt.Println("[Router - Analyzing]")
-						intent, rawRouterResp, err := router.Analyze(ctx, "", input)
+						intent, rawRouterResp, _, err := router.Analyze(ctx, "", input)
 						if err != nil {
 							fmt.Printf("[Error] Router failed: %v\n> ", err)
 							continue
@@ -1809,10 +1816,9 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				//fmt.Printf("[DEBUG] Constructed History Steps: %d\n", len(currentPlan.Steps))
 			}
 
-			// Initialize TaskManager early to unify output
 			tm := NewTaskManager(planner, mcpMgr, buildEngine)
 
-			intent, rawRouterResp, err := router.Analyze(ctx, planID, effectivePrompt)
+			intent, rawRouterResp, _, err := router.Analyze(ctx, planID, effectivePrompt)
 			if err != nil {
 				fmt.Printf("Router failed: %v\n", err)
 				os.Exit(1)
