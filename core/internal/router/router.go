@@ -49,7 +49,7 @@ func (r *Router) Analyze(ctx context.Context, planID string, input string) (mode
 		}
 	}
 
-	resp, err := r.llm.Generate(ctx, input, sysPrompt)
+	resp, _, err := r.llm.Generate(ctx, input, sysPrompt)
 	if err != nil {
 		return model.Intent{}, "", fmt.Errorf("llm generation failed: %w", err)
 	}

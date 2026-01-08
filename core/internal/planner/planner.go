@@ -100,7 +100,7 @@ func (p *Planner) cleanJSONResponse(resp string) string {
 	return clean
 }
 
-func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent, agents []model.AgentDefinition, planID string) []string {
+func (p *Planner) selectRelevantAgents(ctx context.Context, intent model.Intent, agents []model.AgentDefinition, planID string) ([]string, model.TokenUsage) {
 	var detailedList []string
 	for _, a := range agents {
 		// Include ID and Description, maybe Skills?
@@ -127,10 +127,10 @@ Rules:
 
 Example: ["business-analyst"]`, intent.Prompt, detailedList)
 
-	resp, err := p.llm.Generate(ctx, "Select Agents", prompt)
+	resp, usage, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
 		fmt.Printf("[Planner] Agent selection failed: %v\n", err)
-		return nil
+		return nil, model.TokenUsage{}
 	}
 
 	clean := p.cleanJSONResponse(resp)
@@ -146,7 +146,7 @@ Example: ["business-analyst"]`, intent.Prompt, detailedList)
 			if p.Debug {
 				fmt.Printf("[Planner] Failed to parse agent selection: %v. Raw: %s\n", err, resp)
 			}
-			return nil
+			return nil, usage
 		}
 	}
 
@@ -160,7 +160,7 @@ Example: ["business-analyst"]`, intent.Prompt, detailedList)
 		_ = p.Store.LogInteraction(planID, "Planner", "Agent Selection", fmt.Sprintf("Goal: %s\nSelected: %v\n(Limited to Top %d)", intent.Prompt, selected, p.MaxAgentSelection))
 	}
 
-	return selected
+	return selected, usage
 }
 
 func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID string) (model.ExecutionPlan, error) {
@@ -200,7 +200,10 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	allAgents := p.Registry.ListAgents(userGroups)
 
 	// Filter Agents
-	selectedIDs := p.selectRelevantAgents(ctx, intent, allAgents, planID)
+	selectedIDs, usageAgents := p.selectRelevantAgents(ctx, intent, allAgents, planID)
+
+	// Usage tracking
+	totalUsage := usageAgents
 
 	// Expand Selection with Sub-Agents
 	selectedSet := make(map[string]bool)
@@ -302,10 +305,17 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		}
 
 		var err error
-		resp, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
+		var usage model.TokenUsage
+		resp, usage, err = p.llm.Generate(ctx, "Generate plan data", sysPrompt)
 		if err != nil {
 			return model.ExecutionPlan{}, err
 		}
+
+		// Accumulate usage
+		totalUsage.PromptTokens += usage.PromptTokens
+		totalUsage.CompletionTokens += usage.CompletionTokens
+		totalUsage.TotalTokens += usage.TotalTokens
+
 		// 3. Parse Response
 		cleanResp := p.cleanJSONResponse(resp)
 
@@ -396,6 +406,7 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		Status:         "created",
 		Steps:          steps,
 		SelectedAgents: selectedIDs,
+		TotalUsage:     totalUsage,
 	}
 
 	// Persistent Logging
@@ -620,10 +631,15 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 	fullPrompt := baseSystemPrompt + "\n\n" + taskPrompt
 
-	resp, err := p.llm.Generate(ctx, "Refine Plan", fullPrompt)
+	resp, usage, err := p.llm.Generate(ctx, "Refine Plan", fullPrompt)
 	if err != nil {
 		return nil, err
 	}
+
+	// Accumulate Usage
+	plan.TotalUsage.PromptTokens += usage.PromptTokens
+	plan.TotalUsage.CompletionTokens += usage.CompletionTokens
+	plan.TotalUsage.TotalTokens += usage.TotalTokens
 
 	// 3. Parse and Append
 	cleanResp := p.cleanJSONResponse(resp)

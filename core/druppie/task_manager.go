@@ -684,10 +684,25 @@ Return ONLY a valid JSON object representing the FIXED 'params' object.
 Do NOT return YAML or Markdown blocks.
 `, execErr, step.Params)
 
-								fixedJSON, err := tm.planner.GetLLM().Generate(task.Ctx, fixPrompt, "You are a JSON repair agent. Output raw JSON only.")
+								fixedJSON, usage, err := tm.planner.GetLLM().Generate(task.Ctx, fixPrompt, "You are a JSON repair agent. Output raw JSON only.")
 								if err != nil {
 									continue
 								}
+
+								// Update Usage
+								tm.mu.Lock()
+								if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+									p.TotalUsage.PromptTokens += usage.PromptTokens
+									p.TotalUsage.CompletionTokens += usage.CompletionTokens
+									p.TotalUsage.TotalTokens += usage.TotalTokens
+									_ = tm.planner.Store.SavePlan(p)
+									if task.Plan != nil {
+										task.Plan.TotalUsage.PromptTokens += usage.PromptTokens
+										task.Plan.TotalUsage.CompletionTokens += usage.CompletionTokens
+										task.Plan.TotalUsage.TotalTokens += usage.TotalTokens
+									}
+								}
+								tm.mu.Unlock()
 
 								// Clean JSON
 								fixedJSON = strings.TrimSpace(fixedJSON)

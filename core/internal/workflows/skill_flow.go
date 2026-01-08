@@ -105,7 +105,7 @@ Output JSON: { "action": "action_name", "params": { "key": "value" } }`
 		}
 	}
 
-	resp, err := wc.LLM.Generate(wc.Ctx, "Analyze Skill", sysPrompt+"\nRequest: "+prompt)
+	resp, _, err := wc.LLM.Generate(wc.Ctx, "Analyze Skill", sysPrompt+"\nRequest: "+prompt)
 	if err != nil {
 		return "", nil, err
 	}

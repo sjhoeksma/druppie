@@ -2174,8 +2174,30 @@
                 }
                 break;
 
+            case '/usage':
+                if (!state.currentPlanId) {
+                    addChatMessage('ai', '⚠️ Geen actief plan.');
+                    break;
+                }
+                try {
+                    const resp = await fetch(`/v1/plans/${state.currentPlanId}`);
+                    if (!resp.ok) throw new Error('Failed to fetch plan');
+                    const plan = await resp.json();
+
+                    if (plan.total_usage) {
+                        const u = plan.total_usage;
+                        const msg = `📊 Token Usage:\n• Prompt: ${u.prompt_tokens.toLocaleString()}\n• Completion: ${u.completion_tokens.toLocaleString()}\n• Total: ${u.total_tokens.toLocaleString()}`;
+                        addChatMessage('ai', msg);
+                    } else {
+                        addChatMessage('ai', 'ℹ️ No token usage data available for this plan.');
+                    }
+                } catch (e) {
+                    addChatMessage('ai', `❌ Fout: ${e.message}`);
+                }
+                break;
+
             default:
-                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
+                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
         }
     }
 
@@ -2521,6 +2543,11 @@
             if (step.status === 'cancelled') statusIcon = 'x-circle';
             if (step.status === 'waiting_input') statusIcon = 'alert-circle';
 
+            let usageHtml = '';
+            if (step.usage && step.usage.total_tokens > 0) {
+                usageHtml = `<span style="display:flex;align-items:center;gap:3px;margin-left:auto;"><i data-lucide="cpu" size="10"></i> ${step.usage.total_tokens}</span>`;
+            }
+
             card.innerHTML = `
                     <div class="task-header">
                         <span class="task-agent">${step.agent_id}</span>
@@ -2529,7 +2556,8 @@
                     <div class="task-action">${step.action}</div>
                     <div class="task-meta">
                          <i data-lucide="${statusIcon}" size="12"></i>
-                         ${step.status}
+                         <span>${step.status}</span>
+                         ${usageHtml}
                     </div>
                 `;
 
