@@ -1214,6 +1214,34 @@
             font-family: 'JetBrains Mono';
             font-size: 0.65rem;
         }
+
+        #stats-bar {
+            width: 100%;
+            padding: 0.5rem 2rem;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 2rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            flex-shrink: 0;
+            display: none;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-value {
+            color: var(--accent);
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
     </style>
 </head>
 
@@ -1460,6 +1488,7 @@
 </aside>
 
 <main id="main-view">
+
     <div id="kanban-container">
         <div class="kanban-col" id="col-pending">
             <div class="col-header">
@@ -1521,6 +1550,19 @@
     </div>
 
     <div id="process-tab" class="tab-content">
+        <div id="stats-bar">
+            <div class="stat-item">
+                <i data-lucide="cpu" size="14"></i>
+                <span>Tokens</span>
+                <span>Prompt: <span id="stat-prompt" class="stat-value">0</span></span>
+            </div>
+            <div class="stat-item">
+                <span>Completion: <span id="stat-completion" class="stat-value">0</span></span>
+            </div>
+            <div class="stat-item">
+                <span>Total: <span id="stat-total" class="stat-value">0</span></span>
+            </div>
+        </div>
         <div id="step-log">
             <div class="message">Maak een plan...</div>
         </div>
@@ -2464,6 +2506,17 @@
 
     let lastAutoScrollSignature = '';
     function renderPlan(plan) {
+        // Update stats bar
+        const statsBar = document.getElementById('stats-bar');
+        if (plan.total_usage && plan.total_usage.total_tokens > 0) {
+            statsBar.style.display = 'flex';
+            document.getElementById('stat-prompt').textContent = plan.total_usage.prompt_tokens.toLocaleString();
+            document.getElementById('stat-completion').textContent = plan.total_usage.completion_tokens.toLocaleString();
+            document.getElementById('stat-total').textContent = plan.total_usage.total_tokens.toLocaleString();
+        } else {
+            statsBar.style.display = 'none';
+        }
+
         plan.steps = plan.steps || [];
         // Update Kanban background based on plan state
         const kanbanContainer = document.getElementById('kanban-container');
@@ -2660,7 +2713,8 @@
                     <div class="step-log-header">
                         <span class="tag-agent">[${s.agent_id}]</span>
                         <span class="tag-action">${s.action}</span>
-                        <span style="margin-left:auto; color: ${s.status === 'waiting_input' ? 'var(--accent)' : ((s.status === 'rejected' || s.status === 'cancelled') ? '#ef4444' : 'inherit')}">${s.status}</span>
+                        ${s.usage && s.usage.total_tokens > 0 ? `<span style="margin-left: auto; margin-right: 1rem; color: var(--text-dim); font-size: 0.75rem; display: flex; align-items: center; gap: 4px;"><i data-lucide="cpu" size="6"></i> ${s.usage.total_tokens.toLocaleString()}</span>` : ''}
+                        <span style="${(!s.usage || s.usage.total_tokens <= 0) ? 'margin-left:auto;' : ''} color: ${s.status === 'waiting_input' ? 'var(--accent)' : ((s.status === 'rejected' || s.status === 'cancelled') ? '#ef4444' : 'inherit')}">${s.status}</span>
                     </div>
                     ${s.result ? `<div class="step-log-content">${s.result}</div>` : ''}
                 `;
