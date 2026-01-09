@@ -8,7 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-"gopkg.in/yaml.v3"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
@@ -408,14 +409,15 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		Steps:          steps,
 		SelectedAgents: selectedIDs,
 		TotalUsage:     totalUsage,
+		PlanningUsage:  totalUsage, // Initial plan generation counts as planning usage
 	}
 
 	// Persistent Logging
 	if p.Store != nil {
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")
 		_ = p.Store.LogInteraction(plan.ID, "Planner Create",
-fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", sysPrompt),
-fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", sysPrompt),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s", resp, string(planJSON)))
 	}
 
 	// Assign initial usage to the "generate_plan" step if it exists
@@ -428,7 +430,7 @@ fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nRESULTING PLAN:\n%s",
 
 	return plan, nil
 
-}// UpdatePlan updates an existing plan based on user feedback or answers.
+} // UpdatePlan updates an existing plan based on user feedback or answers.
 func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, feedback string) (*model.ExecutionPlan, error) {
 	// 0. Handle Feedback
 	// Find the first non-completed step that matches the feedback category and mark it as completed
@@ -644,10 +646,14 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		return nil, err
 	}
 
-	// Accumulate Usage
+	// Accumulate Usage in both TotalUsage and PlanningUsage
 	plan.TotalUsage.PromptTokens += usage.PromptTokens
 	plan.TotalUsage.CompletionTokens += usage.CompletionTokens
 	plan.TotalUsage.TotalTokens += usage.TotalTokens
+
+	plan.PlanningUsage.PromptTokens += usage.PromptTokens
+	plan.PlanningUsage.CompletionTokens += usage.CompletionTokens
+	plan.PlanningUsage.TotalTokens += usage.TotalTokens
 
 	// 3. Parse and Append
 	cleanResp := p.cleanJSONResponse(resp)
@@ -827,7 +833,7 @@ func (p *Planner) updatePlanCost(plan *model.ExecutionPlan) {
 			}
 		}
 	}
-	
+
 	if err := yaml.Unmarshal(cfgBytes, &cfg); err != nil {
 		return
 	}

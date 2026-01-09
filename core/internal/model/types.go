@@ -69,7 +69,6 @@ type Step struct {
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent
 type ExecutionPlan struct {
-
 	ID             string     `json:"plan_id"`
 	CreatorID      string     `json:"creator_id,omitempty"`
 	Intent         Intent     `json:"intent"`
@@ -79,8 +78,10 @@ type ExecutionPlan struct {
 	Files          []string   `json:"files,omitempty"`
 	AllowedGroups  []string   `json:"allowed_groups,omitempty"`
 	TotalUsage     TokenUsage `json:"total_usage,omitempty"`
-	TotalCost      float64    `json:"total_cost,omitempty"` // Total cost in euros
+	PlanningUsage  TokenUsage `json:"planning_usage,omitempty"` // LLM usage from plan generation and UpdatePlan calls
+	TotalCost      float64    `json:"total_cost,omitempty"`     // Total cost in euros
 }
+
 // MCPServer represents an external tool server
 type MCPServer struct {
 	ID         string           `json:"id" yaml:"id"`
@@ -88,7 +89,8 @@ type MCPServer struct {
 	URL        string           `json:"url,omitempty" yaml:"url,omitempty"`
 	Command    string           `json:"command,omitempty" yaml:"command,omitempty"`
 	Args       []string         `json:"args,omitempty" yaml:"args,omitempty"`
-	Transport  string           `json:"transport" yaml:"transport"` // sse, stdio
+	Transport  string           `json:"transport" yaml:"transport"`                   // sse, stdio
+	Category   string           `json:"category,omitempty" yaml:"category,omitempty"` // mcp, plugin
 	Tools      []ToolDefinition `json:"tools,omitempty" yaml:"tools,omitempty"`
 	AuthGroups []string         `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }

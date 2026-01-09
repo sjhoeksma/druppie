@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/config"
-	"github.com/sjhoeksma/druppie/core/internal/converter"
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
@@ -109,8 +108,8 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("registry load error: %w", err)
 		}
 		stats := reg.Stats()
-		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Agents, %d Compliance) from: %s\n",
-			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["agents"], stats["compliance_rules"], rootDir)
+		fmt.Printf("Loading registry (%d Blocks, %d Skills, %d MCP, %d Plugins, %d Agents, %d Compliance) from: %s\n",
+			stats["building_blocks"], stats["skills"], stats["mcp_servers"], stats["plugins"], stats["agents"], stats["compliance_rules"], rootDir)
 
 		// Initialize Store (Central .druppie dir for all persistence)
 		storeDir := filepath.Join(rootDir, ".druppie")
@@ -353,6 +352,30 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				json.NewEncoder(w).Encode(map[string]string{
 					"version": v,
 				})
+			})
+
+			r.Get("/v1/mcp", func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				// Use mcpManager to get merged list (dynamic + static)
+				servers := mcpManager.GetServers()
+
+				// Sanitize output for public UI
+				type PublicServer struct {
+					Name     string `json:"name"`
+					Category string `json:"category"`
+					Type     string `json:"type"`
+				}
+
+				publicList := make([]PublicServer, 0, len(servers))
+				for _, s := range servers {
+					publicList = append(publicList, PublicServer{
+						Name:     s.Name,
+						Category: s.Category,
+						Type:     s.Type,
+					})
+				}
+
+				json.NewEncoder(w).Encode(publicList)
 			})
 
 			// API Routes
@@ -1083,34 +1106,6 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						http.Error(w, "Failed write file", http.StatusInternalServerError)
 						return
 					}
-					w.Write([]byte("OK"))
-				})
-
-				// --- Plugin Promotion ---
-				r.Post("/plans/{id}/builds/{buildID}/promote", func(w http.ResponseWriter, r *http.Request) {
-					id := chi.URLParam(r, "id")
-					if !strings.HasPrefix(id, "plan-") {
-						id = "plan-" + id
-					}
-					buildID := chi.URLParam(r, "buildID")
-
-					var req struct {
-						Name        string `json:"name"`
-						Description string `json:"description"`
-					}
-					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-						http.Error(w, "Invalid body", http.StatusBadRequest)
-						return
-					}
-
-					root, _ := paths.FindProjectRoot()
-					conv := converter.NewPluginConverter(reg, root)
-
-					if err := conv.ConvertBuildToBlock(id, buildID, req.Name, req.Description); err != nil {
-						http.Error(w, fmt.Sprintf("Promotion failed: %v", err), http.StatusInternalServerError)
-						return
-					}
-
 					w.Write([]byte("OK"))
 				})
 

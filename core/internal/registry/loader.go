@@ -147,6 +147,40 @@ func LoadRegistry(rootDir string) (*Registry, error) {
 		return nil, fmt.Errorf("error loading compliance: %w", err)
 	}
 
+	// 6. Load Plugins (MCP definitions from .druppie/plugins/*/mcp.md)
+	pluginsDir := filepath.Join(rootDir, ".druppie", "plugins")
+	err = walkAndLoad(pluginsDir, []string{".md"}, func(path string, fm []byte, body []byte) error {
+		// Only load mcp.md files
+		if filepath.Base(path) != "mcp.md" {
+			return nil
+		}
+
+		var mcp model.MCPServer
+		if err := yaml.Unmarshal(fm, &mcp); err != nil {
+			return fmt.Errorf("failed to parse plugin mcp %s: %w", path, err)
+		}
+
+		// Fallback ID to parent directory name if missing
+		if mcp.ID == "" {
+			mcp.ID = filepath.Base(filepath.Dir(path))
+		}
+
+		// Force category to plugin
+		mcp.Category = "plugin"
+
+		reg.mu.Lock()
+		reg.MCPServers[mcp.ID] = mcp
+		reg.mu.Unlock()
+		return nil
+	})
+	// Ignore if plugins dir doesn't exist, but report actual errors
+	if err != nil && !os.IsNotExist(err) {
+		// Log warning rather than fail?
+		// fmt.Printf("Warning: error loading plugins: %v\n", err)
+		// For now, consistent with others:
+		return nil, fmt.Errorf("error loading plugins: %w", err)
+	}
+
 	return reg, nil
 }
 

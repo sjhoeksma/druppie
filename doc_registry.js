@@ -96,7 +96,8 @@ const DOC_REGISTRY = {
         { name: "Microsoft & Azure", path: "mcp/microsoft.md" },
         { name: "Open Source Tools", path: "mcp/opensource.md" },
         { name: "Web Design", path: "mcp/shadcn.md" },
-        { name: "Plan FS Template", path: "mcp/plan_fs_template.md" }
+        { name: "FS Template", path: "mcp/fs_template.md" },
+        { name: "Plugin Template", path: "mcp/plugin_template.md" }
     ],
     "design": [
         { name: "Overview", path: "design/overview.md" },

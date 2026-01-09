@@ -150,10 +150,22 @@ func (r *Registry) Stats() map[string]int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Count MCP vs Plugins
+	mcpCount := 0
+	pluginCount := 0
+	for _, s := range r.MCPServers {
+		if s.Category == "plugin" {
+			pluginCount++
+		} else {
+			mcpCount++
+		}
+	}
+
 	return map[string]int{
 		"building_blocks":  len(r.BuildingBlocks),
 		"skills":           len(r.Skills),
-		"mcp_servers":      len(r.MCPServers),
+		"mcp_servers":      mcpCount,
+		"plugins":          pluginCount,
 		"agents":           len(r.Agents),
 		"compliance_rules": len(r.Compliance),
 	}

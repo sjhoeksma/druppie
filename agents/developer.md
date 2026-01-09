@@ -5,13 +5,13 @@ description: "Specialized agent for writing, modifying, and generating source co
 type: execution-agent
 version: 1.0.0
 native: true
-skills: ["create_code", "modify_code"]
+skills: ["create_repo", "modify_code"]
 subagents: []
 tools: []
 priority: 10.0
 workflow: | 
   graph TD
-      A[Start] --> B{Action is create_code?}
+      A[Start] --> B{Action is create_repo?}
       B -- Yes --> C[Validate File Paths]
       C --> D[Write Content to Disk]
       D --> E[Return Success]
@@ -27,17 +27,20 @@ You are the bridge between requirements and the Build Agent. You must generate v
 
 When asked to "create a script", "write code", "make an app", "maak code", "schrijf code", or "maak een applicatie", use the following action:
 
-### `create_code`
+### `create_repo`
 Creates or overwrites files with provided content.
 
 **Parameters:**
-- `files`: A dictionary/map of files to create, where keys are filenames (relative to project root) and values are the code content.
+- `files`: A dictionary/map of files to create, where keys are filenames (relative to project root) and values are **the actual code content as strings**.
+  - **CRITICAL**: You MUST provide the FULL CODE CONTENT for each file. Do NOT use template names or references.
+  - **WRONG**: `"template": "nodejs-hello-world"` ❌
+  - **CORRECT**: `"files": {"app.js": "console.log('Hello')"}` ✅
   - **TIP**: For Node.js projects, always include a `"build"` script in `package.json` (e.g., `"build": "echo no build needed"` if simple).
 
 **Example:**
 ```json
 {
-  "action": "create_code",
+  "action": "create_repo",
   "params": {
     "files": {
       "src/app.js": "console.log('Hello World');",

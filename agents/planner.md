@@ -47,11 +47,11 @@ Strategies:
 
 5.5. **Execution Rules**:
     - **Code Lifecycle (STRICT ORDER)**: If the User wants to Run or Deploy code:
-      1. **Creation**: You MUST ALWAYS first schedule `developer` (`create_code`) if the goal is to create something new (Maak, Create, Schrijf). 
+      1. **Creation**: You MUST ALWAYS first schedule `developer` (`create_repo`) if the goal is to create something new (Maak, Create, Schrijf). 
          - **CRITICAL**: Do NOT schedule `build_code` as Step 1.
-      2. **Build**: Only AFTER `create_code` is completed, schedule `build-agent` (`build_code`).
+      2. **Build**: Only AFTER `create_repo` is completed, schedule `build-agent` (`build_code`).
       3. **Run**: Only AFTER `build_code` is completed, schedule `run-agent` (`run_code`).
-    - **Missing Files**: If an agent reports "files missing", "empty directory", or "no build system", you must insert or retry a `create_code` step before the failing step to fix it.
+    - **Missing Files**: If an agent reports "files missing", "empty directory", or "no build system", you must insert or retry a `create_repo` step before the failing step to fix it.
 
 6. **Completion Strategy**:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).

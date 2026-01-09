@@ -711,14 +711,14 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 								break
 							}
 
-							// Self-Healing Logic for create_code
-							if attempt < maxRetries && step.Action == "create_code" {
+							// Self-Healing Logic for create_repo
+							if attempt < maxRetries && step.Action == "create_repo" {
 								logMu.Lock()
 								logBuffer = append(logBuffer, fmt.Sprintf("⚠️ Step failed: %v. Attempting Self-Healing (%d/%d)...", execErr, attempt+1, maxRetries))
 								logMu.Unlock()
 
 								fixPrompt := fmt.Sprintf(`
-The execution of 'create_code' failed.
+The execution of 'create_repo' failed.
 Error: %v
 Current Params: %v
 

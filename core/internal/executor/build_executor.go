@@ -58,10 +58,10 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 
 	// Check if source directory exists and is not empty
 	if _, err := os.Stat(repoURL); os.IsNotExist(err) {
-		return fmt.Errorf("source directory '%s' does not exist. You must call 'create_code' before 'build_code'", repoURL)
+		return fmt.Errorf("source directory '%s' does not exist. You must call 'create_repo' before 'build_code'", repoURL)
 	}
 	if entries, err := os.ReadDir(repoURL); err != nil || len(entries) == 0 {
-		return fmt.Errorf("source directory '%s' is empty. You must call 'create_code' with content before 'build_code'", repoURL)
+		return fmt.Errorf("source directory '%s' is empty. You must call 'create_repo' with content before 'build_code'", repoURL)
 	}
 
 	// Define Log Path

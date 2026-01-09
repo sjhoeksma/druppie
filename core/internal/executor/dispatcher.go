@@ -23,19 +23,20 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 		executors: []Executor{
 			&MCPExecutor{Manager: mcpManager}, // Check MCP tools first? Or specific executors first?
 			// MCP tools are dynamic, so placing them high allows overriding.
-			// But specific actions "create_code" etc should probably take precedence if they conflict.
-			// However, "create_code" is unlikely to be an MCP tool name unless intentional override.
+			// But specific actions "create_repo" etc should probably take precedence if they conflict.
+			// However, "create_repo" is unlikely to be an MCP tool name unless intentional override.
 
 			&AudioCreatorExecutor{},
 			&VideoCreatorExecutor{},
-			&ImageCreatorExecutor{},               // Start valid Image Executor
-			&FileReaderExecutor{},                 // File Reader
-			&DeveloperExecutor{},                  // Developer (Code Creator)
-			&BuildExecutor{Builder: buildEngine},  // Helper for building code
-			&RunExecutor{Builder: buildEngine},    // Helper for running code
-			&ComplianceExecutor{LLM: llmProvider}, // Compliance/Approval Handler
-			&StandardExecutor{StdCtx: stdCtx},     // Standard/Infra Handler (Replaces InfrastructureExecutor)
-			&ArchitectExecutor{LLM: llmProvider},  // Architect Handler
+			&ImageCreatorExecutor{},                 // Start valid Image Executor
+			&FileReaderExecutor{},                   // File Reader
+			&DeveloperExecutor{},                    // Developer (Code Creator)
+			&BuildExecutor{Builder: buildEngine},    // Helper for building code
+			&RunExecutor{Builder: buildEngine},      // Helper for running code
+			&PluginExecutor{MCPManager: mcpManager}, // Plugin testing and promotion
+			&ComplianceExecutor{LLM: llmProvider},   // Compliance/Approval Handler
+			&StandardExecutor{StdCtx: stdCtx},       // Standard/Infra Handler (Replaces InfrastructureExecutor)
+			&ArchitectExecutor{LLM: llmProvider},    // Architect Handler
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},
