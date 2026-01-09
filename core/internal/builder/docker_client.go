@@ -166,6 +166,7 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		if err != nil {
 			return "", err
 		}
+		fmt.Println("Logging to file:", logPath)
 	} else {
 		// Just a dummy file or fallback
 	}

@@ -22,7 +22,7 @@ type PluginExecutor struct {
 }
 
 func (e *PluginExecutor) CanHandle(action string) bool {
-	return action == "test_plugin" || action == "promote_plugin"
+	return action == "test_plugin" || action == "promote_plugin" || action == "execute_plugin"
 }
 
 func (e *PluginExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
@@ -42,9 +42,84 @@ func (e *PluginExecutor) Execute(ctx context.Context, step model.Step, outputCha
 		return e.testPlugin(ctx, step, planID, outputChan)
 	case "promote_plugin":
 		return e.promotePlugin(ctx, step, planID, outputChan)
+	case "execute_plugin":
+		return e.executePlugin(ctx, step, planID, outputChan)
 	default:
 		return fmt.Errorf("unsupported action: %s", step.Action)
 	}
+}
+
+func (e *PluginExecutor) executePlugin(ctx context.Context, step model.Step, planID string, outputChan chan<- string) error {
+	inputFileRaw, _ := step.Params["input_file"].(string)
+	pluginPathRaw, _ := step.Params["plugin_path"].(string)
+
+	outputChan <- fmt.Sprintf("[plugin-executor] Analyzing execution request: plugin=%s input=%s", pluginPathRaw, inputFileRaw)
+
+	// Resolve src dir
+	srcDir, err := paths.ResolvePath(".druppie", "plans", planID, "src")
+	if err != nil {
+		return fmt.Errorf("failed to resolve src dir: %w", err)
+	}
+
+	// Resolve input file path
+	// Handle variable substitution if present
+	inputFileRaw = strings.ReplaceAll(inputFileRaw, "${PLAN_ID}", planID)
+
+	var inputPath string
+	if filepath.IsAbs(inputFileRaw) {
+		inputPath = inputFileRaw
+	} else if strings.HasPrefix(inputFileRaw, ".druppie") {
+		// Relative from project root
+		root, _ := paths.FindProjectRoot()
+		inputPath = filepath.Join(root, inputFileRaw)
+	} else {
+		// Relative from src
+		inputPath = filepath.Join(srcDir, inputFileRaw)
+	}
+
+	// Resolve plugin entry point
+	// Often comes as "${PLAN_ID}/src/index.js" or similar
+	pluginPathClean := strings.ReplaceAll(pluginPathRaw, "${PLAN_ID}", planID)
+	// If it contains /src/, simplify to filename if we are running from srcDir
+	if strings.Contains(pluginPathClean, "/src/") {
+		parts := strings.Split(pluginPathClean, "/src/")
+		if len(parts) > 1 {
+			pluginPathClean = parts[1] // just the filename e.g. "index.js"
+		}
+	}
+	entryPoint := filepath.Join(srcDir, pluginPathClean)
+
+	outputChan <- fmt.Sprintf("[plugin-executor] Executing %s < %s", entryPoint, inputPath)
+
+	// Check files
+	if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+		return fmt.Errorf("plugin entry point not found: %s", entryPoint)
+	}
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		return fmt.Errorf("input file not found: %s", inputPath)
+	}
+
+	cmd := exec.CommandContext(ctx, "node", entryPoint)
+	cmd.Dir = srcDir
+
+	inFile, err := os.Open(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to open input file: %w", err)
+	}
+	defer inFile.Close()
+	cmd.Stdin = inFile
+
+	// Capture output
+	// Since json-rpc output might optionally be used later, we log it
+	out, err := cmd.CombinedOutput()
+	outputChan <- string(out)
+
+	if err != nil {
+		return fmt.Errorf("plugin execution returned error: %w", err)
+	}
+
+	outputChan <- "[plugin-executor] ✅ Execution successful"
+	return nil
 }
 
 func (e *PluginExecutor) testPlugin(ctx context.Context, step model.Step, planID string, outputChan chan<- string) error {

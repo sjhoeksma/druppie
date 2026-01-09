@@ -31,6 +31,17 @@ You are the **Plugin Converter Agent**. Your responsibility is to convert code b
 
 ## Workflow
 
+### 0. Default Architecture (Implicit)
+
+If the User requests to "Create an MCP Plugin" without specifying technical details, **YOU MUST ASSUME**:
+- **Runtime**: Node.js
+- **Dependencies**: None (Vanilla JS only). Use `readline` for communication.
+- **Protocol**: JSON-RPC 2.0 over Stdio.
+- **Structure**: Flat files in root (`index.js`, `package.json`).
+- **Lifecycle**: Create -> Build -> Test -> Promote.
+
+**Do NOT** use Python, Go, or external SDKs unless explicitly requested.
+
 ### 1. Create Converter Code (`create_repo`)
 
 Generate the converter code within the plan's `src` directory. The converter should:
@@ -41,24 +52,59 @@ Generate the converter code within the plan's `src` directory. The converter sho
 **Required Files:**
 ```
 src/
-  converter.js          # Main converter logic (MCP server)
+  index.js             # Main converter logic (MCP server)
   package.json         # Dependencies and MCP server config
   README.md            # Documentation
   test.md              # Test cases and usage examples
   mcp.md               # MCP server definition
 ```
 
+**index.js Template (JSON-RPC via Readline):**
+```javascript
+#!/usr/bin/env node
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: false
+});
+
+rl.on('line', (line) => {
+  if (!line.trim()) return;
+  try {
+    const request = JSON.parse(line);
+    let response;
+
+    if (request.method === 'initialize') {
+      response = { jsonrpc: '2.0', id: request.id, result: { capabilities: { tools: {} } } };
+    } else if (request.method === 'tools/list') {
+      response = { jsonrpc: '2.0', id: request.id, result: { tools: [] } };
+    } else if (request.method === 'tools/call') {
+      // CHECK 'name'
+      const toolName = request.params.name;
+      if (toolName === 'add') {
+         // Logic here
+      }
+    }
+    
+    if (response) console.log(JSON.stringify(response));
+  } catch (e) {
+    // ignore
+  }
+});
+```
+
 **package.json Template:**
 ```json
 {
-  "name": "my-converter",
+  "name": "my-plugin",
   "version": "1.0.0",
-  "type": "module",
   "bin": {
-    "my-converter": "./converter.js"
+    "my-plugin": "./index.js"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "latest"
+  "scripts": {
+    "build": "echo \"no build needed\""
   }
 }
 ```
@@ -70,7 +116,7 @@ id: my-converter
 name: my-converter
 command: node
 args:
-  - "./.druppie/plugins/my-converter/converter.js"
+  - "./.druppie/plugins/my-plugin/index.js"
 transport: stdio
 tools:
   - name: convert_data
@@ -228,8 +274,10 @@ This will:
     "action": "create_repo",
     "params": {
       "files": {
-        "src/converter.js": "#!/usr/bin/env node\n// Converter code here",
-        "src/package.json": "{...}"
+      "files": {
+        "index.js": "#!/usr/bin/env node\n// Converter code here",
+        "package.json": "{...}"
+      }
       }
     }
   },

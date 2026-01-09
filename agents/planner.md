@@ -51,6 +51,15 @@ Strategies:
          - **CRITICAL**: Do NOT schedule `build_code` as Step 1.
       2. **Build**: Only AFTER `create_repo` is completed, schedule `build-agent` (`build_code`).
       3. **Run**: Only AFTER `build_code` is completed, schedule `run-agent` (`run_code`).
+    - **Plugin Lifecycle (specialized)**:
+      1. **Create**: Use `developer` (`create_repo`). files MUST be at root (e.g. `index.js`), NOT in subfolders. 
+         - **ANTI-PATTERN**: Do NOT use `create_directory` or `move_file`. These actions do not exist.
+      2. **Build**: Use `build-agent` (`build_code`).
+         - **MANDATORY**: You MUST run this step to generate a `build_id`, even if the code needs no compilation (Node.js/Python). `promote_plugin` requires `build_id`.
+      3. **Test**: Use `plugin-converter` (`test_plugin` or `execute_plugin`).
+         - **CRITICAL**: Do NOT assign test/execute actions to `developer` or `tester`. Only `plugin-converter` can run plugins.
+      4. **Promote**: Use `plugin-converter` (`promote_plugin`).
+         - **Requirement**: Must depend on `test_plugin` and use the `${BUILD_ID}` from step 2.
     - **Missing Files**: If an agent reports "files missing", "empty directory", or "no build system", you must insert or retry a `create_repo` step before the failing step to fix it.
 
 6. **Completion Strategy**:
