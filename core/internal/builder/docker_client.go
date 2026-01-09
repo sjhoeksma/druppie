@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // DockerClient implements BuildEngine using Docker containers
@@ -29,7 +30,7 @@ func NewDockerClient(workingDir string) (*DockerClient, error) {
 	}
 
 	if workingDir == "" {
-		workingDir = "."
+		workingDir, _ = paths.FindProjectRoot()
 	}
 	absDir, err := filepath.Abs(workingDir)
 	if err != nil {
@@ -161,7 +162,7 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
 			return "", err
 		}
-		logFile, err = os.Create(logPath)
+		logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return "", err
 		}

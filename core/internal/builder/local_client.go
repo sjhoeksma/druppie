@@ -167,7 +167,7 @@ func (c *LocalClient) TriggerBuild(ctx context.Context, repoURL string, commitHa
 		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
 			return "", err
 		}
-		logFile, err = os.Create(logPath)
+		logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return "", err
 		}

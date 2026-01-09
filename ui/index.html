@@ -2598,7 +2598,7 @@
 
             let usageHtml = '';
             if (step.usage && step.usage.total_tokens > 0) {
-                usageHtml = `<span style="display:flex;align-items:center;gap:3px;margin-left:auto;"><i data-lucide="cpu" size="10"></i> ${step.usage.total_tokens}</span>`;
+                usageHtml = `<span style="display:flex;align-items:center;gap:3px;margin-left:auto;"${step.usage.total_tokens}</span>`;
             }
 
             card.innerHTML = `

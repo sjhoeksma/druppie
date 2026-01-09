@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // Store defines the interface for persisting execution plans and configuration.
@@ -155,7 +156,7 @@ func (s *FileStore) LogInteraction(planID string, tag string, input string, outp
 	}
 
 	// plans/<id>/logs/execution.log
-	logDir := filepath.Join(s.baseDir, "plans", planID, "logs")
+	logDir, _ := paths.ResolvePath(".druppie", "plans", planID, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return err
 	}
@@ -181,7 +182,7 @@ func (s *FileStore) AppendRawLog(planID string, message string) error {
 		return fmt.Errorf("planID is empty")
 	}
 
-	logDir := filepath.Join(s.baseDir, "plans", planID, "logs")
+	logDir, _ := paths.ResolvePath(".druppie", "plans", planID, "logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return err
 	}
@@ -201,7 +202,7 @@ func (s *FileStore) GetLogs(id string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	path := filepath.Join(s.baseDir, "plans", id, "logs", "execution.log")
+	path, _ := paths.ResolvePath(".druppie", "plans", id, "logs", "execution.log")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

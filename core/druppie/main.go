@@ -508,7 +508,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							tm.OutputChan <- fmt.Sprintf("[%s] Router failed: %v", planID, err)
 							// Update pending plan to failed
 							currentPlan.Status = "stopped"
-							cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+							cfg := cfgMgr.Get()
+							if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+								currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+							}
+							_ = plannerService.Store.SavePlan(currentPlan)
 							return
 						}
 
@@ -516,7 +520,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 						currentPlan.TotalUsage.PromptTokens += usage.PromptTokens
 						currentPlan.TotalUsage.CompletionTokens += usage.CompletionTokens
 						currentPlan.TotalUsage.TotalTokens += usage.TotalTokens
-						cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan) // Checkpoint usage immediately
+						cfg := cfgMgr.Get()
+						if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+							currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+						}
+						_ = plannerService.Store.SavePlan(currentPlan) // Checkpoint usage immediately
 
 						tm.OutputChan <- fmt.Sprintf("[%s] Intent: %s", planID, intent.Action)
 
@@ -534,7 +542,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								currentPlan.Steps[i].Status = "completed"
 								currentPlan.Steps[i].Usage = &usage // Assign usage to specific step
 								///currentPlan.Status = "running" //We are now running
-								cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+								cfg := cfgMgr.Get()
+								if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+									currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+								}
+								_ = plannerService.Store.SavePlan(currentPlan)
 							}
 						}
 
@@ -583,7 +595,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								Result:  "Designing execution plan...",
 							}
 							currentPlan.Steps = append(currentPlan.Steps, genPlanStep)
-							cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+							cfg := cfgMgr.Get()
+							if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+								currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+							}
+							_ = plannerService.Store.SavePlan(currentPlan)
 							tm.OutputChan <- fmt.Sprintf("[%s] Generating Plan...", planID)
 
 							fullPlan, err := plannerService.CreatePlan(ctx, intent, planID)
@@ -593,30 +609,33 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								// Mark generate_plan as failed
 								currentPlan.Steps[len(currentPlan.Steps)-1].Status = "failed"
 								currentPlan.Steps[len(currentPlan.Steps)-1].Result = fmt.Sprintf("Failed: %v", err)
-								cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+								cfg := cfgMgr.Get()
+								if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+									currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+								}
+								_ = plannerService.Store.SavePlan(currentPlan)
 								return
 							}
-
 
 							// Mark generate_plan as completed
 							currentPlan.Steps[len(currentPlan.Steps)-1].Status = "completed"
 							currentPlan.Steps[len(currentPlan.Steps)-1].Result = "Plan generated."
-							
+
 							// Assign planner usage to this step
 							plannerUsage := fullPlan.TotalUsage
 							currentPlan.Steps[len(currentPlan.Steps)-1].Usage = &plannerUsage
 
 							// MERGE new steps into current plan
-					// Add planner usage to currentPlan TotalUsage
-					currentPlan.TotalUsage.PromptTokens += plannerUsage.PromptTokens
-					currentPlan.TotalUsage.CompletionTokens += plannerUsage.CompletionTokens
-					currentPlan.TotalUsage.TotalTokens += plannerUsage.TotalTokens
+							// Add planner usage to currentPlan TotalUsage
+							currentPlan.TotalUsage.PromptTokens += plannerUsage.PromptTokens
+							currentPlan.TotalUsage.CompletionTokens += plannerUsage.CompletionTokens
+							currentPlan.TotalUsage.TotalTokens += plannerUsage.TotalTokens
 
-					// Calculate cost based on current LLM provider pricing
-					cfg = cfgMgr.Get()
-					if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
-						currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
-					}
+							// Calculate cost based on current LLM provider pricing
+							cfg = cfgMgr.Get()
+							if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+								currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+							}
 
 							nextID := currentPlan.Steps[len(currentPlan.Steps)-1].ID + 1
 							for i := range fullPlan.Steps {
@@ -640,7 +659,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							// _ = plannerService.Store.LogInteraction(currentPlan.ID, "Router", req.Prompt, rawRouterResp)
 
 							// Save updated plan
-							cfg = cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+							cfg = cfgMgr.Get()
+							if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+								currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+							}
+							_ = plannerService.Store.SavePlan(currentPlan)
 
 							// START THE TASK
 							tm.StartTask(ctx, currentPlan)
@@ -680,7 +703,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 								Status:  "completed",
 								Result:  resultText,
 							})
-							cfg := cfgMgr.Get(); if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok { currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken) }; _ = plannerService.Store.SavePlan(currentPlan)
+							cfg := cfgMgr.Get()
+							if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
+								currentPlan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
+							}
+							_ = plannerService.Store.SavePlan(currentPlan)
 						}
 					}()
 				})
@@ -1897,7 +1924,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			}
 
 			// Initialize Logging to File
-			logDir := filepath.Join(".druppie", "plans", currentPlan.ID, "logs")
+			logDir, _ := paths.ResolvePath(".druppie", "plans", currentPlan.ID, "logs")
 			if err := os.MkdirAll(logDir, 0755); err == nil {
 				logPath := filepath.Join(logDir, "execution.log")
 				if f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {

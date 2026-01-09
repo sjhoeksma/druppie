@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/model"
+	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // BuildExecutor handles "build_code" actions
@@ -47,31 +46,14 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 		planID = p
 	}
 
-	if planID != "" {
-		basePath := fmt.Sprintf(".druppie/plans/%s/src", planID)
-
-		if repoURL == "" || repoURL == "." || repoURL == "./" {
-			repoURL = basePath
-		} else {
-			// If not absolute, try joining with base path
-			// We prioritize the structure inside 'src'
-			joinedPath := filepath.Join(basePath, repoURL)
-
-			// Use the joined path if it exists, or if the raw path doesn't look like a valid existing path
-			if _, err := os.Stat(joinedPath); err == nil {
-				repoURL = joinedPath
-			} else {
-				// Fallback: Check if repoURL was already a valid path (e.g. absolute or correctly relative)
-				if _, err := os.Stat(repoURL); err == nil {
-					// Use as is
-				} else {
-					// Default to the joined path so the error message makes sense relative to src
-					repoURL = joinedPath
-				}
-			}
-		}
-	} else if repoURL == "" {
-		return fmt.Errorf("missing required param 'repo_url' or 'path'")
+	var warning string
+	var err error
+	repoURL, warning, err = paths.ResolveRepoURL(repoURL, planID)
+	if err != nil {
+		return err
+	}
+	if warning != "" {
+		outputChan <- warning
 	}
 
 	// Check if source directory exists and is not empty
@@ -82,23 +64,11 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 		return fmt.Errorf("source directory '%s' is empty. You must call 'create_code' with content before 'build_code'", repoURL)
 	}
 
-	// Robustness check: if repoURL contains "plan-" but NOT our current planID, it's likely a hallucination copy-paste
-	if planID != "" && repoURL != "" {
-		if !strings.Contains(repoURL, planID) {
-			// Check if it contains some other plan ID pattern
-			// Also check for short IDs like "1" or "plans/1" which are common hallucinations
-			if strings.Contains(repoURL, "plan-") || strings.Contains(repoURL, "<YOUR_PLAN_ID>") || strings.Contains(repoURL, "/plans/1/") {
-				// Silent auto-correction for common hallucinations
-				// outputChan <- fmt.Sprintf("⚠️ Detected likely invalid path '%s'. Auto-correcting to current plan '%s'...", repoURL, planID)
-				repoURL = fmt.Sprintf(".druppie/plans/%s/src", planID)
-			}
-		}
-	}
-
 	// Define Log Path
 	var logPath string
+
 	if planID != "" {
-		logPath = fmt.Sprintf(".druppie/plans/%s/logs/build.log", planID)
+		logPath, _ = paths.ResolvePath(".druppie", "plans", planID, "logs", "execution.log")
 	}
 
 	// Create Log Stream Adapter

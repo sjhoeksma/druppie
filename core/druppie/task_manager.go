@@ -176,7 +176,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			}
 		}
 		if modified {
-			tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+			tm.updatePlanCost(&p)
+			_ = tm.planner.Store.SavePlan(p)
 			task.Plan = &p // Update local reference to fresh plan
 		}
 	}
@@ -203,7 +204,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				}
 				if len(newSteps) != len(p.Steps) {
 					p.Steps = newSteps
-					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p)
+					_ = tm.planner.Store.SavePlan(p)
 					task.Plan = &p
 				}
 			}
@@ -267,7 +269,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					// Update plan status in store
 					if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 						p.Status = planStatus
-						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p)
+						_ = tm.planner.Store.SavePlan(p)
 					}
 				},
 				UpdateTokenUsage: func(usage model.TokenUsage) {
@@ -278,7 +281,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						p.TotalUsage.PromptTokens += usage.PromptTokens
 						p.TotalUsage.CompletionTokens += usage.CompletionTokens
 						p.TotalUsage.TotalTokens += usage.TotalTokens
-						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p)
+						_ = tm.planner.Store.SavePlan(p)
 						if task.Plan != nil {
 							task.Plan.TotalUsage = p.TotalUsage
 						}
@@ -315,7 +319,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						storedPlan.Steps = append(storedPlan.Steps, s)
 					}
 
-					tm.updatePlanCost(&storedPlan); if err := tm.planner.Store.SavePlan(storedPlan); err != nil {
+					tm.updatePlanCost(&storedPlan)
+					if err := tm.planner.Store.SavePlan(storedPlan); err != nil {
 						tm.OutputChan <- fmt.Sprintf("[%s] ⚠️ [TaskManager] Failed to save plan update: %v", task.ID, err)
 					}
 
@@ -373,7 +378,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 							storedPlan.Steps[i].Status = "pending"
 						}
 					}
-					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan)
+					_ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 			} else {
@@ -387,7 +393,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				storedPlan, err := tm.planner.Store.GetPlan(task.ID)
 				if err == nil {
 					storedPlan.Status = "completed"
-					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan)
+					_ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 			}
@@ -424,7 +431,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 							s.Result = "Skipped due to cancellation"
 						}
 					}
-					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p)
+					_ = tm.planner.Store.SavePlan(p)
 				}
 				tm.mu.Unlock()
 				return
@@ -442,7 +450,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						p.Steps[i].Status = "pending"
 					}
 				}
-				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p)
+				_ = tm.planner.Store.SavePlan(p)
 			}
 			tm.mu.Unlock()
 			return
@@ -513,7 +522,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 				storedPlan, err := tm.planner.Store.GetPlan(task.ID)
 				if err == nil {
 					storedPlan.Status = "completed"
-					tm.updatePlanCost(&storedPlan); _ = tm.planner.Store.SavePlan(storedPlan)
+					tm.updatePlanCost(&storedPlan)
+					_ = tm.planner.Store.SavePlan(storedPlan)
 				}
 				tm.mu.Unlock()
 
@@ -527,7 +537,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "stopped"
-				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p)
+				_ = tm.planner.Store.SavePlan(p)
 			}
 			tm.mu.Unlock()
 			return
@@ -571,7 +582,8 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 								break
 							}
 						}
-						tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+						tm.updatePlanCost(&p)
+						_ = tm.planner.Store.SavePlan(p)
 					}
 					step.Status = "running" // Update local copy
 					tm.mu.Unlock()
@@ -588,49 +600,49 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 					var resultBuilder strings.Builder
 					var msgWG sync.WaitGroup
 
+					msgWG.Add(1)
+					go func() {
+						defer msgWG.Done()
+						for msg := range outputBridge {
+							// Check if it's a result or a log
+							if strings.HasPrefix(msg, "RESULT_") {
+								// Result processing remains same
+								parts := strings.SplitN(msg, "=", 2)
+								if len(parts) == 2 {
+									key := strings.TrimPrefix(parts[0], "RESULT_")
+									switch key {
+									case "CONSOLE_OUTPUT":
+										resultBuilder.WriteString(parts[1] + "\n")
+									case "TOKEN_USAGE":
+										// Parse: "prompt,completion,total"
+										usageParts := strings.Split(parts[1], ",")
+										if len(usageParts) == 3 {
+											var prompt, completion, total int
+											fmt.Sscanf(usageParts[0], "%d", &prompt)
+											fmt.Sscanf(usageParts[1], "%d", &completion)
+											fmt.Sscanf(usageParts[2], "%d", &total)
 
-				msgWG.Add(1)
-				go func() {
-					defer msgWG.Done()
-					for msg := range outputBridge {
-						// Check if it's a result or a log
-if strings.HasPrefix(msg, "RESULT_") {
-// Result processing remains same
-parts := strings.SplitN(msg, "=", 2)
-if len(parts) == 2 {
-key := strings.TrimPrefix(parts[0], "RESULT_")
-if key == "CONSOLE_OUTPUT" {
-resultBuilder.WriteString(parts[1] + "\n")
-} else if key == "TOKEN_USAGE" {
-// Parse: "prompt,completion,total"
-usageParts := strings.Split(parts[1], ",")
-if len(usageParts) == 3 {
-var prompt, completion, total int
-fmt.Sscanf(usageParts[0], "%d", &prompt)
-fmt.Sscanf(usageParts[1], "%d", &completion)
-fmt.Sscanf(usageParts[2], "%d", &total)
-
-// Initialize step usage if needed
-if step.Usage == nil {
-step.Usage = &model.TokenUsage{}
-}
-step.Usage.PromptTokens += prompt
-step.Usage.CompletionTokens += completion
-step.Usage.TotalTokens += total
-}
-} else {
-resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
-}
-}
-// Do NOT log result lines to console/logBuffer.
-// They are internal protocol for result passing.
-} else {
-logMu.Lock()
-logBuffer = append(logBuffer, msg)
-logMu.Unlock()
-}
-}
-}()
+											// Initialize step usage if needed
+											if step.Usage == nil {
+												step.Usage = &model.TokenUsage{}
+											}
+											step.Usage.PromptTokens += prompt
+											step.Usage.CompletionTokens += completion
+											step.Usage.TotalTokens += total
+										}
+									default:
+										resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
+									}
+								}
+								// Do NOT log result lines to console/logBuffer.
+								// They are internal protocol for result passing.
+							} else {
+								logMu.Lock()
+								logBuffer = append(logBuffer, msg)
+								logMu.Unlock()
+							}
+						}
+					}()
 					// Try matching by AgentID first (e.g. "audio-creator")
 					exec, err := tm.dispatcher.GetExecutor(step.AgentID)
 					if err != nil {
@@ -739,12 +751,13 @@ Do NOT return YAML or Markdown blocks.
 										}
 									}
 
-									tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+									tm.updatePlanCost(&p)
+									_ = tm.planner.Store.SavePlan(p)
 									if task.Plan != nil {
 										task.Plan.TotalUsage.PromptTokens += usage.PromptTokens
 										task.Plan.TotalUsage.CompletionTokens += usage.CompletionTokens
 										task.Plan.TotalUsage.TotalTokens += usage.TotalTokens
-										
+
 										// Update local step reference too
 										if step.Usage == nil {
 											step.Usage = &model.TokenUsage{}
@@ -808,7 +821,8 @@ Do NOT return YAML or Markdown blocks.
 			}
 			execWG.Wait()
 
-			tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
+			tm.updatePlanCost(task.Plan)
+			_ = tm.planner.Store.SavePlan(*task.Plan)
 
 			// Check for auto-update triggers
 			lastIdx := len(task.Plan.Steps) - 1
@@ -979,7 +993,8 @@ Do NOT return YAML or Markdown blocks.
 									break
 								}
 							}
-							tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+							tm.updatePlanCost(&p)
+							_ = tm.planner.Store.SavePlan(p)
 						}
 						tm.mu.Unlock()
 
@@ -1035,7 +1050,8 @@ Do NOT return YAML or Markdown blocks.
 							break
 						}
 					}
-					tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+					tm.updatePlanCost(&p)
+					_ = tm.planner.Store.SavePlan(p)
 				}
 				tm.mu.Unlock()
 				continue
@@ -1058,7 +1074,8 @@ Do NOT return YAML or Markdown blocks.
 					break
 				}
 			}
-			tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+			tm.updatePlanCost(&p)
+			_ = tm.planner.Store.SavePlan(p)
 			// Update local plan pointer
 			task.Plan.Status = "waiting_input"
 			activeStep.Status = "waiting_input"
@@ -1179,7 +1196,8 @@ Do NOT return YAML or Markdown blocks.
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "running"
-				tm.updatePlanCost(&p); _ = tm.planner.Store.SavePlan(p)
+				tm.updatePlanCost(&p)
+				_ = tm.planner.Store.SavePlan(p)
 				task.Plan.Status = "running"
 				tm.OutputChan <- fmt.Sprintf("[%s] Status updated to RUNNING (Input received)", task.ID)
 			}
@@ -1240,7 +1258,8 @@ Do NOT return YAML or Markdown blocks.
 			if isAccept {
 				task.Plan.Steps[activeStepIdx].Status = "completed"
 				task.Plan.Steps[activeStepIdx].Result = answer
-				tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
+				tm.updatePlanCost(task.Plan)
+				_ = tm.planner.Store.SavePlan(*task.Plan)
 
 				if activeStepIdx == len(task.Plan.Steps)-1 {
 					tm.OutputChan <- fmt.Sprintf("[%s] Determining next steps...", task.ID)
@@ -1259,7 +1278,8 @@ Do NOT return YAML or Markdown blocks.
 			if activeStep.Action == "content-review" || activeStep.Action == "draft_scenes" || strings.Contains(strings.ToLower(activeStep.Action), "review") {
 				task.Plan.Steps[activeStepIdx].Status = "rejected"
 				task.Plan.Steps[activeStepIdx].Result = fmt.Sprintf("Rejected by user: %s", answer)
-				tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
+				tm.updatePlanCost(task.Plan)
+				_ = tm.planner.Store.SavePlan(*task.Plan)
 			}
 
 			// Standard update
@@ -1273,7 +1293,8 @@ Do NOT return YAML or Markdown blocks.
 					task.Plan.Steps[activeStepIdx].Error = ""
 					// Append hint to params? For now just retry.
 					tm.OutputChan <- fmt.Sprintf("[%s] Resetting step %d to PENDING via User Action.", task.ID, activeStep.ID)
-					tm.updatePlanCost(task.Plan); _ = tm.planner.Store.SavePlan(*task.Plan)
+					tm.updatePlanCost(task.Plan)
+					_ = tm.planner.Store.SavePlan(*task.Plan)
 
 					// If "fix", we might want to try to use the input as params?
 					// But relying on "UpdatePlan" for a single step retry is hard.
