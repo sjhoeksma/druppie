@@ -164,7 +164,19 @@ func (m *Manager) Generate(ctx context.Context, prompt string, systemPrompt stri
 	if m.defaultProvider == nil {
 		return "", model.TokenUsage{}, fmt.Errorf("no default provider configured")
 	}
+	return m.generateWithRetry(ctx, m.defaultProvider, prompt, systemPrompt)
+}
 
+// GenerateWithProvider uses a specific provider with retry and timeout logic
+func (m *Manager) GenerateWithProvider(ctx context.Context, providerName string, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	p, err := m.GetProvider(providerName)
+	if err != nil {
+		return "", model.TokenUsage{}, err
+	}
+	return m.generateWithRetry(ctx, p, prompt, systemPrompt)
+}
+
+func (m *Manager) generateWithRetry(ctx context.Context, p Provider, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
 	// Use configured retries
 	maxRetries := m.retries
 	if maxRetries <= 0 {
@@ -180,7 +192,7 @@ func (m *Manager) Generate(ctx context.Context, prompt string, systemPrompt stri
 			fmt.Printf("[LLM] Retry attempt %d/%d...\n", i+1, maxRetries)
 		}
 
-		resp, usage, err := m.defaultProvider.Generate(attemptCtx, prompt, systemPrompt)
+		resp, usage, err := p.Generate(attemptCtx, prompt, systemPrompt)
 		cancel() // Ensure we release the timeout resources immediately
 
 		if err == nil {
