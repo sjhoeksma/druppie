@@ -108,6 +108,9 @@ func (s *FileStore) ListPlans() ([]model.ExecutionPlan, error) {
 	plansDir := filepath.Join(s.baseDir, "plans")
 	entries, err := os.ReadDir(plansDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []model.ExecutionPlan{}, nil
+		}
 		return nil, fmt.Errorf("failed to list plans: %w", err)
 	}
 

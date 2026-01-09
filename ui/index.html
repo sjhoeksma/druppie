@@ -1798,6 +1798,11 @@
         try {
             const resp = await fetch('/v1/plans');
             if (resp.status === 401) return; // Handled by interceptor
+            if (resp.status === 500) {
+                const selector = elements.planSelector;
+                selector.innerHTML = '<option value="">Fout bij laden plannen (500)</option>';
+                return;
+            }
             if (!resp.ok) return;
 
             const plans = await resp.json();
@@ -2310,6 +2315,20 @@
         if (!state.currentPlanId || (!state.token && !state.isDemo)) return;
         try {
             const resp = await fetch(`/v1/plans/${state.currentPlanId}`);
+            if (resp.status === 404) {
+                // Plan deleted or invalid
+                addChatMessage('ai', `❌ Plan ${state.currentPlanId} niet gevonden (404). Monitor gestopt.`);
+                state.currentPlanId = null;
+                if (state.pollingInterval) clearInterval(state.pollingInterval);
+
+                // Clear UI
+                elements.systemLogs.innerHTML = '';
+                elements.stepLogs.innerHTML = '';
+
+                // Refresh list to remove the invalid plan
+                updatePlanSelector();
+                return;
+            }
             if (!resp.ok) return;
             const plan = await resp.json();
 
