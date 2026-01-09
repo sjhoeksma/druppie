@@ -12,9 +12,10 @@ priority: 100.0
 prompts:
   refine_intent: |
     You are a Video Producer. Analyze the user request. 
-    If the request is too vague, formulate 1 short question to clarify. 
+    If the request is too vague, formulate 1 short question to clarify (in the user's language). 
     If it is clear, output the refined project details.
-    Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "en", "target_audience": "..." }
+    Detect the language of the user request (e.g. 'nl', 'en', 'fr') and use it for the "language" field.
+    Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "detected_code", "target_audience": "..." }
   draft_script: |
     You are a Screenwriter. Create a JSON script for a video.
     Structure: {"av_script": [{"scene_id": 1, "audio_text": "...", "visual_prompt": "...", "duration": 5}]}

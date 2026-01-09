@@ -2678,8 +2678,14 @@
         // 2. Scroll on active plan progress
         // 3. STOP scroll if plan is completed/stopped/failed
         // Auto-scroll logic: Only scroll if state changed
-        let lastStep = null;
-        if (plan.steps.length > 0) lastStep = plan.steps[plan.steps.length - 1];
+        // Prioritize: Waiting Input > Running > Last Non-Pending > First Step
+        let lastStep = plan.steps.find(s => s.status === 'waiting_input');
+        if (!lastStep) lastStep = plan.steps.find(s => s.status === 'running');
+        if (!lastStep) {
+            const executed = plan.steps.filter(s => s.status !== 'pending');
+            if (executed.length > 0) lastStep = executed[executed.length - 1];
+        }
+        if (!lastStep && plan.steps.length > 0) lastStep = plan.steps[0];
 
         const currentSignature = `${plan.plan_id}-${plan.status}-${lastStep ? lastStep.step_id : '0'}-${lastStep ? lastStep.status : 'none'}`;
 

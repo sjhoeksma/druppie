@@ -340,9 +340,10 @@ func (w *VideoCreationWorkflow) refineIntent(wc *WorkflowContext, prompt string)
 	wc.OutputChan <- "🔍 [Intent] Analyzing request..."
 
 	sysPrompt := `You are a Video Producer. Analyze the user request. 
-If the request is too vague, formulate 1 short question to clarify. 
+If the request is too vague, formulate 1 short question to clarify (in the user's language). 
 If it is clear, output the refined project details.
-Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "en", "target_audience": "..." }`
+Detect the language of the user request (e.g. 'nl', 'en', 'fr') and use it for the "language" field.
+Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "detected_code", "target_audience": "..." }`
 
 	// Try to load prompt from agent definition
 	if agent, err := wc.GetAgent("video-content-creator"); err == nil {
