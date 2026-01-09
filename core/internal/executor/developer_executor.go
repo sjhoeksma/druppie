@@ -66,6 +66,22 @@ func (e *DeveloperExecutor) Execute(ctx context.Context, step model.Step, output
 			return fmt.Errorf("missing required parameter 'files' with code content. The developer agent needs actual code, not template references")
 		}
 
+		// LOGIC: Auto-Create go.mod if missing for Go projects (Reliability Fix)
+		hasGoFiles := false
+		hasGoMod := false
+		for path := range fileMap {
+			if filepath.Ext(path) == ".go" {
+				hasGoFiles = true
+			}
+			if filepath.Base(path) == "go.mod" {
+				hasGoMod = true
+			}
+		}
+		if hasGoFiles && !hasGoMod {
+			fileMap["go.mod"] = "module main\n\ngo 1.20"
+			outputChan <- "[developer] Auto-created 'go.mod' (Defensive Fix)"
+		}
+
 		for path, content := range fileMap {
 			strContent, ok := content.(string)
 			if !ok {

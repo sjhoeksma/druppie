@@ -52,6 +52,45 @@ func (e *PluginExecutor) Execute(ctx context.Context, step model.Step, outputCha
 func (e *PluginExecutor) executePlugin(ctx context.Context, step model.Step, planID string, outputChan chan<- string) error {
 	inputFileRaw, _ := step.Params["input_file"].(string)
 	pluginPathRaw, _ := step.Params["plugin_path"].(string)
+	pluginNameRaw, _ := step.Params["plugin_name"].(string)
+
+	// Smart Redirect: If plugin_name matches a running MCP Server, use MCP execution
+	if pluginNameRaw != "" && e.MCPManager != nil {
+		// Check if server exists (using internal map check via GetServers or similar?
+		// Manager doesn't expose CheckServer directly, but GetToolServer is for tools.
+		// However, we can blindly try to resolve if we have a function_name)
+
+		toolName, _ := step.Params["function_name"].(string)
+
+		// Extract args from various aliases
+		var args map[string]interface{}
+		if a, ok := step.Params["args"].(map[string]interface{}); ok {
+			args = a
+		} else if a, ok := step.Params["input"].(map[string]interface{}); ok {
+			args = a
+		} else if a, ok := step.Params["arguments"].(map[string]interface{}); ok {
+			args = a
+		} else if a, ok := step.Params["tool_input"].(map[string]interface{}); ok {
+			args = a
+		}
+
+		if toolName != "" {
+			// This looks like an MCP call disguised as execute_plugin
+			outputChan <- fmt.Sprintf("[plugin-executor] Redirecting '%s' to MCP Executor...", pluginNameRaw)
+
+			// Try execute
+			res, err := e.MCPManager.ExecuteTool(ctx, toolName, args)
+			if err != nil {
+				return fmt.Errorf("redirected MCP execution failed: %w", err)
+			}
+			for _, c := range res.Content {
+				if c.Type == "text" {
+					outputChan <- c.Text
+				}
+			}
+			return nil
+		}
+	}
 
 	outputChan <- fmt.Sprintf("[plugin-executor] Analyzing execution request: plugin=%s input=%s", pluginPathRaw, inputFileRaw)
 

@@ -1612,7 +1612,8 @@
         shownStepIds: new Set(),
         token: localStorage.getItem('druppie_token'),
         user: null,
-        isDemo: false
+        isDemo: false,
+        lastUserPrompt: null
     };
 
     function openCodeEditor() {
@@ -1942,6 +1943,7 @@
     async function sendMessage() {
         const prompt = elements.prompt.value.trim();
         if (!prompt) return;
+        state.lastUserPrompt = prompt;
 
         addChatMessage('user', prompt);
         elements.prompt.value = '';
@@ -2330,6 +2332,12 @@
                     if (s.action === 'user_query' && s.result) {
                         role = 'user';
                         msg = s.result;
+                        // Dedup Logic: If matches recently sent prompt, skip rendering
+                        if (state.lastUserPrompt && msg === state.lastUserPrompt) {
+                            state.shownStepIds.add(s.step_id);
+                            state.lastUserPrompt = null; // Clear matches
+                            msg = null; // Don't render
+                        }
                     } else if ((s.action === 'general_chat' || s.agent_id === 'router') && s.result) {
                         msg = s.result;
                     } else {

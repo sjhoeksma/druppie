@@ -168,10 +168,16 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	}
 
 	// 1. Gather Context from Registry
-	blocks := p.Registry.ListBuildingBlocks(userGroups)
+	// Optimization: Only include Registry Building Blocks (Infrastructure/Services) if the intent requires orchestration or infrastructure.
+	// For simple 'create_project' code tasks, we reduce token usage by skipping irrelevant blocks.
+	var blocks []model.BuildingBlock
+	if intent.Action == "orchestrate_complex" || intent.Category == "infrastructure" || intent.Action == "query_registry" {
+		blocks = p.Registry.ListBuildingBlocks(userGroups)
+	}
+
 	blockNames := make([]string, 0, len(blocks))
 	for _, b := range blocks {
-		blockNames = append(blockNames, b.Name)
+		blockNames = append(blockNames, fmt.Sprintf("%s (%s)", b.Name, b.Description))
 	}
 
 	// Add MCP Tools from Registry (Templates & Static Definitions)
@@ -187,10 +193,20 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	if p.MCPManager != nil {
 		mcpTools := p.MCPManager.ListAllTools()
 		for _, t := range mcpTools {
-			// Avoid duplicates if possible?
-			// For now, listing again is harmless or we can dedup.
-			// Simple dedup by checking suffix? Or just append.
-			blockNames = append(blockNames, fmt.Sprintf("%s (%s)", t.Name, t.Description))
+			// Find server for tool to create Namespaced Name
+			srv, _ := p.MCPManager.GetToolServer(t.Name)
+			// Format schema for Planner (JSON)
+			schemaBytes, _ := json.Marshal(t.InputSchema)
+			schemaStr := string(schemaBytes)
+			// Truncate schema if too long
+			if len(schemaStr) > 200 {
+				schemaStr = schemaStr[:200] + "..."
+			}
+
+			// Format: server__tool (Description) Args: schema
+			// Using namespaced name ensures uniqueness
+			namespaced := fmt.Sprintf("%s__%s", srv, t.Name)
+			blockNames = append(blockNames, fmt.Sprintf("%s (%s) Args: %s", namespaced, t.Description, schemaStr))
 		}
 	}
 
@@ -260,9 +276,14 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		if a.Workflow != "" {
 			sb.WriteString(fmt.Sprintf("  Workflow:\n%s\n", a.Workflow))
 		}
-		if a.Instructions != "" {
-			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
-		}
+		// Optimization: Do NOT include full Agent Instructions/Directives here.
+		// The Planner only needs Workflow, Skills, and Description to make decisions.
+		// Detailed templates (e.g. in Developer agent) differ from Planner logic and waste tokens.
+		/*
+			if a.Instructions != "" {
+				sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+			}
+		*/
 		agentList = append(agentList, sb.String())
 	}
 	//fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
@@ -457,7 +478,12 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	effectiveGoal := plan.Intent.InitialPrompt
 	for _, s := range plan.Steps {
 		if s.Result != "" {
-			effectiveGoal += fmt.Sprintf("\n- %s", s.Result)
+			// TRUNCATE Result to prevent exploding context size (e.g. file contents)
+			res := s.Result
+			if len(res) > 500 {
+				res = res[:500] + "... (truncated)"
+			}
+			effectiveGoal += fmt.Sprintf("\n- Step %d: %s", s.ID, res)
 		}
 	}
 	// Update the active prompt to reflect the full gathered context
@@ -559,18 +585,31 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		if a.Workflow != "" {
 			sb.WriteString(fmt.Sprintf("  Workflow:\n%s\n", a.Workflow))
 		}
-		if a.Instructions != "" {
-			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
-		}
+		// Optimization: Instructions removed from context
+		/*
+			if a.Instructions != "" {
+				sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+			}
+		*/
 		updatedAgentList = append(updatedAgentList, sb.String())
 	}
 	// Backward compatibility link if needed, or just use updatedAgentList in prompt
 	// agentList := updatedAgentList
 
-	// --- AUTO-STOP LOGIC REMOVED ---
-	// Previously, this stopped planning if scene count matched script length.
-	// This prevented post-production steps (Merge/Final Review) from being scheduled.
-	// We now let the LLM decide when to stop based on the workflow state.
+	// --- AUTO-STOP LOGIC (OPTIMIZATION) ---
+	// If the workflow reaches a definitive terminal state, stop immediately to save tokens.
+	if len(completedSteps) > 0 {
+		lastStep := completedSteps[len(completedSteps)-1]
+		// Hard Stop for 'promote_plugin' (Terminal action for Plugin workflow)
+		if lastStep.Action == "promote_plugin" ||
+			lastStep.Action == "run_code" ||
+			lastStep.Action == "tool_usage" {
+			if p.Store != nil {
+				_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
+			}
+			return plan, nil
+		}
+	}
 	// --------------------------------
 
 	// Load System Prompt from Agent Definition
@@ -588,6 +627,21 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		blockNames = append(blockNames, b.Name)
 	}
 
+	// Add Dynamic MCP Tools to UpdatePlan Context (Previously Missing)
+	if p.MCPManager != nil {
+		mcpTools := p.MCPManager.ListAllTools()
+		for _, t := range mcpTools {
+			srv, _ := p.MCPManager.GetToolServer(t.Name)
+			schemaBytes, _ := json.Marshal(t.InputSchema)
+			schemaStr := string(schemaBytes)
+			if len(schemaStr) > 200 {
+				schemaStr = schemaStr[:200] + "..."
+			}
+			namespaced := fmt.Sprintf("%s__%s", srv, t.Name)
+			blockNames = append(blockNames, fmt.Sprintf("%s (%s) Args: %s", namespaced, t.Description, schemaStr))
+		}
+	}
+
 	replacer := strings.NewReplacer(
 		"%goal%", plan.Intent.Prompt,
 		"%action%", plan.Intent.Action,
@@ -602,7 +656,33 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		startID = plan.Steps[len(plan.Steps)-1].ID
 	}
 
-	stepsJSON, _ := json.MarshalIndent(plan.Steps, "", "  ")
+	// Optimization: Minify Steps for History (Exclude Usage, Truncate Result)
+	type MinifiedStep struct {
+		StepID    int                    `json:"step_id"`
+		AgentID   string                 `json:"agent_id"`
+		Action    string                 `json:"action"`
+		Params    map[string]interface{} `json:"params,omitempty"`
+		Result    string                 `json:"result,omitempty"`
+		Status    string                 `json:"status"`
+		DependsOn []int                  `json:"depends_on,omitempty"`
+	}
+	minSteps := make([]MinifiedStep, len(plan.Steps))
+	for i, s := range plan.Steps {
+		res := s.Result
+		if len(res) > 500 {
+			res = res[:500] + "... (truncated)"
+		}
+		minSteps[i] = MinifiedStep{
+			StepID:    s.ID,
+			AgentID:   s.AgentID,
+			Action:    s.Action,
+			Params:    s.Params,
+			Result:    res,
+			Status:    s.Status,
+			DependsOn: s.DependsOn,
+		}
+	}
+	stepsJSON, _ := json.MarshalIndent(minSteps, "", "  ")
 
 	// Manage Memory
 	if p.Memory != nil && feedback != "" {

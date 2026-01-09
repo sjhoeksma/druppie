@@ -245,7 +245,11 @@ func (m *Manager) refreshToolsLocked(ctx context.Context) error {
 			continue
 		}
 		for _, tool := range tools {
+			// Register raw name (last write wins)
 			m.tools[tool.Name] = name
+			// Register namespaced name (server__tool) for uniqueness
+			namespaced := fmt.Sprintf("%s__%s", name, tool.Name)
+			m.tools[namespaced] = name
 			m.cachedTools = append(m.cachedTools, tool)
 		}
 	}
@@ -262,7 +266,7 @@ func (m *Manager) ListAllTools() []Tool {
 }
 
 // GetToolServer finds which server hosts the tool
-func (m *Manager) GetServerForTool(toolName string) (string, bool) {
+func (m *Manager) GetToolServer(toolName string) (string, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	server, ok := m.tools[toolName]
@@ -280,7 +284,13 @@ func (m *Manager) ExecuteTool(ctx context.Context, toolName string, args map[str
 		return nil, fmt.Errorf("tool not found: %s", toolName)
 	}
 
-	return client.CallTool(ctx, toolName, args)
+	// Strip namespace if present
+	realToolName := toolName
+	if strings.HasPrefix(toolName, serverName+"__") {
+		realToolName = strings.TrimPrefix(toolName, serverName+"__")
+	}
+
+	return client.CallTool(ctx, realToolName, args)
 }
 
 // GetServers returns list of configs

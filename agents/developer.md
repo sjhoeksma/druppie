@@ -1,7 +1,7 @@
 ---
 id: developer
 name: "Developer"
-description: "Specialized agent for writing, modifying, and generating source code files."
+description: "Specialized agent for writing code. MUST include 'package.json' for Node, 'go.mod' for Go, and 'requirements.txt' for Python."
 type: execution-agent
 version: 1.0.0
 native: true
@@ -36,6 +36,7 @@ Creates or overwrites files with provided content.
   - **WRONG**: `"template": "nodejs-hello-world"` ❌
   - **CORRECT**: `"files": {"app.js": "console.log('Hello')"}` ✅
   - **TIP**: For Node.js projects, always include a `"build"` script in `package.json` (e.g., `"build": "echo no build needed"` if simple).
+  - **TIP**: For Go projects, always include a `go.mod` file (e.g., `"go.mod": "module main\n\ngo 1.20"`).
 
 **IMPORTANT**: You do NOT execute or test code. You only write it. For execution, rely on `run_agent` or `plugin-converter`.
 

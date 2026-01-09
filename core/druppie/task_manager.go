@@ -1335,7 +1335,14 @@ func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID
 
 	// 2. Handle "tool_usage" wrapper pattern (used by mcp-agent)
 	if action == "tool_usage" {
-		if toolName, ok := step.Params["tool_name"].(string); ok {
+		toolName, ok := step.Params["tool_name"].(string)
+		if !ok {
+			toolName, ok = step.Params["function_name"].(string)
+		}
+		if !ok {
+			toolName, ok = step.Params["plugin_name"].(string)
+		}
+		if ok {
 			outputChan <- fmt.Sprintf("🔧 Unwrapping tool_usage: %s", toolName)
 			// Try finding executor for the specific tool name
 			if tm.dispatcher != nil {
