@@ -36,5 +36,6 @@
 - [ ] Add background job processing
 - [x] Add common function for directory location
 - [ ] Add common function to call a tool script or mcp from an internal agent
+- [ ] Fix:logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 

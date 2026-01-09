@@ -28,7 +28,12 @@ func (e *MCPExecutor) CanHandle(action string) bool {
 
 // Execute calls the tool via the MCP Manager
 func (e *MCPExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
-	outputChan <- fmt.Sprintf("[mcp] Executing: %s", step.Action)
+	// Identify Server
+	serverName, _ := e.Manager.GetServerForTool(step.Action)
+	if serverName == "" {
+		serverName = "unknown"
+	}
+	outputChan <- fmt.Sprintf("[mcp] Executing tool '%s' on server '%s'", step.Action, serverName)
 
 	// Normalize Parameters (AI alias handling)
 	// Map common variations to strict MCP schema keys
@@ -98,8 +103,9 @@ func (e *MCPExecutor) Execute(ctx context.Context, step model.Step, outputChan c
 	}
 
 	if len(texts) == 0 {
-		texts = append(texts, "Tool executed successfully.")
-		outputChan <- "Tool executed successfully."
+		texts = append(texts, "Tool executed successfully (No text content returned).")
+		outputChan <- "Tool executed successfully (No text content returned)."
+		outputChan <- "DEBUG: Ensure the MCP Plugin returns { content: [{ type: 'text', text: '...' }] }"
 	}
 
 	// Capture result for Plan History

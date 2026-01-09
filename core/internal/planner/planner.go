@@ -54,6 +54,8 @@ func NewPlanner(llm llm.Provider, reg *registry.Registry, store store.Store, mcp
 
 func (p *Planner) cleanJSONResponse(resp string) string {
 	clean := strings.TrimSpace(resp)
+
+	// 1. Extract from Markdown Code Blocks if present
 	if start := strings.Index(clean, "```"); start != -1 {
 		if newline := strings.Index(clean[start:], "\n"); newline != -1 {
 			start += newline + 1
@@ -63,42 +65,34 @@ func (p *Planner) cleanJSONResponse(resp string) string {
 		end := strings.LastIndex(clean, "```")
 		if end > start {
 			clean = clean[start:end]
-		} else {
-			clean = clean[start:]
 		}
 	}
-	clean = strings.TrimSpace(clean)
 
-	// Sanitize: Replace literal control characters (newlines, tabs) with spaces to ensure valid JSON parsing
-	// because LLMs often fail to escape them inside strings.
-	// We accept the minor loss of formatting in text fields in exchange for structural validity.
-	clean = strings.ReplaceAll(clean, "\n", " ")
-	clean = strings.ReplaceAll(clean, "\r", " ")
-	clean = strings.ReplaceAll(clean, "\t", " ")
+	// 2. Scan for Outermost Brackets (Array or Object) to ignore chatty prefixes/suffixes
+	startArr := strings.Index(clean, "[")
+	startObj := strings.Index(clean, "{")
 
-	// Robustly close brackets and braces
-	depthMap := map[rune]int{'{': 0, '[': 0}
-	for _, r := range clean {
-		switch r {
-		case '{':
-			depthMap['{']++
-		case '}':
-			depthMap['{']--
-		case '[':
-			depthMap['[']++
-		case ']':
-			depthMap['[']--
-		}
+	var start, end int
+	// Determine if we are looking for Array or Object start
+	if startArr != -1 && (startObj == -1 || startArr < startObj) {
+		start = startArr
+		end = strings.LastIndex(clean, "]")
+	} else if startObj != -1 {
+		start = startObj
+		end = strings.LastIndex(clean, "}")
+	} else {
+		// No brackets found, return original trimmed (likely will Assert Error later)
+		return clean
 	}
-	// Append missing closers in reverse order? Simple check:
-	for depthMap['['] > 0 {
-		clean += "]"
-		depthMap['[']--
+
+	if end > start {
+		clean = clean[start : end+1]
 	}
-	for depthMap['{'] > 0 {
-		clean += "}"
-		depthMap['{']--
-	}
+
+	// 3. REMOVED Destructive Newline Replacement
+	// We trust the LLM/Template to produce valid JSON-escaped strings for code content.
+	// Replacing \n with space corrupts 'create_repo' file contents.
+
 	return clean
 }
 
@@ -118,7 +112,8 @@ Task: Select the most relevant agents for this goal.
 Rules:
 1. Return exactly one JSON array of strings containing Agent IDs.
 2. Sort the array by relevance (most relevant first).
-3. Be extremely restrictive. prefer single specialized agent over multiple.
+3. Select ALL agents necessary for the complete workflow.
+   - **CRITICAL**: If the goal involves creating, writing, or modifying code/files, YOU MUST INCLUDE 'developer'.
 4. Guidelines:
    - Video content -> 'video-content-creator'
    - Research/Data -> 'data-scientist'
@@ -801,6 +796,9 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	plan.Steps = append(plan.Steps, filteredSteps...)
 
 	// Save to Store
+	// Calculate cost before saving
+	p.updatePlanCost(plan)
+
 	if p.Store != nil {
 		_ = p.Store.SavePlan(*plan)
 		planJSON, _ := json.MarshalIndent(plan, "", "  ")

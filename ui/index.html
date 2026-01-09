@@ -1560,6 +1560,9 @@
                 <span>Completion: <span id="stat-completion" class="stat-value">0</span></span>
             </div>
             <div class="stat-item">
+                <span>Planner: <span id="stat-planner" class="stat-value">0</span></span>
+            </div>
+            <div class="stat-item">
                 <span>Total: <span id="stat-total" class="stat-value">0</span></span>
             </div>
         </div>
@@ -2510,12 +2513,23 @@
         const statsBar = document.getElementById('stats-bar');
         if (plan.total_usage && plan.total_usage.total_tokens > 0) {
             statsBar.style.display = 'flex';
-            document.getElementById('stat-prompt').textContent = plan.total_usage.prompt_tokens.toLocaleString();
-            document.getElementById('stat-completion').textContent = plan.total_usage.completion_tokens.toLocaleString();
-            const totalText = plan.total_usage.total_tokens.toLocaleString(); const costText = plan.total_cost ? ` (€${plan.total_cost.toFixed(4)})` : ''; document.getElementById('stat-total').textContent = totalText + costText;
+            if (plan.planning_usage && plan.planning_usage.total_tokens > 0) {
+                document.getElementById('stat-prompt').textContent = (plan.total_usage.prompt_tokens - plan.planning_usage.prompt_tokens).toLocaleString();
+                document.getElementById('stat-completion').textContent = (plan.total_usage.completion_tokens - plan.planning_usage.completion_tokens).toLocaleString();
+                document.getElementById('stat-planner').textContent = (plan.planning_usage.total_tokens).toLocaleString();
+            } else {
+                document.getElementById('stat-prompt').textContent = plan.total_usage.prompt_tokens.toLocaleString();
+                document.getElementById('stat-completion').textContent = plan.total_usage.completion_tokens.toLocaleString();
+                document.getElementById('stat-planner').textContent = "0";
+            }
+            const totalText = plan.total_usage.total_tokens.toLocaleString();
+            const costText = plan.total_cost ? ` (€${plan.total_cost.toFixed(4)})` : '';
+            document.getElementById('stat-total').textContent = totalText + costText;
         } else {
             statsBar.style.display = 'none';
         }
+
+
 
         plan.steps = plan.steps || [];
         // Update Kanban background based on plan state

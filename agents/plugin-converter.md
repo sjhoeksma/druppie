@@ -90,9 +90,30 @@ rl.on('line', (line) => {
     
     if (response) console.log(JSON.stringify(response));
   } catch (e) {
-    // ignore
+    console.log(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: "Parse error" } }));
   }
 });
+```
+
+**mcp.md Template:**
+```markdown
+---
+id: my-plugin
+name: my-plugin
+command: node
+args:
+  - ./.druppie/plugins/my-plugin/index.js # MUST start with ./.druppie/plugins/... (No quotes)
+transport: stdio
+tools:
+  - name: add
+    description: Adds two numbers
+---
+# My Plugin
+
+Description here.
+
+## Usage Strategies
+Examples...
 ```
 
 **package.json Template:**

@@ -65,6 +65,7 @@ Strategies:
 6. **Completion Strategy**:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
    - **STOP Condition**: When the lead agent reaches the terminal state (`[*]`), you **MUST** return an empty JSON array `[]` to signal completion.
+   - **Plugin Completion**: If the last completed step was `promote_plugin`, the workflow is DONE. Return `[]`.
    - **Anti-Pattern**: Do NOT generate steps like "orchestration", "quality-check", or "summary" after the final state. If the workflow is done, STOP.
 
 7. **Compliance First Policy (MANDATORY)**:

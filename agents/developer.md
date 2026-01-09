@@ -113,7 +113,7 @@ rl.on('line', (line) => {
         response = {
           jsonrpc: '2.0',
           id: request.id,
-          result: { content: [{ type: "text", text: String(result) }] }
+          result: { content: [{ type: "text", text: String(result) }] } // MUST use content array
         };
       } else {
         response = { jsonrpc: '2.0', id: request.id, error: { code: -32601, message: "Tool not found" } };
@@ -123,7 +123,34 @@ rl.on('line', (line) => {
     if (response) console.log(JSON.stringify(response));
 
   } catch (e) {
-    // Ignore invalid lines
+    console.log(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: "Parse error or Internal error" } }));
   }
 });
+```
+
+**mcp.md Template (for Registry):**
+You MUST create this file so the Planner knows how to use the plugin.
+
+```markdown
+---
+id: my-plugin
+name: my-plugin
+command: node
+args:
+  - ./.druppie/plugins/my-plugin/index.js # MUST start with ./.druppie/plugins/... (No quotes)
+transport: stdio
+tools:
+  - name: add
+    description: Adds two numbers
+---
+# My Plugin
+
+Description here.
+
+### add
+Description...
+
+## Usage Strategies
+Provide examples of WHEN to use this tool.
+- "When user asks to X..."
 ```
