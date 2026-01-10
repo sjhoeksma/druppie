@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/config"
@@ -695,6 +694,36 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 							}
 						}
 					}()
+
+					// Check for special 'complete_plan' action
+					if step.Action == "complete_plan" {
+						tm.OutputChan <- fmt.Sprintf("[%s] ✅ Plan marked as complete by Planner.", task.ID)
+
+						// Mark step as completed
+						tm.mu.Lock()
+						if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+							// Mark step completed
+							for k := range p.Steps {
+								if p.Steps[k].ID == step.ID {
+									p.Steps[k].Status = "completed"
+									p.Steps[k].Result = "Plan Completed"
+									break
+								}
+							}
+							// Mark plan completed
+							p.Status = "completed"
+							tm.updatePlanCost(&p)
+							_ = tm.planner.Store.SavePlan(p)
+							task.Plan = &p
+						}
+						task.Status = TaskStatusCompleted
+						tm.mu.Unlock()
+
+						outputBridge <- "RESULT_CONSOLE_Output=Plan Completed"
+						close(outputBridge)
+						return
+					}
+
 					// Try matching by AgentID first (e.g. "audio-creator")
 					exec, err := tm.dispatcher.GetExecutor(step.AgentID)
 					if err != nil {
@@ -839,7 +868,7 @@ Do NOT return YAML or Markdown blocks.
 							}
 						}
 					} else {
-						execErr = tm.executeStep(task.Ctx, step, task.ID, outputBridge)
+						execErr = fmt.Errorf("no executor found for agent '%s' or action '%s'", step.AgentID, step.Action)
 					}
 					close(outputBridge)
 					msgWG.Wait() // Wait for all logs to be processed
@@ -1450,151 +1479,6 @@ Do NOT return YAML or Markdown blocks.
 			}
 		}
 	}
-}
-
-// executeStep handles the actual execution logic for a step
-// executeStep handles the actual execution logic for a step
-// executeStep handles the actual execution logic for a step
-func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID string, outputChan chan<- string) error {
-	if step.Params == nil {
-		step.Params = make(map[string]interface{})
-	}
-	// Inject Plan ID for context-aware executors (e.g. MCP path resolution)
-	step.Params["plan_id"] = planID
-
-	// Inject Language from Plan Intent if available
-	tm.mu.Lock()
-	if t, ok := tm.tasks[planID]; ok && t.Plan != nil {
-		if t.Plan.Intent.Language != "" {
-			if _, exists := step.Params["language"]; !exists {
-				step.Params["language"] = t.Plan.Intent.Language
-			}
-		}
-	} else {
-		// Fallback to Store if task not active (unlikely for running step)
-		if p, err := tm.planner.Store.GetPlan(planID); err == nil {
-			if p.Intent.Language != "" {
-				if _, exists := step.Params["language"]; !exists {
-					step.Params["language"] = p.Intent.Language
-				}
-			}
-		}
-	}
-	tm.mu.Unlock()
-
-	action := step.Action
-
-	// 1. Try Dispatcher directly
-	if tm.dispatcher != nil {
-		if exec, err := tm.dispatcher.GetExecutor(action); err == nil {
-			return exec.Execute(ctx, *step, outputChan)
-		}
-	}
-
-	// 2. Handle "tool_usage" wrapper pattern (used by mcp-agent)
-	if action == "tool_usage" {
-		toolName, ok := step.Params["tool_name"].(string)
-		if !ok {
-			toolName, ok = step.Params["function_name"].(string)
-		}
-		if !ok {
-			toolName, ok = step.Params["plugin_name"].(string)
-		}
-		if ok {
-			outputChan <- fmt.Sprintf("🔧 Unwrapping tool_usage: %s", toolName)
-			// Try finding executor for the specific tool name
-			if tm.dispatcher != nil {
-				if exec, err := tm.dispatcher.GetExecutor(toolName); err == nil {
-					// Create a proxy step with the specific action
-					proxyStep := *step
-					proxyStep.Action = toolName
-
-					// Flatten "parameters" if present (common in tool_usage schema)
-					if innerParams, ok := step.Params["parameters"].(map[string]interface{}); ok {
-						for k, v := range innerParams {
-							proxyStep.Params[k] = v
-						}
-					}
-					// Also support "params" key just in case
-					if innerParams, ok := step.Params["params"].(map[string]interface{}); ok {
-						for k, v := range innerParams {
-							proxyStep.Params[k] = v
-						}
-					}
-
-					return exec.Execute(ctx, proxyStep, outputChan)
-				}
-			}
-			return fmt.Errorf("no executor found for tool: %s", toolName)
-		}
-		return fmt.Errorf("tool_usage action requires 'tool_name' parameter")
-	}
-
-	if action == "replanning" {
-		tm.OutputChan <- fmt.Sprintf("🔄 [%s] Replanning step execution (auto-completing)...", step.AgentID)
-		return nil
-	}
-
-	// 3. Agent-specific Legacy Handling
-	switch step.AgentID {
-	case "scene-creator":
-		return tm.executeSceneCreation(ctx, step)
-
-	default:
-		// Default: Check for known prefix
-		if strings.HasPrefix(step.Action, "generate_") {
-			tm.OutputChan <- fmt.Sprintf("[%s] executing generic generation action: %s", step.AgentID, step.Action)
-			time.Sleep(1 * time.Second)
-			return nil
-		}
-		// If explicit "tool_usage" failed above, or unknown action:
-		return fmt.Errorf("unknown action '%s' for agent '%s' (no executor found)", step.Action, step.AgentID)
-	}
-}
-
-// executeSceneCreation handles logic for the scene-creator agent
-func (tm *TaskManager) executeSceneCreation(ctx context.Context, step *model.Step) error {
-	// Detect tool usage based on Action or Params
-	// The planner should have populated 'action' with something descriptive
-
-	// Delegate to Block Executors
-	if tm.dispatcher != nil {
-		if exec, err := tm.dispatcher.GetExecutor(step.Action); err == nil {
-			return exec.Execute(ctx, *step, tm.OutputChan)
-		}
-	}
-
-	action := strings.ToLower(step.Action)
-
-	// Legacy handlers for non-refactored actions
-
-	if strings.Contains(action, "image") {
-		// Simulate SDXL Image Generation
-		tm.OutputChan <- fmt.Sprintf("🖼️ [SDXL] (%s) Generating Image Asset: %v", step.AgentID, step.Params)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(2 * time.Second):
-		}
-		tm.OutputChan <- fmt.Sprintf("✅ [SDXL] (%s) Image generated: %d_asset.png", step.AgentID, step.ID)
-		return nil
-	}
-
-	if strings.Contains(action, "speech") || strings.Contains(action, "tts") || strings.Contains(action, "voice") {
-		// Simulate TTS
-		tm.OutputChan <- fmt.Sprintf("🗣️ [TTS] (%s) Generating Voiceover: %v", step.AgentID, step.Params)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(1 * time.Second):
-		}
-		tm.OutputChan <- fmt.Sprintf("✅ [TTS] (%s) Audio generated: %d_voice.mp3", step.AgentID, step.ID)
-		return nil
-	}
-
-	// Fallback
-	tm.OutputChan <- fmt.Sprintf("⚠️ [Scene Creator] Unknown action '%s', skipping execution logic.", action)
-	return nil
 }
 
 func formatStepParams(params map[string]interface{}) string {

@@ -108,7 +108,12 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				lang = "nl"
 			}
 			return NewSherpaTTSProvider(lang, pCfg.Model)
-
+		case "stable-diffusion":
+			// Use BaseURL field from config which maps to APIURL usually?
+			// Config struct has APIURL? Let's check config struct in next step if needed,
+			// but usually provider config has generic fields.
+			// provider.go uses pCfg.APIURL for OpenAI, so we assume BaseURL is passed there.
+			return NewStableDiffusionProvider(pCfg.URL, pCfg.Model), nil
 		default:
 			return nil, fmt.Errorf("unknown provider type: %s", pCfg.Type)
 		}

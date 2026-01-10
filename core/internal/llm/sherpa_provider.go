@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	sherpa "github.com/k2-fsa/sherpa-onnx-go/sherpa_onnx"
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -92,19 +93,57 @@ func ListVoices(lang string) []string {
 }
 
 type SherpaTTSProvider struct {
-	Language  string
-	Model     string
-	tts       *sherpa.OfflineTts
-	modelPath string
+	DefaultLang  string
+	DefaultModel string
+
+	modelsMu sync.Mutex
+	models   map[string]*sherpa.OfflineTts
+
+	baseDir string
 }
 
 func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
-	// 1. Resolve Model
-	// Logic:
-	// - If modelName matches registry key (e.g. "nl-nathalie"), use it.
-	// - If modelName is just "dutch" or "nl", find default for that lang.
-	// - If lang provided, filter by lang.
+	// Determine paths usage
+	// Use project relative path as requested
+	baseDir := filepath.Join(".druppie", "sherpa")
 
+	p := &SherpaTTSProvider{
+		DefaultLang:  lang,
+		DefaultModel: modelName,
+		models:       make(map[string]*sherpa.OfflineTts),
+		baseDir:      baseDir,
+	}
+
+	// Pre-load default model
+	// Resolve default config
+	_, err := p.getOrLoadModel(lang, modelName)
+	if err != nil {
+		fmt.Printf("Warning: Failed to pre-load default Sherpa model: %v\n", err)
+		// Don't fail init, allow lazy load
+	}
+
+	return p, nil
+}
+
+func (p *SherpaTTSProvider) getOrLoadModel(lang, modelName string) (*sherpa.OfflineTts, error) {
+	p.modelsMu.Lock()
+	defer p.modelsMu.Unlock()
+
+	// Logic: modelName takes precedence if specific key (e.g. 'nl-nathalie').
+	// If generic ('dutch'), look up by lang.
+
+	// Composite key for cache
+	key := fmt.Sprintf("%s:%s", lang, modelName)
+	if tts, ok := p.models[key]; ok {
+		return tts, nil
+	}
+	// Also check if we have a model for just the lang cached
+	if modelName == "" || modelName == "default" {
+		// Check if any model for this lang is loaded?
+		// For simplicity, we stick to strict keys or map generic to specific.
+	}
+
+	// Resolve Config
 	var selectedConfig SherpaModelInfo
 	found := false
 
@@ -113,7 +152,7 @@ func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
 		selectedConfig = info
 		found = true
 	} else {
-		// Search by language/partial config of modelName
+		// Search by language
 		searchLang := lang
 		if searchLang == "" {
 			// Infer from modelName
@@ -141,16 +180,21 @@ func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
 		selectedConfig = sherpaRegistry["en-amy"]
 	}
 
-	// Determine paths
-	// Use project relative path as requested
-	baseDir := filepath.Join(".druppie", "sherpa")
+	// Double check cache with resolved voice name to avoid duplicates
+	cacheKey := selectedConfig.Language // Simplify caching by Language for now (1 voice per lang active)
+	// Or cache by voice name
+	cacheKey = selectedConfig.Voice // "nathalie", "amy"
+	if tts, ok := p.models[cacheKey]; ok {
+		p.models[key] = tts // Alias
+		return tts, nil
+	}
 
-	fullDir := filepath.Join(baseDir, selectedConfig.SubDir)
+	fullDir := filepath.Join(p.baseDir, selectedConfig.SubDir)
 
 	// Download if missing
 	if _, err := os.Stat(fullDir); os.IsNotExist(err) {
 		fmt.Printf("[Sherpa] Downloading model %s (%s) from %s...\n", selectedConfig.Voice, selectedConfig.Language, selectedConfig.DownloadURL)
-		if err := downloadAndExtract(selectedConfig.DownloadURL, baseDir); err != nil {
+		if err := downloadAndExtract(selectedConfig.DownloadURL, p.baseDir); err != nil {
 			return nil, fmt.Errorf("failed to download model: %w", err)
 		}
 	}
@@ -174,22 +218,45 @@ func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
 		return nil, fmt.Errorf("failed to create sherpa tts instance")
 	}
 
-	return &SherpaTTSProvider{
-		Language:  selectedConfig.Language,
-		Model:     selectedConfig.Voice,
-		tts:       tts,
-		modelPath: fullDir,
-	}, nil
+	p.models[key] = tts
+	p.models[cacheKey] = tts
+	// Also map lang code to this model
+	p.models[selectedConfig.Language] = tts
 
+	return tts, nil
 }
 
 func (p *SherpaTTSProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
-	if p.tts == nil {
-		return "", model.TokenUsage{}, fmt.Errorf("sherpa tts not initialized")
+	// Parse System Prompt for metadata
+	// Convention: "Language: en" or JSON
+	lang := p.DefaultLang
+	modelName := p.DefaultModel
+
+	// Simple check for "Language: <lang>" in systemPrompt
+	lines := strings.Split(systemPrompt, "\n")
+	for _, line := range lines {
+		lower := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(lower, "language:") {
+			parts := strings.SplitN(lower, ":", 2)
+			if len(parts) == 2 {
+				lang = strings.TrimSpace(parts[1])
+			}
+		}
+		if strings.HasPrefix(lower, "voice:") {
+			parts := strings.SplitN(lower, ":", 2)
+			if len(parts) == 2 {
+				modelName = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	tts, err := p.getOrLoadModel(lang, modelName)
+	if err != nil {
+		return "", model.TokenUsage{}, err
 	}
 
 	// Generate Audio
-	audio := p.tts.Generate(prompt, 0, 1.0)
+	audio := tts.Generate(prompt, 0, 1.0)
 	if len(audio.Samples) == 0 {
 		return "", model.TokenUsage{}, fmt.Errorf("generated empty audio")
 	}
@@ -204,7 +271,10 @@ func (p *SherpaTTSProvider) Generate(ctx context.Context, prompt string, systemP
 }
 
 func (p *SherpaTTSProvider) Close() error {
-	// Method undefined, handled by GC
+	p.modelsMu.Lock()
+	defer p.modelsMu.Unlock()
+	// Clear map, let GC handle
+	p.models = make(map[string]*sherpa.OfflineTts)
 	return nil
 }
 

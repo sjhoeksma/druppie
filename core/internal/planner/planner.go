@@ -693,7 +693,10 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			// Hard Stop for 'promote_plugin' (Terminal action for Plugin workflow)
 			if lastStep.Action == "promote_plugin" ||
 				lastStep.Action == "run_code" ||
-				lastStep.Action == "tool_usage" {
+				lastStep.Action == "tool_usage" ||
+				lastStep.Action == "image-generation" ||
+				lastStep.Action == "video-generation" ||
+				lastStep.Action == "text-to-speech" {
 				if p.Store != nil {
 					_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
 				}

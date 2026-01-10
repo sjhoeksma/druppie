@@ -56,7 +56,21 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	// Try LLM Provider "text_to_speech"
 	if e.LLM != nil {
 		if mgr, ok := e.LLM.(*llm.Manager); ok {
-			resp, _, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, "Generate Audio")
+			// Construct system prompt with metadata
+			// Convention: "Generate Audio\nLanguage: <lang>\nVoice: <voice>"
+			sysPrompt := "Generate Audio"
+
+			// Detect language from step (if passed by Planner/Router)
+			// Planner usually puts detected language in intent or params
+			if lang, ok := step.Params["language"]; ok {
+				sysPrompt += fmt.Sprintf("\nLanguage: %v", lang)
+			}
+			// Voice override
+			if voice != "Default" {
+				sysPrompt += fmt.Sprintf("\nVoice: %s", voice)
+			}
+
+			resp, _, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, sysPrompt)
 			if err == nil && resp != "" {
 				// Detect format
 				ext := ".mp3"

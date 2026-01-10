@@ -105,7 +105,9 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- "🎙️ [VideoWorkflow] Phase 1/3: Audio Generation..."
 	for {
 		var err error
-		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, w.generateAudio)
+		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, func(wc *WorkflowContext, s Scene) (Scene, error) {
+			return w.generateAudio(wc, s, intent.Language)
+		})
 		if err != nil {
 			return err
 		}
@@ -604,12 +606,20 @@ func (w *VideoCreationWorkflow) formatScript(script AVScript) string {
 	return sb.String()
 }
 
-func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene) (Scene, error) {
+func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, language string) (Scene, error) {
 	executor, _ := wc.Dispatcher.GetExecutor("text-to-speech")
 	execChan := make(chan string, 100)
 	var capturedFile string
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "text-to-speech", Params: map[string]interface{}{"audio_text": s.AudioText, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
+		params := map[string]interface{}{
+			"audio_text": s.AudioText,
+			"scene_id":   s.ID,
+			"plan_id":    wc.PlanID,
+		}
+		if language != "" {
+			params["language"] = language
+		}
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "text-to-speech", Params: params}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {

@@ -14,3 +14,4 @@ Gebruik de volgende prompts om de verschillende mogelijkheden te testen.
 - [x] MCP : use plugin calc-mcp to add 5 and 11
 - [x] ARCHITECT: Zou je voor mij als architect een mermaid diagram willen maken over hoe memory werkt binnen AI
 - [x] SHERPA TTS:Generate a Dutch audio file saying 'Dit is een test van het autonome Druppie TTS systeem'
+- [x] STABLE DIFFUSION: Generate an image of a cyberpunk street scene with neon lights

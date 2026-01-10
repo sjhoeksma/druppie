@@ -521,7 +521,8 @@
             }
 
             // Check for Media
-            if (path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.mp4') || path.endsWith('.ogg') || path.endsWith('.webm')) {
+            if (path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.mp4') || path.endsWith('.ogg') || path.endsWith('.webm') ||
+                path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.gif') || path.endsWith('.webp')) {
                 showMedia(path);
                 return;
             }
@@ -668,6 +669,14 @@
                     video.src = objectURL;
                     video.autoplay = false;
                     mediaDiv.appendChild(video);
+                } else if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.gif') || path.endsWith('.webp')) {
+                    const img = document.createElement('img');
+                    img.src = objectURL;
+                    img.style.maxWidth = '100%';
+                    img.style.maxHeight = '80vh';
+                    img.style.borderRadius = '8px';
+                    img.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+                    mediaDiv.appendChild(img);
                 }
             } catch (e) {
                 console.error(e);
