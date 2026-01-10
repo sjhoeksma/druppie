@@ -101,6 +101,13 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				Model:  model,
 				APIKey: pCfg.APIKey,
 			}, nil
+		case "sherpa-onnx":
+			// Language from configuration or default to EN
+			lang := "en"
+			if strings.Contains(strings.ToLower(pCfg.Model), "dutch") || strings.Contains(strings.ToLower(pCfg.Model), "nl") {
+				lang = "nl"
+			}
+			return NewSherpaTTSProvider(lang, pCfg.Model)
 
 		default:
 			return nil, fmt.Errorf("unknown provider type: %s", pCfg.Type)

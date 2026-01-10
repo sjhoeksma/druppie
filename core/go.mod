@@ -67,6 +67,10 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/k2-fsa/sherpa-onnx-go v1.12.20 // indirect
+	github.com/k2-fsa/sherpa-onnx-go-linux v1.12.20 // indirect
+	github.com/k2-fsa/sherpa-onnx-go-macos v1.12.20 // indirect
+	github.com/k2-fsa/sherpa-onnx-go-windows v1.12.20 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

@@ -137,6 +137,23 @@
         }
 
         /* ... rest of styles ... */
+        #media-player {
+            display: none;
+            flex: 1;
+            padding: 2rem;
+            background: var(--bg-deep);
+            color: var(--text-main);
+            text-align: center;
+        }
+
+        #media-player audio,
+        #media-player video {
+            max-width: 100%;
+            max-height: 80%;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
         #file-tree {
             flex: 1;
             overflow-y: auto;
@@ -345,6 +362,7 @@
         </div>
         <div id="monaco"></div>
         <div id="markdown-preview"></div>
+        <div id="media-player"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
@@ -502,6 +520,12 @@
                 document.getElementById('sidebar').classList.remove('open');
             }
 
+            // Check for Media
+            if (path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.mp4') || path.endsWith('.ogg') || path.endsWith('.webm')) {
+                showMedia(path);
+                return;
+            }
+
             // Markdown Logic
             isMarkdown = path.endsWith('.md');
             isPreviewMode = isMarkdown; // Default to viewer for MD
@@ -566,6 +590,7 @@
 
         function showPreview(content) {
             document.getElementById('monaco').style.display = 'none';
+            document.getElementById('media-player').style.display = 'none';
             const preview = document.getElementById('markdown-preview');
             preview.style.display = 'block';
             // Parse Markdown
@@ -578,6 +603,7 @@
 
         function showEditor(content, path) {
             document.getElementById('markdown-preview').style.display = 'none';
+            document.getElementById('media-player').style.display = 'none';
             document.getElementById('monaco').style.display = 'block';
             editor.setValue(content);
 
@@ -595,6 +621,61 @@
                 if (path.endsWith('.sh')) lang = 'shell';
             }
             monaco.editor.setModelLanguage(editor.getModel(), lang);
+        }
+
+        async function showMedia(path) {
+            document.getElementById('markdown-preview').style.display = 'none';
+            document.getElementById('monaco').style.display = 'none';
+            const mediaDiv = document.getElementById('media-player');
+            mediaDiv.style.display = 'flex';
+            mediaDiv.style.flexDirection = 'column';
+            mediaDiv.style.alignItems = 'center';
+            mediaDiv.style.justifyContent = 'center';
+            mediaDiv.innerHTML = '<div style="color:var(--text-dim);">Loading media...</div>';
+
+            const url = `/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`;
+
+            try {
+                // Fetch as blob
+                const res = await fetch(url);
+                if (res.status === 401) {
+                    mediaDiv.innerHTML = '<div style="color:var(--accent);">⚠️ Authentication Required.</div>';
+                    return;
+                }
+                if (!res.ok) {
+                    throw new Error(`Status ${res.status}`);
+                }
+
+                const blob = await res.blob();
+                const objectURL = URL.createObjectURL(blob);
+
+                mediaDiv.innerHTML = '';
+
+                const title = document.createElement('h3');
+                title.innerText = path.split('/').pop();
+                title.style.marginBottom = '1rem';
+                mediaDiv.appendChild(title);
+
+                if (path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.ogg')) {
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = objectURL;
+                    audio.autoplay = false;
+                    mediaDiv.appendChild(audio);
+                } else if (path.endsWith('.mp4') || path.endsWith('.webm')) {
+                    const video = document.createElement('video');
+                    video.controls = true;
+                    video.src = objectURL;
+                    video.autoplay = false;
+                    mediaDiv.appendChild(video);
+                }
+            } catch (e) {
+                console.error(e);
+                mediaDiv.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+            }
+
+            // Hide preview toggle
+            document.getElementById('toggle-view-btn').style.display = 'none';
         }
 
         // Initialize icons after DOM updates

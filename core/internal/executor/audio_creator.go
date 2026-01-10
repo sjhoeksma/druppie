@@ -2,8 +2,10 @@ package executor
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/llm"
@@ -56,7 +58,26 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		if mgr, ok := e.LLM.(*llm.Manager); ok {
 			resp, _, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, "Generate Audio")
 			if err == nil && resp != "" {
-				filename := fmt.Sprintf("audio_scene_%s.mp3", sceneID)
+				// Detect format
+				ext := ".mp3"
+				// Quick sniff of base64 data to check for RIFF (WAV)
+				// Base64 for "RIFF" is "UkVG..." or similar depending on alignment, but better to decode prefix
+				// "RIFF" in hex: 52 49 46 46
+				// Just strip prefix and decode a chunk
+				dataPayload := resp
+				if strings.HasPrefix(resp, "base64,") {
+					parts := strings.Split(resp, ",")
+					if len(parts) > 1 {
+						dataPayload = parts[len(parts)-1]
+					}
+				}
+				// Decode first 12 bytes
+				header, _ := base64.StdEncoding.DecodeString(dataPayload)
+				if len(header) >= 4 && string(header[:4]) == "RIFF" {
+					ext = ".wav"
+				}
+
+				filename := fmt.Sprintf("audio_scene_%s%s", sceneID, ext)
 				if planID != "" {
 					if err := saveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated via Provider: %s", filename)
