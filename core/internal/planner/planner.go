@@ -310,6 +310,65 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	//fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
 
 	// 2. Prompt LLM
+	// Filter Tools based on User Request ("select the onces which are linked to the agents selected")
+	requiredTools := make(map[string]bool)
+	for _, a := range activeAgents {
+		for _, t := range a.Tools {
+			requiredTools[t] = true
+		}
+	}
+
+	// Rebuild blockNames filtered
+	if len(requiredTools) > 0 {
+		filteredBlockNames := make([]string, 0)
+
+		// Filter Building Blocks
+		for _, b := range blocks {
+			if requiredTools[b.ID] || requiredTools["*"] {
+				filteredBlockNames = append(filteredBlockNames, fmt.Sprintf("%s (%s)", b.Name, b.Description))
+			}
+		}
+
+		// Filter MCP Tools
+		// Check against Server ID AND Tool Name to be safe
+		for _, s := range mcpServers {
+			serverMatch := requiredTools[s.ID]
+			for _, t := range s.Tools {
+				if serverMatch || requiredTools[t.Name] || requiredTools["*"] {
+					filteredBlockNames = append(filteredBlockNames, fmt.Sprintf("%s (%s)", t.Name, t.Description))
+				}
+			}
+		}
+
+		// Also check dynamic MCPs (Running Servers)
+		// We need to re-scan p.MCPManager.ListTools if needed,
+		// but 'blockNames' currently only includes static Registry definitions + dynamic discovery from earlier lines.
+		// The earlier dynamic discovery loop (lines 192-239) appended to 'blockNames'.
+		// Since we are Overwriting 'blockNames' (or rather replacing it), we need to capture ALL sources.
+
+		// ISSUE: 'blocks' and 'mcpServers' (static) are available variables.
+		// But dynamic tools were added to 'blockNames' loop around line 210. We lost the source objects effectively unless we re-fetch.
+
+		// Simpler approach: Filter 'blockNames' strings?
+		// No, strings are formatted "Name (Desc)". Parsing back is fragile.
+
+		// Re-run Dynamic Logic here
+		if p.MCPManager != nil {
+			_, cancel := context.WithTimeout(ctx, 2*time.Second)
+			allTools := p.MCPManager.ListAllTools()
+			cancel()
+
+			for _, tool := range allTools {
+				// Check if tool allowed
+				// Tool struct has Name. ServerID? Not easily accessible here maybe.
+				if requiredTools[tool.Name] || requiredTools["*"] {
+					filteredBlockNames = append(filteredBlockNames, fmt.Sprintf("%s (%s)", tool.Name, tool.Description))
+				}
+			}
+		}
+
+		blockNames = filteredBlockNames
+	}
 	sysTemplate := ""
 	if plannerAgent, err := p.Registry.GetAgent("planner"); err == nil && plannerAgent.Instructions != "" {
 		sysTemplate = plannerAgent.Instructions
@@ -330,7 +389,6 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 	}
 
 	sysPrompt := replacer.Replace(sysTemplate)
-
 	var steps []model.Step
 	var validationErr error
 	var resp string
@@ -396,6 +454,14 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 						}
 					}
 				}
+			}
+
+			// Ensure Params initialized and Language injected
+			if steps[i].Params == nil {
+				steps[i].Params = make(map[string]interface{})
+			}
+			if _, ok := steps[i].Params["language"]; !ok {
+				steps[i].Params["language"] = intent.Language
 			}
 
 			// CRITICAL VALIDATION: Content Review MUST have av_script
@@ -496,19 +562,15 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	// 1. Construct Effective Goal (Context)
-	effectiveGoal := plan.Intent.InitialPrompt
+	// ONLY update Intent.Prompt if explicit 'refine_intent' step occurred (User Request)
 	for _, s := range plan.Steps {
-		if s.Result != "" {
-			// TRUNCATE Result to prevent exploding context size (e.g. file contents)
-			res := s.Result
-			if len(res) > 500 {
-				res = res[:500] + "... (truncated)"
-			}
-			effectiveGoal += fmt.Sprintf("\n- Step %d: %s", s.ID, res)
+		if s.Action == "refine_intent" && s.Status == "completed" && s.Result != "" {
+			// Start fresh from Initial if explicitly refining? Or append?
+			// User said "add it to the intent". Usually refinement clarifies/replaces.
+			// Safeguard: If result is huge, maybe truncate? But for intent we want query.
+			plan.Intent.Prompt = s.Result
 		}
 	}
-	// Update the active prompt to reflect the full gathered context
-	plan.Intent.Prompt = effectiveGoal
 
 	// Truncate pending steps: we want the LLM to redefine the future of the plan
 	// based on the new information/feedback.
@@ -749,7 +811,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			"3. GENERATE: Provide NEXT steps (starting from id %d). Follow the Strategies defined above.\n"+
 			"4. AVOID LOOPS: If the last completed step was an interactive agent (e.g. business-analyst) and the result was a confirmation/answer, DO NOT immediately schedule the same agent for the same task. Proceed to execution or the next phase.\n"+
 			"5. COMPLETION CHECK: If the 'current steps' have successfully achieved the 'Goal', you MUST return an empty JSON array `[]`. This will stop the plan.\n"+
-			"6. LANGUAGE: Ensure all generated content/parameters use the user's language: %s.\n"+
+			"6. LANGUAGE: Ensure all generated content/parameters use the user's language: %s. NO ENGLISH when not requested.\n"+
 			"7. OUTPUT: Return a JSON array of Step objects.",
 		string(stepsJSON),
 		plan.Files,
@@ -835,6 +897,14 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 					}
 				}
 			}
+		}
+
+		// Inject Language if missing (General Fix)
+		if s.Params == nil {
+			s.Params = make(map[string]interface{})
+		}
+		if _, ok := s.Params["language"]; !ok {
+			s.Params["language"] = plan.Intent.Language
 		}
 
 		// Resolve Dependencies
