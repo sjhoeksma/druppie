@@ -29,15 +29,16 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 
 			&AudioCreatorExecutor{},
 			&VideoCreatorExecutor{},
-			&ImageCreatorExecutor{},                             // Start valid Image Executor
-			&FileReaderExecutor{},                               // File Reader
-			&DeveloperExecutor{},                                // Developer (Code Creator)
-			&BuildExecutor{Builder: buildEngine},                // Helper for building code
-			&RunExecutor{Builder: buildEngine},                  // Helper for running code
-			&PluginExecutor{MCPManager: mcpManager},             // Plugin testing and promotion
-			&ComplianceExecutor{LLM: llmProvider},               // Compliance/Approval Handler
-			&StandardExecutor{StdCtx: stdCtx},                   // Standard/Infra Handler (Replaces InfrastructureExecutor)
-			&ArchitectExecutor{LLM: llmProvider, Registry: reg}, // Architect Handler
+			&ImageCreatorExecutor{},                                   // Start valid Image Executor
+			&FileReaderExecutor{},                                     // File Reader
+			&DeveloperExecutor{},                                      // Developer (Code Creator)
+			&BuildExecutor{Builder: buildEngine},                      // Helper for building code
+			&RunExecutor{Builder: buildEngine},                        // Helper for running code
+			&PluginExecutor{MCPManager: mcpManager},                   // Plugin testing and promotion
+			&ComplianceExecutor{LLM: llmProvider},                     // Compliance/Approval Handler
+			&BusinessAnalystExecutor{LLM: llmProvider, Registry: reg}, // Business Analyst Handler
+			&StandardExecutor{StdCtx: stdCtx},                         // Standard/Infra Handler (Replaces InfrastructureExecutor)
+			&ArchitectExecutor{LLM: llmProvider, Registry: reg},       // Architect Handler
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},

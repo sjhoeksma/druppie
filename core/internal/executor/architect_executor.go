@@ -31,7 +31,7 @@ func (e *ArchitectExecutor) CanHandle(action string) bool {
 		action == "roadmap-gaps" || action == "roadmap_gaps" ||
 		action == "roadmap-and-gaps" || action == "roadmap_and_gaps" ||
 		action == "review-governance" || action == "review_governance" || action == "review_and_governance" ||
-		action == "intake" || action == "completion"
+		action == "intake" || action == "completion" || action == "iteration"
 }
 
 func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
@@ -59,29 +59,64 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 			language = l
 		}
 
+		// Lookup Provider and Instructions if AgentID is known
+		var providerName string
+		var agentInstructions string
+
+		if e.Registry != nil && step.AgentID != "" {
+			if agent, err := e.Registry.GetAgent(step.AgentID); err == nil {
+				if agent.Provider != "" {
+					providerName = agent.Provider
+				}
+				if agent.Instructions != "" {
+					agentInstructions = agent.Instructions
+				}
+			}
+		}
+
 		// Construct System Prompt
 		systemPrompt := "You are an Enterprise Architect. Provide a structured architectural output in Markdown format."
+
+		// Use Agent Instructions if available (User Request)
+		if agentInstructions != "" {
+			systemPrompt = agentInstructions
+		}
+
 		if language != "" {
 			systemPrompt = fmt.Sprintf("IMPORTANT: You MUST write in %s language.\n%s", language, systemPrompt)
 		}
 
 		// Construct User Prompt with Context
 		userPrompt := fmt.Sprintf("Task: %s\n\nContext: %v", action, step.Params)
+
+		// Context Loading: Load previous architectural files (Session Handling via Filesystem)
+		filesDir, _ := paths.ResolvePath(".druppie", "plans", planID, "files")
+		if files, err := os.ReadDir(filesDir); err == nil {
+			var fileContext strings.Builder
+			fileContext.WriteString("\n\n--- EXISTING ARTIFACTS ---\n")
+			count := 0
+			for _, f := range files {
+				if strings.HasSuffix(f.Name(), ".md") {
+					content, _ := os.ReadFile(filepath.Join(filesDir, f.Name()))
+					// Avoid re-reading own output if retrying? No, good context.
+					fileContext.WriteString(fmt.Sprintf("File: %s\nContent:\n%s\n\n", f.Name(), string(content)))
+					count++
+				}
+			}
+			if count > 0 {
+				userPrompt += fileContext.String()
+				outputChan <- fmt.Sprintf("ArchitectExecutor: Loaded %d existing artifacts into context.", count)
+			}
+		}
+
 		if language != "" {
 			userPrompt += fmt.Sprintf("\n\nReminder: Output must be in %s.", language)
 		}
 
-		var err error
-		var providerName string
+		// Debug Logging (User Request)
+		outputChan <- fmt.Sprintf("LLM Prompt Length: %d chars. Context keys: %v", len(userPrompt), getKeys(step.Params))
 
-		// Lookup Provider if AgentID is known
-		if e.Registry != nil && step.AgentID != "" {
-			if agent, err := e.Registry.GetAgent(step.AgentID); err == nil {
-				if agent.Provider != "" {
-					providerName = agent.Provider
-				}
-			}
-		}
+		var err error
 
 		if providerName != "" {
 			if mgr, ok := e.LLM.(*llm.Manager); ok {
@@ -167,10 +202,21 @@ func (e *ArchitectExecutor) getFallbackResult(action string) string {
 	case "roadmap-gaps", "roadmap_gaps", "roadmap-and-gaps", "roadmap_and_gaps":
 		return "## Roadmap\n1. Phase 1: Foundation\n2. Phase 2: Migration"
 
-	case "review-governance", "review_governance":
+	case "review-governance", "review_governance", "review_and_governance":
 		return "## Governance Review\n**Status**: APPROVED\n\nAll architecture principles and compliance requirements have been met. Proceed to completion."
+
+	case "iteration":
+		return "## Iteration Update\nArchitecture updated based on feedback."
 
 	default:
 		return fmt.Sprintf("## Output for %s\nTask completed successfully.", action)
 	}
+}
+
+func getKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

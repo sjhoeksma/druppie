@@ -19,7 +19,8 @@ Strategies:
 1. **Reuse over Rebuild**: Check 'Available Tools'. If a block matches the need (e.g. 'ai-video-comfyui' for video), USE IT. Do NOT design generic architecture or provision generic clusters if a specific Block exists.
 2. **Ensure Availability**: Before using a Service Block, create a step for 'Infrastructure Engineer' to 'ensure_availability' of that block. This step must check status. IMPORTANT: Include a param 'if_missing' describing the deployment action (e.g. "Deploy ai-video-comfyui from Building Block Library") to execute if the block is not found.
 3. **Agent Priority**: Available Agents are listed in PRIORITY order. Highest priority agents (e.g. 'business-analyst') should typically lead the plan or be used for initial scoping.
-4. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
+4. **Scope Adherence (MVP Principle)**: Do NOT add 'nice-to-have' architectural blocks (e.g. Observability, GitOps, Vector DB, Data Lakes) unless (a) explicitly requested by the User, (b) required by a specific Compliance Policy, or (c) absolutely critical for the primary function. If the Goal is 'Deploy Database', focus on the Database and its direct Security/Networking. Avoid over-engineering.
+5. **Precision First**: Review the 'Goal' carefully. If the User has already provided details (e.g. duration, audience, platform), **DO NOT** ask for them again. 
 5. **Workflow-Driven Execution (MANDATORY)**:
    - **Check**: IF an Agent has a `Workflow` (Mermaid diagram), YOU MUST EXECUTE IT.
    - **Interpretation Rules (In Priority Order)**:
@@ -66,6 +67,7 @@ Strategies:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
    - **Stop Logic**:
      - If the Lead Agent workflow is done (`[*]`), return `[]`.
+     - **Execution**: If the last workflow step has completed successfully, the goal is met. STOP. Return `[]`.
      - **Loop Prevention (CRITICAL)**: If you see a completed sequence (e.g. `Deployment` -> `Verification` -> `Audit`), **DO NOT** repeat it. A successful Audit on a completed Deployment means the goal is met. STOP.
      - **Compliance Deduplication**: If an `audit_request` step is already `completed` or `requires_approval` in the history, **DO NOT** schedule another one unless the Intent has changed or a NEW critical violation was found. Assume one approval covers the plan execution.
      - **Idempotency**: Do not schedule `ensure_availability` or `create_repo` for items that are already 'completed' in the history.

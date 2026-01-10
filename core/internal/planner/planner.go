@@ -680,15 +680,25 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// --- AUTO-STOP LOGIC (OPTIMIZATION) ---
 	// If the workflow reaches a definitive terminal state, stop immediately to save tokens.
 	if len(completedSteps) > 0 {
-		lastStep := completedSteps[len(completedSteps)-1]
-		// Hard Stop for 'promote_plugin' (Terminal action for Plugin workflow)
-		if lastStep.Action == "promote_plugin" ||
-			lastStep.Action == "run_code" ||
-			lastStep.Action == "tool_usage" {
-			if p.Store != nil {
-				_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
+		var lastStep *model.Step
+		// Find last meaningful step (ignore replanning)
+		for i := len(completedSteps) - 1; i >= 0; i-- {
+			if completedSteps[i].Action != "replanning" {
+				lastStep = &completedSteps[i]
+				break
 			}
-			return plan, nil
+		}
+
+		if lastStep != nil {
+			// Hard Stop for 'promote_plugin' (Terminal action for Plugin workflow)
+			if lastStep.Action == "promote_plugin" ||
+				lastStep.Action == "run_code" ||
+				lastStep.Action == "tool_usage" {
+				if p.Store != nil {
+					_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
+				}
+				return plan, nil
+			}
 		}
 	}
 	// --------------------------------
@@ -917,6 +927,32 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 				}
 			} else if f, ok := ps.DependsOnRaw.(float64); ok {
 				s.DependsOn = append(s.DependsOn, int(f))
+			}
+		}
+
+		// --- Duplicate Audit Prevention (User Request) ---
+		if s.Action == "audit_request" {
+			auditSatisfied := false
+			// Check history
+			for _, prev := range plan.Steps {
+				if prev.Action == "audit_request" && (prev.Status == "completed" || prev.Status == "requires_approval") {
+					auditSatisfied = true
+					break
+				}
+			}
+			// Check current batch
+			if !auditSatisfied {
+				for _, pending := range newSteps {
+					if pending.Action == "audit_request" {
+						auditSatisfied = true // Already added one in this batch
+						break
+					}
+				}
+			}
+
+			if auditSatisfied {
+				// SKIP this duplicate audit
+				continue
 			}
 		}
 

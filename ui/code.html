@@ -17,6 +17,7 @@
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="common.css">
     <script src="common.js"></script>
     <style>
@@ -33,8 +34,12 @@
             display: flex;
             flex-direction: column;
             transition: transform 0.3s ease;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
         }
 
+        /* ... existing sidebar ... */
         .sidebar-header {
             padding: 0.6rem 1rem;
             border-bottom: 1px solid var(--border);
@@ -44,6 +49,94 @@
             align-items: center;
         }
 
+        /* Markdown Preview Styles */
+        #markdown-preview {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-deep);
+            line-height: 1.6;
+        }
+
+        #markdown-preview h1,
+        #markdown-preview h2,
+        #markdown-preview h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+
+        #markdown-preview p {
+            margin-bottom: 1rem;
+        }
+
+        #markdown-preview pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+
+        #markdown-preview code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.2rem;
+            font-size: 0.85em;
+        }
+
+        #markdown-preview pre code {
+            background: transparent;
+            padding: 0;
+            font-size: 0.9em;
+        }
+
+        #markdown-preview ul,
+        #markdown-preview ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        #markdown-preview blockquote {
+            border-left: 4px solid var(--accent);
+            padding-left: 1rem;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+
+        #markdown-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+            font-size: 0.9em;
+        }
+
+        #markdown-preview th,
+        #markdown-preview td {
+            border: 1px solid var(--border);
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+        }
+
+        #markdown-preview th {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        #markdown-preview tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        #markdown-preview tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* ... rest of styles ... */
         #file-tree {
             flex: 1;
             overflow-y: auto;
@@ -81,6 +174,8 @@
             position: relative;
             display: flex;
             flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
 
         #editor-header {
@@ -233,7 +328,14 @@
         <div id="editor-header">
             <button id="menu-toggle" onclick="toggleSidebar()"><i data-lucide="menu" style="width:20px;"></i></button>
             <span id="current-file">No file selected</span>
-            <div style="display:flex; gap:0.5rem;">
+
+            <!-- Toggle View Button for Markdown -->
+            <button id="toggle-view-btn" class="btn btn-secondary" onclick="toggleView()"
+                style="display:none; margin-right:auto; margin-left:1rem; padding:0.25rem 0.5rem; font-size:0.8rem;">
+                <i data-lucide="eye" style="width:14px; margin-right:4px;"></i> Preview
+            </button>
+
+            <div style="display:flex; gap:0.5rem; margin-left:auto;">
                 <button class="btn" style="background:#22c55e;" onclick="saveFile()"><span
                         class="btn-text">Save</span><i data-lucide="save" style="width:16px;"></i></button>
                 <button class="btn btn-secondary"
@@ -242,6 +344,7 @@
             </div>
         </div>
         <div id="monaco"></div>
+        <div id="markdown-preview"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
@@ -250,6 +353,9 @@
         const planID = urlParams.get('plan_id');
         let editor;
         let currentPath = null;
+        let isMarkdown = false;
+        let isPreviewMode = false;
+        let fileContent = '';
 
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
         require(['vs/editor/editor.main'], function () {
@@ -268,28 +374,21 @@
 
         // Auth Failure Handler (called by common.js)
         window.onAuthFailure = function () {
-            const container = document.getElementById('file-tree');
-            container.innerHTML = `
-                <div style="padding:1rem;color:var(--text-dim);font-size:0.9rem;text-align:center;">
-                    <div style="margin-bottom:0.5rem;">Authentication Required</div>
-                    <button class="btn" style="font-size:0.8rem;" onclick="window.location.href='/ui/index.html'">Login</button>
-                </div>`;
+            // ... existing ...
         };
 
+        // ... existing refreshFiles and tree logic ...
         async function refreshFiles() {
             if (!planID) {
                 document.getElementById('file-tree').innerText = 'No Plan ID provided';
                 return;
             }
             try {
-                // List files API
                 const res = await fetch(`/v1/plans/${planID}/files`);
-
                 if (!res.ok) {
-                    if (res.status === 401) return; // Handled by onAuthFailure/interceptor
+                    if (res.status === 401) return;
                     throw new Error(`Server returned ${res.status}`);
                 }
-
                 const files = await res.json();
                 renderTree(files);
             } catch (e) {
@@ -394,67 +493,38 @@
             });
         }
 
-
-        async function saveFile() {
-            if (!currentPath) return;
-            const content = editor.getValue();
-            try {
-                // Ensure query param path is encoded
-                await fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(currentPath)}`, {
-                    method: 'PUT',
-                    body: content
-                });
-                // Flash success
-                const btn = document.querySelector('button[onclick="saveFile()"]');
-                const originalContent = btn.innerHTML;
-                btn.innerHTML = '<span class="btn-text">Saved!</span><i data-lucide="check" style="width:16px;"></i>';
-                lucide.createIcons();
-                setTimeout(() => {
-                    btn.innerHTML = originalContent;
-                    lucide.createIcons();
-                }, 2000);
-            } catch (e) {
-                alert('Failed to save');
-            }
-        }
-
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('open');
-        }
-
-        // Close sidebar on file selection (mobile)
         function loadFile(path) {
             currentPath = path;
             document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
-            // Highlight the clicked one is hard with recursive gen without IDs. 
-            // We can rely on css :active or re-implement selection logic later.
-
             document.getElementById('current-file').innerText = path;
 
-            // Close sidebar on mobile
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('open');
+            }
+
+            // Markdown Logic
+            isMarkdown = path.endsWith('.md');
+            isPreviewMode = isMarkdown; // Default to viewer for MD
+
+            const toggleBtn = document.getElementById('toggle-view-btn');
+            if (isMarkdown) {
+                toggleBtn.style.display = 'inline-flex';
+                updateToggleBtn();
+            } else {
+                toggleBtn.style.display = 'none';
+                isPreviewMode = false;
             }
 
             try {
                 fetch(`/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`)
                     .then(res => res.text())
                     .then(content => {
-                        editor.setValue(content);
-
-                        // Detect language
-                        let lang = 'plaintext';
-                        if (path.endsWith('.js')) lang = 'javascript';
-                        if (path.endsWith('.py')) lang = 'python';
-                        if (path.endsWith('.go')) lang = 'go';
-                        if (path.endsWith('.html')) lang = 'html';
-                        if (path.endsWith('.json')) lang = 'json';
-                        if (path.endsWith('.md')) lang = 'markdown';
-                        if (path.endsWith('.yaml') || path.endsWith('.yml')) lang = 'yaml';
-                        if (path.endsWith('.css')) lang = 'css';
-                        if (path.endsWith('.sh')) lang = 'shell';
-                        monaco.editor.setModelLanguage(editor.getModel(), lang);
+                        fileContent = content;
+                        if (isMarkdown && isPreviewMode) {
+                            showPreview(content);
+                        } else {
+                            showEditor(content, path);
+                        }
                     })
                     .catch(e => {
                         editor.setValue('Error loading file');
@@ -462,6 +532,69 @@
             } catch (e) {
                 editor.setValue('Error loading file');
             }
+        }
+
+        function toggleView() {
+            if (!isMarkdown) return;
+
+            // Sync content from editor if switching TO preview
+            if (!isPreviewMode) {
+                fileContent = editor.getValue();
+            }
+
+            isPreviewMode = !isPreviewMode;
+            updateToggleBtn();
+
+            if (isPreviewMode) {
+                showPreview(fileContent);
+            } else {
+                showEditor(fileContent, currentPath);
+            }
+        }
+
+        function updateToggleBtn() {
+            const btn = document.getElementById('toggle-view-btn');
+            if (isPreviewMode) {
+                btn.innerHTML = '<i data-lucide="code" style="width:14px; margin-right:4px;"></i> Code';
+                btn.title = "Switch to Code Editor";
+            } else {
+                btn.innerHTML = '<i data-lucide="eye" style="width:14px; margin-right:4px;"></i> Preview';
+                btn.title = "Switch to Preview";
+            }
+            lucide.createIcons();
+        }
+
+        function showPreview(content) {
+            document.getElementById('monaco').style.display = 'none';
+            const preview = document.getElementById('markdown-preview');
+            preview.style.display = 'block';
+            // Parse Markdown
+            if (typeof marked !== 'undefined') {
+                preview.innerHTML = marked.parse(content);
+            } else {
+                preview.innerHTML = '<div style="padding:1rem;">Marked.js not loaded</div>';
+            }
+        }
+
+        function showEditor(content, path) {
+            document.getElementById('markdown-preview').style.display = 'none';
+            document.getElementById('monaco').style.display = 'block';
+            editor.setValue(content);
+
+            // Detect language
+            let lang = 'plaintext';
+            if (path) {
+                if (path.endsWith('.js')) lang = 'javascript';
+                if (path.endsWith('.py')) lang = 'python';
+                if (path.endsWith('.go')) lang = 'go';
+                if (path.endsWith('.html')) lang = 'html';
+                if (path.endsWith('.json')) lang = 'json';
+                if (path.endsWith('.md')) lang = 'markdown';
+                if (path.endsWith('.yaml') || path.endsWith('.yml')) lang = 'yaml';
+                if (path.endsWith('.css')) lang = 'css';
+                if (path.endsWith('.sh')) lang = 'shell';
+            }
+            monaco.editor.setModelLanguage(editor.getModel(), lang);
         }
 
         // Initialize icons after DOM updates
