@@ -6,6 +6,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
+	"github.com/sjhoeksma/druppie/core/internal/registry"
 )
 
 // Dispatcher selects the correct executor for a step
@@ -13,7 +14,7 @@ type Dispatcher struct {
 	executors []Executor
 }
 
-func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llmProvider llm.Provider) *Dispatcher {
+func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llmProvider llm.Provider, reg *registry.Registry) *Dispatcher {
 	stdCtx := &StandardContext{
 		MCPManager:      mcpManager,
 		StandardActions: &StandardActions{},
@@ -28,15 +29,15 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 
 			&AudioCreatorExecutor{},
 			&VideoCreatorExecutor{},
-			&ImageCreatorExecutor{},                 // Start valid Image Executor
-			&FileReaderExecutor{},                   // File Reader
-			&DeveloperExecutor{},                    // Developer (Code Creator)
-			&BuildExecutor{Builder: buildEngine},    // Helper for building code
-			&RunExecutor{Builder: buildEngine},      // Helper for running code
-			&PluginExecutor{MCPManager: mcpManager}, // Plugin testing and promotion
-			&ComplianceExecutor{LLM: llmProvider},   // Compliance/Approval Handler
-			&StandardExecutor{StdCtx: stdCtx},       // Standard/Infra Handler (Replaces InfrastructureExecutor)
-			&ArchitectExecutor{LLM: llmProvider},    // Architect Handler
+			&ImageCreatorExecutor{},                             // Start valid Image Executor
+			&FileReaderExecutor{},                               // File Reader
+			&DeveloperExecutor{},                                // Developer (Code Creator)
+			&BuildExecutor{Builder: buildEngine},                // Helper for building code
+			&RunExecutor{Builder: buildEngine},                  // Helper for running code
+			&PluginExecutor{MCPManager: mcpManager},             // Plugin testing and promotion
+			&ComplianceExecutor{LLM: llmProvider},               // Compliance/Approval Handler
+			&StandardExecutor{StdCtx: stdCtx},                   // Standard/Infra Handler (Replaces InfrastructureExecutor)
+			&ArchitectExecutor{LLM: llmProvider, Registry: reg}, // Architect Handler
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},

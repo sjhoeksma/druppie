@@ -39,7 +39,7 @@
 - [X] Fix:logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 
-- [ ] Check if using provider in header
+- [x] Check if using provider in header
 - [ ] Add in video_flow the steps to select provider, per prompt
 - [ ] Planner next steps should have own task
 - [ ] Kanban also focus last completed task

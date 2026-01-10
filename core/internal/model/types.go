@@ -109,7 +109,6 @@ type AgentDefinition struct {
 	Description  string            `json:"description" yaml:"description"`
 	Instructions string            `json:"instructions" yaml:"instructions"` // Inline system prompt
 	Provider     string            `json:"provider" yaml:"provider"`         //When empty use default provider
-	Model        string            `json:"model" yaml:"model"`               //When empty use default model
 	Skills       []string          `json:"skills" yaml:"skills"`
 	Tools        []string          `json:"tools" yaml:"tools"`                         // References to BuildingBlocks or MCPs
 	SubAgents    []string          `json:"sub_agents" yaml:"sub_agents"`               // List of agent IDs that this agent orchestrates

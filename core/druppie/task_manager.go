@@ -59,7 +59,7 @@ func NewTaskManager(p *planner.Planner, mcpMgr *mcp.Manager, buildEngine builder
 		planner:         p,
 		OutputChan:      make(chan string, 100),
 		TaskDoneChan:    make(chan string, 10),
-		dispatcher:      executor.NewDispatcher(buildEngine, mcpMgr, p.GetLLM()),
+		dispatcher:      executor.NewDispatcher(buildEngine, mcpMgr, p.GetLLM(), p.Registry),
 		workflowManager: workflows.NewManager(),
 		MCPManager:      mcpMgr,
 	}

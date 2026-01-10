@@ -360,12 +360,22 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			Status:  "running",
 		})
 
-		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Refine Intent", sysPrompt+"\nUser Request: "+prompt)
-		if wc.UpdateTokenUsage != nil {
-			wc.UpdateTokenUsage(usage)
+		// Retrieve Provider from Agent Definition
+		var providerName string
+		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+			providerName = agent.Provider
+		}
+
+		resp, usagePtr, err := wc.CallLLM(sysPrompt+"\nUser Request: "+prompt, "Refine Intent", providerName)
+		if wc.UpdateTokenUsage != nil && usagePtr != nil {
+			wc.UpdateTokenUsage(*usagePtr)
 		}
 		if err != nil {
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: &usage})
+			usageVal := model.TokenUsage{} // Default empty
+			if usagePtr != nil {
+				usageVal = *usagePtr
+			}
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: &usageVal})
 			return ProjectIntent{}, err
 		}
 
@@ -507,13 +517,22 @@ Key Rules:
 		// Replace placeholders
 		sysPrompt = strings.ReplaceAll(sysPrompt, "%LANGUAGE%", intent.Language)
 
-		resp, usage, err := wc.LLM.Generate(wc.Ctx, "Draft Script", sysPrompt+"\nRequest: "+currentPrompt)
-		if wc.UpdateTokenUsage != nil {
-			wc.UpdateTokenUsage(usage)
+		// Retrieve Provider from Agent Definition
+		var providerName string
+		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+			providerName = agent.Provider
+		}
+
+		resp, usagePtr, err := wc.CallLLM(sysPrompt+"\nRequest: "+currentPrompt, "Draft Script", providerName)
+		if wc.UpdateTokenUsage != nil && usagePtr != nil {
+			wc.UpdateTokenUsage(*usagePtr)
 		}
 		if err != nil {
-			// Mark failed if LLM fails
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: &usage})
+			usageVal := model.TokenUsage{}
+			if usagePtr != nil {
+				usageVal = *usagePtr
+			}
+			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: &usageVal})
 			return AVScript{}, err
 		}
 

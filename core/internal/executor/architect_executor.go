@@ -10,11 +10,13 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/paths"
+	"github.com/sjhoeksma/druppie/core/internal/registry"
 )
 
 // ArchitectExecutor handles high-level architectural design tasks
 type ArchitectExecutor struct {
-	LLM llm.Provider
+	LLM      llm.Provider
+	Registry *registry.Registry
 }
 
 func (e *ArchitectExecutor) CanHandle(action string) bool {
@@ -55,7 +57,26 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 		prompt := fmt.Sprintf("You are an Enterprise Architect. Task: %s\n\nContext: %v\n\nProvide a structured architectural output in Markdown format.", action, step.Params)
 
 		var err error
-		result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+		var providerName string
+
+		// Lookup Provider if AgentID is known
+		if e.Registry != nil && step.AgentID != "" {
+			if agent, err := e.Registry.GetAgent(step.AgentID); err == nil {
+				if agent.Provider != "" {
+					providerName = agent.Provider
+				}
+			}
+		}
+
+		if providerName != "" {
+			if mgr, ok := e.LLM.(*llm.Manager); ok {
+				result, usage, err = mgr.GenerateWithProvider(ctx, providerName, fmt.Sprintf("Architect: %s", action), prompt)
+			} else {
+				result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+			}
+		} else {
+			result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+		}
 		if err != nil {
 			outputChan <- fmt.Sprintf("LLM generation failed: %v. Using fallback.", err)
 			result = e.getFallbackResult(action)
