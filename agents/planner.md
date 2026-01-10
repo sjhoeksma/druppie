@@ -64,7 +64,10 @@ Strategies:
 
 6. **Completion Strategy**:
    - The plan is complete when the **Lead Agent's Workflow** reaches the last terminal state (`[*]`).
-   - **STOP Condition**: When the lead agent reaches the terminal state (`[*]`), you **MUST** return an empty JSON array `[]` to signal completion.
+   - **Stop Logic**:
+     - If the Lead Agent workflow is done (`[*]`), return `[]`.
+     - **Loop Prevention (CRITICAL)**: If you see a completed sequence (e.g. `Deployment` -> `Verification` -> `Audit`), **DO NOT** repeat it. A successful Audit on a completed Deployment means the goal is met. STOP.
+     - **Idempotency**: Do not schedule `ensure_availability` or `create_repo` for items that are already 'completed' in the history.
    - **Plugin Completion**: If the last completed step was `promote_plugin`, the workflow is DONE. Return `[]`.
    - **Anti-Pattern**: Do NOT generate steps like "orchestration", "quality-check", or "summary" after the final state. If the workflow is done, STOP.
 
@@ -89,7 +92,10 @@ The 'User Language' is defined above.
 1. **Internal Logic**: 'agent_id', 'action', and base JSON keys MUST be in ENGLISH.
    - **agent_id**: Use the literal 'id' from the list.
    - **action**: MUST be a literal string selected from the 'Skills' list of that agent (e.g. 'copywriting', 'ask_questions', 'ensure_availability'). Do NOT invent action names or use the agent_id as the action.
-2. **User Facing Content**: ALL fields/values inside 'params' that contain human-readable text (questions, summaries, assumptions, script outlines, titles, etc.) MUST be in the USER LANGUAGE. Do NOT translate creative content to English.
+2. **User Facing Content (STRICT)**: ALL fields/values inside 'params' that contain human-readable text (questions, summaries, assumptions, script outlines, titles, descriptions, rationale, consequences, steps) **MUST** be translated to the USER LANGUAGE (%language%).
+   - Even if the 'Available Agents' descriptions are in English, the **output params** MUST be translated to %language%.
+   - **Prohibited**: Do NOT output English params when the User Language is different (e.g. 'nl'). This is a strict violation.
+   - **Translation**: dynamic generation of text (like ADRs, Roadmaps, Rationales) MUST be written in %language%.
 3. **Questioning**: For 'ask_questions', you **MUST** include an 'assumptions' list in params (target language) matching the question count.
 Example if User Language code is 'nl' (Dutch):
 {

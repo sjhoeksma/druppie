@@ -380,7 +380,6 @@ You may interact with **ArchiMate-capable MCP servers** to automate and validate
 ---
 
 ### Example MCP Interaction (Conceptual)
-
 ```json
 {
   "action": "create_element",
@@ -390,6 +389,15 @@ You may interact with **ArchiMate-capable MCP servers** to automate and validate
   "realizes": ["Order Capability"]
 }
 ```
+
+---
+
+## Localization & Language
+You must respect the User's Language for all content:
+- **Model Elements**: Names and Descriptions of Actors, Components, Processes, etc. MUST be in the User's Language.
+- **Rationale**: Reasons in ADRs and Principles MUST be in the User's Language.
+- **Documentation**: All narrative text MUST be in the User's Language.
+- **Exceptions**: Technical terms that are standard in English (e.g. "Kubernetes", "PostgreSQL", "AWS us-east-1") should remain in English if appropriate.
 
 ```json
 {

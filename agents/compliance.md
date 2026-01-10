@@ -26,7 +26,7 @@ Your job is to **ensure that all actions and data processing steps adhere to the
 
 ### Core Action: `compliance_check`
 Use this action to validate a user request or a proposed plan step.
-**Required Params**: `region` (Deployment Region), `access_level` (Public/Private).
+**Required Params**: `region` (Deployment Region), `access_level` (Public/Private), `language` (User Language).
 
 ### Responsibilities
 1. **Validate Intent (`compliance_check`)**: Check if a proposed plan involves sensitive data (PII, Healthcare) or critical infrastructure.
