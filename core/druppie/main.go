@@ -151,10 +151,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 		mcpManager := mcp.NewManager(context.Background(), druppieStore, reg)
 
 		// Initialize Memory Manager
-		memManager := memory.NewManager(cfg.Memory.MaxWindowTokens, druppieStore)
+		memManager := memory.NewManager(cfg.General.Memory.MaxWindowTokens, druppieStore)
 
 		r := router.NewRouter(llmManager, druppieStore, reg, debug)
-		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, memManager, cfg.Planner.MaxAgentSelection, debug)
+		p := planner.NewPlanner(llmManager, reg, druppieStore, mcpManager, memManager, cfg.General.MaxAgentSelection, debug)
 
 		iamProv, err := iam.NewProvider(cfg.IAM, rootDir)
 		if err != nil {
@@ -180,7 +180,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			go func() {
 				storeDir, err := paths.ResolvePath(".druppie")
 				if err == nil {
-					cleanupDays := cfg.Server.CleanupDays
+					cleanupDays := cfg.General.CleanupDays
 					if cleanupDays <= 0 {
 						cleanupDays = 7 // Default fallback if config missing
 					}
@@ -810,7 +810,38 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 
 					r.Get("/tools", func(w http.ResponseWriter, r *http.Request) {
 						w.Header().Set("Content-Type", "application/json")
-						json.NewEncoder(w).Encode(manager.ListAllTools())
+
+						// Auth Check
+						user, _ := iamProvider.GetUser(r)
+						var groups []string
+						if user != nil {
+							groups = user.Groups
+						}
+
+						// Build ACL
+						authorizedMap := make(map[string]bool)
+						allRegistryMap := make(map[string]bool)
+						for _, s := range reg.ListMCPServers(groups) {
+							authorizedMap[s.Name] = true
+						}
+						for _, s := range reg.ListAllMCPServers() {
+							allRegistryMap[s.Name] = true
+						}
+
+						allTools := manager.ListAllTools()
+						var filteredTools []mcp.Tool
+
+						for _, t := range allTools {
+							srv, _ := manager.GetToolServer(t.Name)
+							if allRegistryMap[srv] {
+								if !authorizedMap[srv] {
+									continue
+								}
+							}
+							filteredTools = append(filteredTools, t)
+						}
+
+						json.NewEncoder(w).Encode(filteredTools)
 					})
 				})
 
@@ -1476,7 +1507,7 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			fs := http.FileServer(http.Dir(staticRoot))
 			r.Handle("/*", fs)
 
-			port := cfg.Server.Port
+			port := cfg.General.ServerPort
 			if port == "" {
 				port = "8080"
 			}

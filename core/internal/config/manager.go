@@ -12,17 +12,19 @@ import (
 // Config holds the runtime configuration
 type Config struct {
 	LLM            LLMConfig           `yaml:"llm" json:"llm"`
-	Server         ServerConfig        `yaml:"server" json:"server"`
 	Build          BuildConfig         `yaml:"build" json:"build"`
 	Git            GitConfig           `yaml:"git" json:"git"`
 	IAM            IAMConfig           `yaml:"iam" json:"iam"`
-	Memory         MemoryConfig        `yaml:"memory" json:"memory"`
-	Planner        PlannerConfig       `yaml:"planner" json:"planner"`
 	ApprovalGroups map[string][]string `yaml:"approval_groups" json:"approval_groups"`
+	General        GeneralConfig       `yaml:"general" json:"general"`
 }
 
-type PlannerConfig struct {
-	MaxAgentSelection int `yaml:"max_agent_selection" json:"max_agent_selection"`
+type GeneralConfig struct {
+	MaxUnattendedCost float64      `yaml:"max_unattended_cost" json:"max_unattended_cost"`
+	ServerPort        string       `yaml:"server_port" json:"server_port"`
+	CleanupDays       int          `yaml:"cleanup_days" json:"cleanup_days"`
+	MaxAgentSelection int          `yaml:"max_agent_selections" json:"max_agent_selections"`
+	Memory            MemoryConfig `yaml:"memory" json:"memory"`
 }
 
 type MemoryConfig struct {
@@ -70,21 +72,16 @@ type LLMConfig struct {
 	Providers       map[string]ProviderConfig `yaml:"providers" json:"providers"`
 }
 
-
 type ProviderConfig struct {
-	Type                     string  `yaml:"type" json:"type"` // "gemini", "ollama", "lmstudio"
-	APIKey                   string  `yaml:"api_key,omitempty" json:"api_key,omitempty"`
-	Model                    string  `yaml:"model,omitempty" json:"model,omitempty"` // Default model for this provider
-	URL                      string  `yaml:"url,omitempty" json:"url,omitempty"`     // For local LLMs
-	ProjectID                string  `yaml:"project_id,omitempty" json:"project_id,omitempty"`
-	ClientID                 string  `yaml:"client_id,omitempty" json:"client_id,omitempty"`
-	ClientSecret             string  `yaml:"client_secret,omitempty" json:"client_secret,omitempty"`
-	PricePerPromptToken      float64 `yaml:"price_per_prompt_token,omitempty" json:"price_per_prompt_token,omitempty"`           // € per 1M tokens
-	PricePerCompletionToken  float64 `yaml:"price_per_completion_token,omitempty" json:"price_per_completion_token,omitempty"` // € per 1M tokens
-}
-type ServerConfig struct {
-	Port        string `yaml:"port" json:"port"`
-	CleanupDays int    `yaml:"cleanup_days" json:"cleanup_days"`
+	Type                    string  `yaml:"type" json:"type"` // "gemini", "ollama", "lmstudio"
+	APIKey                  string  `yaml:"api_key,omitempty" json:"api_key,omitempty"`
+	Model                   string  `yaml:"model,omitempty" json:"model,omitempty"` // Default model for this provider
+	URL                     string  `yaml:"url,omitempty" json:"url,omitempty"`     // For local LLMs
+	ProjectID               string  `yaml:"project_id,omitempty" json:"project_id,omitempty"`
+	ClientID                string  `yaml:"client_id,omitempty" json:"client_id,omitempty"`
+	ClientSecret            string  `yaml:"client_secret,omitempty" json:"client_secret,omitempty"`
+	PricePerPromptToken     float64 `yaml:"price_per_prompt_token,omitempty" json:"price_per_prompt_token,omitempty"`         // € per 1M tokens
+	PricePerCompletionToken float64 `yaml:"price_per_completion_token,omitempty" json:"price_per_completion_token,omitempty"` // € per 1M tokens
 }
 
 // Manager handles concurrent access to the configuration
@@ -94,7 +91,7 @@ type Manager struct {
 	store  store.Store
 }
 
-
+// NewManager creates a new config manager and loads the config from store
 // NewManager creates a new config manager and loads the config from store
 func NewManager(s store.Store) (*Manager, error) {
 	mgr := &Manager{
@@ -106,23 +103,29 @@ func NewManager(s store.Store) (*Manager, error) {
 				Retries:         3,
 				Providers: map[string]ProviderConfig{
 					"ollama": {
-						Type:                     "ollama",
-						Model:                    "qwen3:8b",
-						URL:                      "http://localhost:11434",
-						PricePerPromptToken:      0.0,  // Free for local models
-						PricePerCompletionToken:  0.0,
+						Type:                    "ollama",
+						Model:                   "qwen3:8b",
+						URL:                     "http://localhost:11434",
+						PricePerPromptToken:     0.0, // Free for local models
+						PricePerCompletionToken: 0.0,
 					},
 					"gemini": {
-						Type:                     "gemini",
-						Model:                    "gemini-2.0-flash-exp",
-						PricePerPromptToken:      0.075, // €0.075 per 1M input tokens
-						PricePerCompletionToken:  0.30,  // €0.30 per 1M output tokens
+						Type:                    "gemini",
+						Model:                   "gemini-2.0-flash-exp",
+						PricePerPromptToken:     0.075, // €0.075 per 1M input tokens
+						PricePerCompletionToken: 0.30,  // €0.30 per 1M output tokens
 					},
 				},
 			},
-			Server: ServerConfig{
-				Port:        "8080",
-				CleanupDays: 7,
+			General: GeneralConfig{
+				MaxUnattendedCost: 1.0,
+				ServerPort:        "8080",
+				CleanupDays:       7,
+				MaxAgentSelection: 3,
+				Memory: MemoryConfig{
+					MaxWindowTokens: 12000,
+					SummarizeAfter:  20,
+				},
 			},
 			Build: BuildConfig{
 				DefaultProvider: "local",
@@ -144,13 +147,6 @@ func NewManager(s store.Store) (*Manager, error) {
 			IAM: IAMConfig{
 				Provider: "local",
 			},
-			Memory: MemoryConfig{
-				MaxWindowTokens: 12000,
-				SummarizeAfter:  20,
-			},
-			Planner: PlannerConfig{
-				MaxAgentSelection: 3,
-			},
 		},
 	}
 
@@ -167,6 +163,7 @@ func NewManager(s store.Store) (*Manager, error) {
 
 	return mgr, nil
 }
+
 // Load reads the config from store
 func (m *Manager) Load() error {
 	m.mu.Lock()
@@ -264,12 +261,12 @@ func (m *Manager) loadEnv() {
 		}
 	}
 	if port := os.Getenv("PORT"); port != "" {
-		m.config.Server.Port = port
+		m.config.General.ServerPort = port
 	}
 	if cleanup := os.Getenv("CLEANUP_DAYS"); cleanup != "" {
 		var days int
 		if _, err := fmt.Sscanf(cleanup, "%d", &days); err == nil && days > 0 {
-			m.config.Server.CleanupDays = days
+			m.config.General.CleanupDays = days
 		}
 	}
 	if iam := os.Getenv("IAM_PROVIDER"); iam != "" {

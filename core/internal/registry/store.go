@@ -170,3 +170,26 @@ func (r *Registry) Stats() map[string]int {
 		"compliance_rules": len(r.Compliance),
 	}
 }
+
+// GetMCPServer retrieves an MCP server definition by ID
+func (r *Registry) GetMCPServer(id string) (model.MCPServer, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if val, ok := r.MCPServers[id]; ok {
+		return val, nil
+	}
+	return model.MCPServer{}, fmt.Errorf("mcp server %s not found", id)
+}
+
+// ListAllMCPServers returns all MCP servers without filtering
+func (r *Registry) ListAllMCPServers() []model.MCPServer {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	list := make([]model.MCPServer, 0, len(r.MCPServers))
+	for _, v := range r.MCPServers {
+		list = append(list, v)
+	}
+	return list
+}

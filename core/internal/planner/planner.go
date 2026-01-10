@@ -191,10 +191,33 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 
 	// Add MCP Tools from Running Servers (Dynamic Discovery)
 	if p.MCPManager != nil {
+		// --- AUTH CHECK ---
+		authorizedMap := make(map[string]bool)
+		allRegistryMap := make(map[string]bool)
+
+		// ListMCPServers filters by groups
+		for _, s := range p.Registry.ListMCPServers(userGroups) {
+			authorizedMap[s.Name] = true
+		}
+		// ListAllMCPServers returns everything
+		for _, s := range p.Registry.ListAllMCPServers() {
+			allRegistryMap[s.Name] = true
+		}
+
 		mcpTools := p.MCPManager.ListAllTools()
 		for _, t := range mcpTools {
 			// Find server for tool to create Namespaced Name
 			srv, _ := p.MCPManager.GetToolServer(t.Name)
+
+			// Check Access
+			if allRegistryMap[srv] {
+				// If it is a Registry-managed server, it MUST be authorized
+				if !authorizedMap[srv] {
+					continue // Restricted
+				}
+			}
+			// If not in RegistryMap, it is Dynamic -> Allowed by default logic
+
 			// Format schema for Planner (JSON)
 			schemaBytes, _ := json.Marshal(t.InputSchema)
 			schemaStr := string(schemaBytes)
@@ -625,9 +648,32 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 	// Add Dynamic MCP Tools to UpdatePlan Context (Previously Missing)
 	if p.MCPManager != nil {
+		// --- AUTH CHECK ---
+		authorizedMap := make(map[string]bool)
+		allRegistryMap := make(map[string]bool)
+
+		// ListMCPServers filters by groups
+		for _, s := range p.Registry.ListMCPServers(userGroups) {
+			authorizedMap[s.Name] = true
+		}
+		// ListAllMCPServers returns everything
+		for _, s := range p.Registry.ListAllMCPServers() {
+			allRegistryMap[s.Name] = true
+		}
+
 		mcpTools := p.MCPManager.ListAllTools()
 		for _, t := range mcpTools {
 			srv, _ := p.MCPManager.GetToolServer(t.Name)
+
+			// Check Access
+			if allRegistryMap[srv] {
+				// If it is a Registry-managed server, it MUST be authorized
+				if !authorizedMap[srv] {
+					continue // Restricted
+				}
+			}
+			// If not in RegistryMap, it is Dynamic -> Allowed by default logic
+
 			schemaBytes, _ := json.Marshal(t.InputSchema)
 			schemaStr := string(schemaBytes)
 			if len(schemaStr) > 200 {

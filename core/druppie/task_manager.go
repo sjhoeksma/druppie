@@ -459,6 +459,58 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 			// Proceed
 		}
 
+		// --- COST SAFETY NET CHECK ---
+		// Load config to check limits
+		var safetyCfg config.Config
+		if cfgBytes, err := tm.planner.Store.LoadConfig(); err == nil {
+			_ = yaml.Unmarshal(cfgBytes, &safetyCfg)
+		}
+		// Default to 1.0 if not set or 0
+		maxCost := safetyCfg.General.MaxUnattendedCost
+		if maxCost <= 0 {
+			maxCost = 1.0
+		}
+
+		currentUnattended := task.Plan.TotalCost - task.Plan.LastInteractionTotalCost
+		if currentUnattended > maxCost {
+			tm.OutputChan <- fmt.Sprintf("⚠️ [Safety Net] Unattended cost (€%.4f) exceeds limit (€%.2f). Pausing.", currentUnattended, maxCost)
+			tm.OutputChan <- "Options: '/continue' (resets limit) | '/stop'"
+
+			// Set Status Waiting
+			task.Status = TaskStatusWaitingInput
+			tm.mu.Lock()
+			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+				p.Status = "waiting_input"
+				// No specific step is waiting, just the plan
+				tm.updatePlanCost(&p)
+				_ = tm.planner.Store.SavePlan(p)
+			}
+			tm.mu.Unlock()
+
+			// Wait for input
+			select {
+			case <-task.Ctx.Done():
+				continue // Loop will handle Done at top
+			case answer := <-task.InputChan:
+				tm.OutputChan <- fmt.Sprintf("[%s] Safety check accepted: %s", task.ID, answer)
+				// Reset Cost Tracker
+				task.Plan.LastInteractionTotalCost = task.Plan.TotalCost
+
+				// Update persistent plan
+				tm.mu.Lock()
+				if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
+					p.LastInteractionTotalCost = task.Plan.TotalCost
+					p.Status = "running"
+					tm.updatePlanCost(&p)
+					_ = tm.planner.Store.SavePlan(p)
+				}
+				tm.mu.Unlock()
+				task.Status = TaskStatusRunning
+				continue // Restart loop
+			}
+		}
+		// -----------------------------
+
 		// 1. Identify Runnable Steps (Batch)
 		var batchIndices []int
 		var activeStep *model.Step
@@ -1277,6 +1329,11 @@ Do NOT return YAML or Markdown blocks.
 			tm.mu.Lock()
 			if p, err := tm.planner.Store.GetPlan(task.ID); err == nil {
 				p.Status = "running"
+
+				// Update Cost Tracker on Interaction
+				p.LastInteractionTotalCost = p.TotalCost
+				task.Plan.LastInteractionTotalCost = p.TotalCost
+
 				tm.updatePlanCost(&p)
 				_ = tm.planner.Store.SavePlan(p)
 				task.Plan.Status = "running"

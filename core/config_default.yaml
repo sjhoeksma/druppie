@@ -26,8 +26,9 @@ llm:
         price_per_completion_token: 1.20  #  per 1M output tokens
     
 server:
-    port: "80"
+#    port: "80" Moved to general
 build:
+# ... keep build ...
     default_provider: docker
     providers:
       tekton:
@@ -47,15 +48,20 @@ git:
 iam: # ProviderOptions: local, keycloak, demo
     provider: local
 
-memory:
-    max_window_tokens: 12000
-    summarize_after: 20
-
-planner:
-    max_agent_selection: 5
+# memory: Moved to general
+# planner: Moved to general
 
 approval_groups:
     security: ["ciso", "group-admin"]
     legal: ["legal", "group-admin"]
     compliance: ["compliance","group-admin"]
     privacy: ["privacy","group-admin"]
+
+general:
+    max_unattended_cost: 1.0 # Pause task if cost since last interaction exceeds this amount (Euros)
+    server_port: "80"
+    cleanup_days: 7
+    max_agent_selections: 5
+    memory:
+        max_window_tokens: 12000
+        summarize_after: 20

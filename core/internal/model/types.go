@@ -69,17 +69,18 @@ type Step struct {
 
 // ExecutionPlan represents a sequence of steps to fulfill an intent
 type ExecutionPlan struct {
-	ID             string     `json:"plan_id"`
-	CreatorID      string     `json:"creator_id,omitempty"`
-	Intent         Intent     `json:"intent"`
-	Status         string     `json:"status"`
-	Steps          []Step     `json:"steps"`
-	SelectedAgents []string   `json:"selected_agents"`
-	Files          []string   `json:"files,omitempty"`
-	AllowedGroups  []string   `json:"allowed_groups,omitempty"`
-	TotalUsage     TokenUsage `json:"total_usage,omitempty"`
-	PlanningUsage  TokenUsage `json:"planning_usage,omitempty"` // LLM usage from plan generation and UpdatePlan calls
-	TotalCost      float64    `json:"total_cost,omitempty"`     // Total cost in euros
+	ID                       string     `json:"plan_id"`
+	CreatorID                string     `json:"creator_id,omitempty"`
+	Intent                   Intent     `json:"intent"`
+	Status                   string     `json:"status"`
+	Steps                    []Step     `json:"steps"`
+	SelectedAgents           []string   `json:"selected_agents"`
+	Files                    []string   `json:"files,omitempty"`
+	AllowedGroups            []string   `json:"allowed_groups,omitempty"`
+	TotalUsage               TokenUsage `json:"total_usage,omitempty"`
+	PlanningUsage            TokenUsage `json:"planning_usage,omitempty"`              // LLM usage from plan generation and UpdatePlan calls
+	TotalCost                float64    `json:"total_cost,omitempty"`                  // Total cost in euros
+	LastInteractionTotalCost float64    `json:"last_interaction_total_cost,omitempty"` // Cost snapshot at last user interaction
 }
 
 // MCPServer represents an external tool server
