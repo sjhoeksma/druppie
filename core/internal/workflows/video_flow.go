@@ -609,7 +609,7 @@ func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene) (Sce
 	execChan := make(chan string, 100)
 	var capturedFile string
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "text-to-speech", Params: map[string]interface{}{"audio_text": s.AudioText, "scene_id": s.ID}}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "text-to-speech", Params: map[string]interface{}{"audio_text": s.AudioText, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {
@@ -631,7 +631,7 @@ func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Sce
 	execChan := make(chan string, 100)
 	var capturedFile string
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "image-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "scene_id": s.ID}}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "image-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {
@@ -653,7 +653,7 @@ func (w *VideoCreationWorkflow) generateVideo(wc *WorkflowContext, s Scene) (Sce
 	execChan := make(chan string, 100)
 	var capturedFile string
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "video-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "audio_file": s.AudioFile, "image_file": s.ImageFile, "duration": s.Duration, "scene_id": s.ID}}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "video-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "audio_file": s.AudioFile, "image_file": s.ImageFile, "duration": s.Duration, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {

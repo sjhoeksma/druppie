@@ -6,11 +6,14 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
 // AudioCreatorExecutor handles TTS generation
-type AudioCreatorExecutor struct{}
+type AudioCreatorExecutor struct {
+	LLM llm.Provider
+}
 
 func (e *AudioCreatorExecutor) CanHandle(action string) bool {
 	return action == "audio-creator" || action == "text-to-speech"
@@ -23,6 +26,10 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		sceneID = fmt.Sprintf("%v", sID)
 	} else if sID, ok := step.Params["scene"]; ok {
 		sceneID = fmt.Sprintf("%v", sID)
+	}
+	planID := ""
+	if p, ok := step.Params["plan_id"].(string); ok {
+		planID = p
 	}
 
 	outputChan <- fmt.Sprintf("🎙️ [Audio Creator] Processing Scene %s...", sceneID)
@@ -44,6 +51,26 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 
 	outputChan <- fmt.Sprintf("   📝 Logic: Generating speech for \"%s\" (Voice: %s)", text, voice)
 
+	// Try LLM Provider "text_to_speech"
+	if e.LLM != nil {
+		if mgr, ok := e.LLM.(*llm.Manager); ok {
+			resp, _, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, "Generate Audio")
+			if err == nil && resp != "" {
+				filename := fmt.Sprintf("audio_scene_%s.mp3", sceneID)
+				if planID != "" {
+					if err := saveAsset(planID, filename, resp); err == nil {
+						outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated via Provider: %s", filename)
+						outputChan <- fmt.Sprintf("RESULT_AUDIO_FILE=%s", filename)
+						return nil
+					}
+					outputChan <- fmt.Sprintf("⚠️ Failed to save audio from provider: %v", err)
+				} else {
+					outputChan <- "⚠️ Plan ID missing, cannot save file."
+				}
+			}
+		}
+	}
+
 	// Simulate Latency (1-5s)
 	delay := time.Duration(1000+rand.Intn(4000)) * time.Millisecond
 	select {
@@ -60,17 +87,10 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	durationStr := fmt.Sprintf("%ds", durationSeconds)
 
 	filename := fmt.Sprintf("audio_scene_%s.mp3", sceneID)
-	outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated: %s (Duration: %s)", filename, durationStr)
+	// Mock file creation if planID exists?
+	outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated (Mock): %s (Duration: %s)", filename, durationStr)
 
-	// Return structural result (Simulate writing to step result, though we just log here.
-	// In real system, we'd return a result object.
-	// For now, we assume the system parses logs or step is done.)
-
-	// We can also print a special log line that the Planner might pick up?
-	// The Planner currently doesn't parse executor output automatically into next step params
-	// EXCEPT via the "Result" field if we had one.
-	// But our Planner prompts instruct it to "EXTRACT from Result/Logs".
-	// So logging clearly is good.
+	// Return structural result
 	outputChan <- fmt.Sprintf("RESULT_DURATION=%s", durationStr)
 	outputChan <- fmt.Sprintf("RESULT_AUDIO_FILE=%s", filename)
 

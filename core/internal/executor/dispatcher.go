@@ -27,9 +27,9 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 			// But specific actions "create_repo" etc should probably take precedence if they conflict.
 			// However, "create_repo" is unlikely to be an MCP tool name unless intentional override.
 
-			&AudioCreatorExecutor{},
-			&VideoCreatorExecutor{},
-			&ImageCreatorExecutor{},                                   // Start valid Image Executor
+			&AudioCreatorExecutor{LLM: llmProvider},
+			&VideoCreatorExecutor{LLM: llmProvider},
+			&ImageCreatorExecutor{LLM: llmProvider},                   // Start valid Image Executor
 			&FileReaderExecutor{},                                     // File Reader
 			&DeveloperExecutor{},                                      // Developer (Code Creator)
 			&BuildExecutor{Builder: buildEngine},                      // Helper for building code

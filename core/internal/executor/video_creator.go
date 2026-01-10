@@ -6,11 +6,14 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
 // VideoCreatorExecutor handles Visual generation and assembly
-type VideoCreatorExecutor struct{}
+type VideoCreatorExecutor struct {
+	LLM llm.Provider
+}
 
 func (e *VideoCreatorExecutor) CanHandle(action string) bool {
 	return action == "video-creator" || action == "video-generation"
@@ -23,6 +26,10 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		sceneID = fmt.Sprintf("%v", sID)
 	} else if sID, ok := step.Params["scene"]; ok {
 		sceneID = fmt.Sprintf("%v", sID)
+	}
+	planID := ""
+	if p, ok := step.Params["plan_id"].(string); ok {
+		planID = p
 	}
 
 	outputChan <- fmt.Sprintf("🎥 [Video Creator] Processing Scene %s...", sceneID)
@@ -66,6 +73,27 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		outputChan <- "   ⚠️ No Audio ID provided, using default pacing."
 	}
 
+	// Try LLM Provider "video_creator"
+	if e.LLM != nil {
+		if mgr, ok := e.LLM.(*llm.Manager); ok {
+			prompt := fmt.Sprintf("Create a video based on: %s", visual)
+			resp, _, err := mgr.GenerateWithProvider(ctx, "video_creator", prompt, "Generate Video")
+			if err == nil && resp != "" {
+				filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
+				if planID != "" {
+					if err := saveAsset(planID, filename, resp); err == nil {
+						outputChan <- fmt.Sprintf("✅ [Video Creator] Generated via Provider: %s", filename)
+						outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
+						return nil
+					}
+					outputChan <- fmt.Sprintf("⚠️ Failed to save video from provider: %v", err)
+				} else {
+					outputChan <- "⚠️ Plan ID missing, cannot save file."
+				}
+			}
+		}
+	}
+
 	outputChan <- "   ⚙️ sending to ai-video-comfyui..."
 	// Simulate Latency (1-5s)
 	delay := time.Duration(1000+rand.Intn(4000)) * time.Millisecond
@@ -76,7 +104,8 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	}
 
 	filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
-	outputChan <- fmt.Sprintf("✅ [Video Creator] Asset Generated: %s", filename)
+	// Mock
+	outputChan <- fmt.Sprintf("✅ [Video Creator] Asset Generated (Mock): %s", filename)
 	outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
 
 	return nil
