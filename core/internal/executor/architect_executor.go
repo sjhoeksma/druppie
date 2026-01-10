@@ -26,12 +26,12 @@ func (e *ArchitectExecutor) CanHandle(action string) bool {
 		action == "baseline-modeling" || action == "baseline_modeling" ||
 		action == "target-modeling" || action == "target_modeling" ||
 		action == "viewpoint-derivation" || action == "viewpoint_derivation" ||
-		action == "principles-consistency-check" || action == "principles_consistency_check" ||
+		action == "principles-consistency-check" || action == "principles_consistency_check" || action == "principles_and_consistency_check" ||
 		action == "decision-recording" || action == "decision_recording" ||
 		action == "roadmap-gaps" || action == "roadmap_gaps" ||
 		action == "roadmap-and-gaps" || action == "roadmap_and_gaps" ||
-		action == "review-governance" || action == "review_governance" ||
-		action == "intake"
+		action == "review-governance" || action == "review_governance" || action == "review_and_governance" ||
+		action == "intake" || action == "completion"
 }
 
 func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
@@ -54,7 +54,22 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 
 	// Use LLM for architectural tasks
 	if e.LLM != nil {
-		prompt := fmt.Sprintf("You are an Enterprise Architect. Task: %s\n\nContext: %v\n\nProvide a structured architectural output in Markdown format.", action, step.Params)
+		language := ""
+		if l, ok := step.Params["language"].(string); ok {
+			language = l
+		}
+
+		// Construct System Prompt
+		systemPrompt := "You are an Enterprise Architect. Provide a structured architectural output in Markdown format."
+		if language != "" {
+			systemPrompt = fmt.Sprintf("IMPORTANT: You MUST write in %s language.\n%s", language, systemPrompt)
+		}
+
+		// Construct User Prompt with Context
+		userPrompt := fmt.Sprintf("Task: %s\n\nContext: %v", action, step.Params)
+		if language != "" {
+			userPrompt += fmt.Sprintf("\n\nReminder: Output must be in %s.", language)
+		}
 
 		var err error
 		var providerName string
@@ -70,12 +85,12 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 
 		if providerName != "" {
 			if mgr, ok := e.LLM.(*llm.Manager); ok {
-				result, usage, err = mgr.GenerateWithProvider(ctx, providerName, fmt.Sprintf("Architect: %s", action), prompt)
+				result, usage, err = mgr.GenerateWithProvider(ctx, providerName, userPrompt, systemPrompt)
 			} else {
-				result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+				result, usage, err = e.LLM.Generate(ctx, userPrompt, systemPrompt)
 			}
 		} else {
-			result, usage, err = e.LLM.Generate(ctx, fmt.Sprintf("Architect: %s", action), prompt)
+			result, usage, err = e.LLM.Generate(ctx, userPrompt, systemPrompt)
 		}
 		if err != nil {
 			outputChan <- fmt.Sprintf("LLM generation failed: %v. Using fallback.", err)

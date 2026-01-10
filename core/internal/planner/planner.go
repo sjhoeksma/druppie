@@ -453,7 +453,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		// If it was already completed (by TaskManager /accept logic), just ensure the result is set if empty
 		if status == "completed" {
 			action := plan.Steps[i].Action
-			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" {
+			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
 				if plan.Steps[i].Result == "" {
 					plan.Steps[i].Result = feedback
 				}
@@ -464,7 +464,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		if status == "pending" || status == "waiting_input" || status == "running" {
 			// If it's a question or content creation step, mark it as completed
 			action := plan.Steps[i].Action
-			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" {
+			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
 				plan.Steps[i].Status = "completed"
 				plan.Steps[i].Result = feedback
 				break
@@ -491,7 +491,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// based on the new information/feedback.
 	var completedSteps []model.Step
 	for _, s := range plan.Steps {
-		if s.Status == "completed" {
+		if s.Status == "completed" || (s.Status == "running" && s.Action == "replanning") {
 			completedSteps = append(completedSteps, s)
 		}
 	}
@@ -703,11 +703,13 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			"3. GENERATE: Provide NEXT steps (starting from id %d). Follow the Strategies defined above.\n"+
 			"4. AVOID LOOPS: If the last completed step was an interactive agent (e.g. business-analyst) and the result was a confirmation/answer, DO NOT immediately schedule the same agent for the same task. Proceed to execution or the next phase.\n"+
 			"5. COMPLETION CHECK: If the 'current steps' have successfully achieved the 'Goal', you MUST return an empty JSON array `[]`. This will stop the plan.\n"+
-			"6. OUTPUT: Return a JSON array of Step objects.",
+			"6. LANGUAGE: Ensure all generated content/parameters use the user's language: %s.\n"+
+			"7. OUTPUT: Return a JSON array of Step objects.",
 		string(stepsJSON),
 		plan.Files,
 		chatHistory,
-		startID+1, // Start ID for new steps
+		startID+1,            // Start ID for new steps
+		plan.Intent.Language, // Inject Language
 	)
 
 	fullPrompt := baseSystemPrompt + "\n\n" + taskPrompt

@@ -199,6 +199,11 @@ func (m *Manager) generateWithRetry(ctx context.Context, p Provider, prompt stri
 			return resp, usage, nil
 		}
 
+		// Check if parent context was canceled (User stopped)
+		if ctx.Err() != nil {
+			return "", model.TokenUsage{}, ctx.Err()
+		}
+
 		lastErr = err
 		fmt.Printf("[LLM] Attempt %d failed: %v. Retrying in %v...\n", i+1, err, RetryDelay)
 

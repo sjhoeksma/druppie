@@ -548,7 +548,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 		// Check for interactive steps
 		for _, idx := range batchIndices {
 			step := &task.Plan.Steps[idx]
-			isReview := step.Action == "content-review" || step.Action == "draft_scenes" || step.Action == "audit_request"
+			isReview := step.Action == "content-review" || step.Action == "draft_scenes" || step.Action == "audit_request" || step.Action == "review_and_governance" || step.Action == "review_governance"
 			if step.Action == "ask_questions" || isReview {
 				// Stop batching, prioritize this interactive step alone
 				batchIndices = []int{idx}
@@ -889,6 +889,15 @@ Do NOT return YAML or Markdown blocks.
 							updatedPlan.Steps[i].Status = "completed"
 							updatedPlan.Steps[i].Result = "Next steps determined."
 							updatedPlan.Steps[i].Usage = &deltaUsage
+
+							// Deduct from PlanningUsage bucket since it is now attributed to this step
+							updatedPlan.PlanningUsage.PromptTokens -= deltaUsage.PromptTokens
+							updatedPlan.PlanningUsage.CompletionTokens -= deltaUsage.CompletionTokens
+							updatedPlan.PlanningUsage.TotalTokens -= deltaUsage.TotalTokens
+							if updatedPlan.PlanningUsage.TotalTokens < 0 {
+								updatedPlan.PlanningUsage = model.TokenUsage{} // Safety floor
+							}
+
 							found = true
 							break
 						}
@@ -1177,6 +1186,24 @@ Do NOT return YAML or Markdown blocks.
 			tm.OutputChan <- formatStepParams(activeStep.Params)
 			tm.OutputChan <- "Options: [Type feedback] | '/accept' | '/stop'"
 
+		case "review_and_governance", "review_governance", "review-governance":
+			tm.OutputChan <- fmt.Sprintf("\n[%s] 🛡️ Governance Review (%s):", task.ID, activeStep.AgentID)
+
+			// Format Params
+			if criteria, ok := activeStep.Params["criteria"].([]interface{}); ok {
+				tm.OutputChan <- "**Acceptance Criteria:**"
+				for _, c := range criteria {
+					tm.OutputChan <- fmt.Sprintf("- %v", c)
+				}
+			}
+			if reviewers, ok := activeStep.Params["reviewers"].([]interface{}); ok {
+				tm.OutputChan <- fmt.Sprintf("\n**Assigned Reviewers:** %v", reviewers)
+			} else if group, ok := activeStep.Params["assigned_group"]; ok {
+				tm.OutputChan <- fmt.Sprintf("\n**Assigned Group:** %v", group)
+			}
+
+			tm.OutputChan <- "\nOptions: [Type feedback/approval] | '/accept' (Approves) | '/stop'"
+
 		case "audit_request", "audit-request":
 			justification, _ := activeStep.Params["justification"].(string)
 			stakeholders, _ := activeStep.Params["stakeholders"].([]interface{})
@@ -1378,6 +1405,26 @@ func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID
 	// Inject Plan ID for context-aware executors (e.g. MCP path resolution)
 	step.Params["plan_id"] = planID
 
+	// Inject Language from Plan Intent if available
+	tm.mu.Lock()
+	if t, ok := tm.tasks[planID]; ok && t.Plan != nil {
+		if t.Plan.Intent.Language != "" {
+			if _, exists := step.Params["language"]; !exists {
+				step.Params["language"] = t.Plan.Intent.Language
+			}
+		}
+	} else {
+		// Fallback to Store if task not active (unlikely for running step)
+		if p, err := tm.planner.Store.GetPlan(planID); err == nil {
+			if p.Intent.Language != "" {
+				if _, exists := step.Params["language"]; !exists {
+					step.Params["language"] = p.Intent.Language
+				}
+			}
+		}
+	}
+	tm.mu.Unlock()
+
 	action := step.Action
 
 	// 1. Try Dispatcher directly
@@ -1426,10 +1473,16 @@ func (tm *TaskManager) executeStep(ctx context.Context, step *model.Step, planID
 		return fmt.Errorf("tool_usage action requires 'tool_name' parameter")
 	}
 
+	if action == "replanning" {
+		tm.OutputChan <- fmt.Sprintf("🔄 [%s] Replanning step execution (auto-completing)...", step.AgentID)
+		return nil
+	}
+
 	// 3. Agent-specific Legacy Handling
 	switch step.AgentID {
 	case "scene-creator":
 		return tm.executeSceneCreation(ctx, step)
+
 	default:
 		// Default: Check for known prefix
 		if strings.HasPrefix(step.Action, "generate_") {
