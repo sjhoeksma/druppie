@@ -279,11 +279,9 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		// Optimization: Do NOT include full Agent Instructions/Directives here.
 		// The Planner only needs Workflow, Skills, and Description to make decisions.
 		// Detailed templates (e.g. in Developer agent) differ from Planner logic and waste tokens.
-		/*
-			if a.Instructions != "" {
-				sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
-			}
-		*/
+		if a.Instructions != "" {
+			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+		}
 		agentList = append(agentList, sb.String())
 	}
 	//fmt.Printf("[Planner - Agents] %v\n", sortedIDs)
@@ -586,11 +584,9 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			sb.WriteString(fmt.Sprintf("  Workflow:\n%s\n", a.Workflow))
 		}
 		// Optimization: Instructions removed from context
-		/*
-			if a.Instructions != "" {
-				sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
-			}
-		*/
+		if a.Instructions != "" {
+			sb.WriteString(fmt.Sprintf("  Directives:\n%s", a.Instructions))
+		}
 		updatedAgentList = append(updatedAgentList, sb.String())
 	}
 	// Backward compatibility link if needed, or just use updatedAgentList in prompt

@@ -346,6 +346,8 @@ func (e *PluginExecutor) testPlugin(ctx context.Context, step model.Step, planID
 		}
 
 		outputChan <- fmt.Sprintf("[test-%d] Testing tool: %s", i+1, toolName)
+		inputJSON, _ := json.Marshal(input)
+		outputChan <- fmt.Sprintf("[test-%d] Input: %s", i+1, string(inputJSON))
 
 		// Call tool
 		callRequest := map[string]interface{}{

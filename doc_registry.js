@@ -53,7 +53,8 @@ const DOC_REGISTRY = {
         { name: "Audio Creator", path: "agents/audio-creator.md" },
         { name: "Image Creator", path: "agents/image-creator.md" },
         { name: "Video Creator", path: "agents/video-creator.md" },
-        { name: "MCP Specialist", path: "agents/mcp_agent.md" }
+        { name: "MCP Specialist", path: "agents/mcp_agent.md" },
+        { name: "MCP Plugin Developer", path: "agents/mcp-plugin-developer.md" },
     ],
     "skills": [
         { name: "Overview", path: "skills/overview.md" },
