@@ -850,11 +850,65 @@ Do NOT return YAML or Markdown blocks.
 			}
 			if finishedLast {
 				tm.OutputChan <- fmt.Sprintf("[%s] Determining next steps...", task.ID)
+
+				// 1. Create Visible Replanning Step
+				newID := 1
+				if len(task.Plan.Steps) > 0 {
+					newID = task.Plan.Steps[len(task.Plan.Steps)-1].ID + 1
+				}
+				replanStep := model.Step{
+					ID:      newID,
+					AgentID: "planner",
+					Action:  "replanning",
+					Status:  "running",
+					Result:  "Analyzing progress and determining next steps...",
+				}
+				task.Plan.Steps = append(task.Plan.Steps, replanStep)
+				tm.updatePlanCost(task.Plan)
+				_ = tm.planner.Store.SavePlan(*task.Plan)
+
+				// 2. Capture Usage Before
+				usageBefore := task.Plan.TotalUsage
+
+				// 3. Call UpdatePlan
 				updatedPlan, err := tm.planner.UpdatePlan(task.Ctx, task.Plan, "Autoconfirmed: Parallel batch completed.")
 				if err == nil {
+					// 4. Calculate Usage Delta
+					usageAfter := updatedPlan.TotalUsage
+					deltaUsage := model.TokenUsage{
+						PromptTokens:     usageAfter.PromptTokens - usageBefore.PromptTokens,
+						CompletionTokens: usageAfter.CompletionTokens - usageBefore.CompletionTokens,
+						TotalTokens:      usageAfter.TotalTokens - usageBefore.TotalTokens,
+					}
+
+					// 5. Update the Replanning Step in the New Plan
+					// We need to find it (it should be there)
+					found := false
+					for i := range updatedPlan.Steps {
+						if updatedPlan.Steps[i].ID == newID && updatedPlan.Steps[i].Action == "replanning" {
+							updatedPlan.Steps[i].Status = "completed"
+							updatedPlan.Steps[i].Result = "Next steps determined."
+							updatedPlan.Steps[i].Usage = &deltaUsage
+							found = true
+							break
+						}
+					}
+					// If for some reason UpdatePlan removed it (unlikely), we ignore.
+					if found {
+						tm.OutputChan <- fmt.Sprintf("[%s] Replanning complete (Usage: %d tokens)", task.ID, deltaUsage.TotalTokens)
+					}
+
 					task.Plan = updatedPlan
+					tm.updatePlanCost(task.Plan) // Re-save with completed step
+					_ = tm.planner.Store.SavePlan(*task.Plan)
+
 					continue
 				} else {
+					// Mark failed
+					task.Plan.Steps[len(task.Plan.Steps)-1].Status = "failed"
+					task.Plan.Steps[len(task.Plan.Steps)-1].Result = fmt.Sprintf("Error: %v", err)
+					_ = tm.planner.Store.SavePlan(*task.Plan)
+
 					tm.OutputChan <- fmt.Sprintf("[%s] Error updating plan: %v", task.ID, err)
 					return
 				}
