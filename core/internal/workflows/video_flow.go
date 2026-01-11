@@ -434,12 +434,18 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 		intent.Language, _ = raw["language"].(string)
 		intent.Parameters = raw
 
-		// Final Review Step (Enforce content-review)
-		wc.OutputChan <- fmt.Sprintf("\n🧠 [Intent] Analysis:\n - **Language**: %s\n - **Prompt**: %s\n", intent.Language, intent.RefinedPrompt)
-		wc.OutputChan <- "Options: 'ok' or '/accept' to proceed | provide feedback to refine further"
-
+		// 4. Mark "refine_intent" as COMPLETED with Usage
 		wc.AppendStep(model.Step{
 			ID:      stepID,
+			AgentID: "video-content-creator",
+			Action:  "refine_intent",
+			Status:  "completed",
+			Result:  "Intent refined",
+			Usage:   usagePtr,
+		})
+
+		// 5. Create NEW step for content-review
+		reviewStepID := wc.AppendStep(model.Step{
 			AgentID: "video-content-creator",
 			Action:  "content-review", // Matches user request for skill: content-review
 			Status:  "waiting_input",
@@ -457,29 +463,21 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			}
 			if input == "/accept" || input == "ok" || input == "" || strings.EqualFold(input, "accept") {
 				wc.AppendStep(model.Step{
-					ID:      stepID,
+					ID:      reviewStepID,
 					AgentID: "video-content-creator",
 					Action:  "content-review",
 					Status:  "completed",
 					Result:  "Intent Approved",
 				})
-				// Finalize
-				wc.AppendStep(model.Step{
-					ID:      stepID + 1, // New step for final record
-					AgentID: "video-content-creator",
-					Action:  "refine_intent",
-					Status:  "completed",
-					Result:  "Intent finalized",
-					Params:  map[string]interface{}{"refined": intent.RefinedPrompt, "language": intent.Language},
-					Usage:   usagePtr,
-				})
+				// Finalize (Optional: Record final intent params if needed, or just return)
+				// We already marked refine_intent as completed.
 				return intent, nil
 			}
 
 			// Feedback received
 			wc.OutputChan <- fmt.Sprintf("🔄 [Intent] Feedback: %s. Refining...", input)
 			wc.AppendStep(model.Step{
-				ID:      stepID,
+				ID:      reviewStepID,
 				AgentID: "video-content-creator",
 				Action:  "content-review",
 				Status:  "rejected",
@@ -560,10 +558,20 @@ Key Rules:
 		wc.OutputChan <- w.formatScript(script)
 		wc.OutputChan <- "Options: [Type feedback] | '/accept' to proceed"
 
+		// Mark generation completed
 		wc.AppendStep(model.Step{
 			ID:      stepID,
 			AgentID: "video-content-creator",
 			Action:  "draft_scenes",
+			Status:  "completed",
+			Result:  "Script Drafted",
+			Usage:   usagePtr,
+		})
+
+		// Create Review Step
+		reviewStepID := wc.AppendStep(model.Step{
+			AgentID: "video-content-creator",
+			Action:  "draft_scenes_review",
 			Status:  "waiting_input",
 			Result:  w.formatScript(script),
 		})
@@ -579,12 +587,11 @@ Key Rules:
 			}
 			if input == "/accept" || input == "" || strings.EqualFold(input, "accept") {
 				wc.AppendStep(model.Step{
-					ID:      stepID,
+					ID:      reviewStepID,
 					AgentID: "video-content-creator",
-					Action:  "draft_scenes",
+					Action:  "draft_scenes_review",
 					Status:  "completed",
 					Result:  "Approved",
-					Usage:   usagePtr,
 				})
 				return script, nil
 			}
@@ -592,9 +599,9 @@ Key Rules:
 			wc.OutputChan <- fmt.Sprintf("🔄 [Script] Feedback received: '%s'. Refining script...", input)
 
 			wc.AppendStep(model.Step{
-				ID:      stepID,
+				ID:      reviewStepID,
 				AgentID: "video-content-creator",
-				Action:  "draft_scenes",
+				Action:  "draft_scenes_review",
 				Status:  "rejected",
 				Result:  fmt.Sprintf("Rejected: %s", input),
 			})

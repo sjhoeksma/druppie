@@ -833,8 +833,33 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 	fullPrompt := baseSystemPrompt + "\n\n" + taskPrompt
 
+	// Add a temporary replanning step to show in Kanban
+	replanID := 1
+	if len(plan.Steps) > 0 {
+		replanID = plan.Steps[len(plan.Steps)-1].ID + 1
+	}
+	replanStep := model.Step{
+		ID:      replanID,
+		AgentID: "planner",
+		Action:  "replanning",
+		Status:  "running",
+		Result:  "Replanning based on feedback...",
+	}
+	plan.Steps = append(plan.Steps, replanStep)
+	// Persist so UI sees "Running"
+	_ = p.Store.SavePlan(*plan)
+
 	resp, usage, err := p.llm.Generate(ctx, "Refine Plan", fullPrompt)
 	if err != nil {
+		// Mark replan step as failed
+		for i := len(plan.Steps) - 1; i >= 0; i-- {
+			if plan.Steps[i].Action == "replanning" && plan.Steps[i].Status == "running" {
+				plan.Steps[i].Status = "failed"
+				plan.Steps[i].Result = fmt.Sprintf("Error: %v", err)
+				break
+			}
+		}
+		_ = p.Store.SavePlan(*plan)
 		return nil, err
 	}
 

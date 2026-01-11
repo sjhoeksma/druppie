@@ -3,6 +3,7 @@ package workflows
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -71,7 +72,35 @@ func (w *SkillExecutionWorkflow) Run(wc *WorkflowContext, initialPrompt string) 
 		wc.OutputChan <- fmt.Sprintf("  %s", msg)
 
 		// Capture structured results
-		if strings.HasPrefix(msg, "RESULT_") {
+		if strings.HasPrefix(msg, "RESULT_TOKEN_USAGE=") {
+			parts := strings.Split(strings.TrimPrefix(msg, "RESULT_TOKEN_USAGE="), ",")
+			if len(parts) >= 3 {
+				// Parse
+				pt, _ := strconv.Atoi(parts[0])
+				ct, _ := strconv.Atoi(parts[1])
+				tt, _ := strconv.Atoi(parts[2])
+				cost := 0.0
+				if len(parts) >= 4 {
+					cost, _ = strconv.ParseFloat(parts[3], 64)
+				}
+
+				// Accumulate
+				usage.PromptTokens += pt
+				usage.CompletionTokens += ct
+				usage.TotalTokens += tt
+				usage.EstimatedCost += cost
+
+				// Update global
+				if wc.UpdateTokenUsage != nil {
+					wc.UpdateTokenUsage(model.TokenUsage{
+						PromptTokens:     pt,
+						CompletionTokens: ct,
+						TotalTokens:      tt,
+						EstimatedCost:    cost,
+					})
+				}
+			}
+		} else if strings.HasPrefix(msg, "RESULT_") {
 			if capturedResult != "" {
 				capturedResult += "\n"
 			}
