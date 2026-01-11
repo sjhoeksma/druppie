@@ -11,12 +11,20 @@ import (
 
 // Config holds the runtime configuration
 type Config struct {
-	LLM            LLMConfig           `yaml:"llm" json:"llm"`
-	Build          BuildConfig         `yaml:"build" json:"build"`
-	Git            GitConfig           `yaml:"git" json:"git"`
-	IAM            IAMConfig           `yaml:"iam" json:"iam"`
-	ApprovalGroups map[string][]string `yaml:"approval_groups" json:"approval_groups"`
-	General        GeneralConfig       `yaml:"general" json:"general"`
+	LLM            LLMConfig            `yaml:"llm" json:"llm"`
+	Build          BuildConfig          `yaml:"build" json:"build"`
+	Git            GitConfig            `yaml:"git" json:"git"`
+	IAM            IAMConfig            `yaml:"iam" json:"iam"`
+	ApprovalGroups map[string][]string  `yaml:"approval_groups" json:"approval_groups"`
+	General        GeneralConfig        `yaml:"general" json:"general"`
+	ScheduledJobs  []ScheduledJobConfig `yaml:"scheduled_jobs" json:"scheduled_jobs"`
+}
+
+type ScheduledJobConfig struct {
+	Name     string            `yaml:"name" json:"name"`
+	Type     string            `yaml:"type" json:"type"` // "cleanup", "llm"
+	Schedule string            `yaml:"schedule" json:"schedule"`
+	Params   map[string]string `yaml:"params" json:"params"`
 }
 
 type GeneralConfig struct {
@@ -222,6 +230,19 @@ func (c Config) Clone() Config {
 		newCfg.General.InternalCosts = make(map[string]float64, len(c.General.InternalCosts))
 		for k, v := range c.General.InternalCosts {
 			newCfg.General.InternalCosts[k] = v
+		}
+	}
+	if c.ScheduledJobs != nil {
+		newCfg.ScheduledJobs = make([]ScheduledJobConfig, len(c.ScheduledJobs))
+		for i, job := range c.ScheduledJobs {
+			newJob := job
+			if job.Params != nil {
+				newJob.Params = make(map[string]string, len(job.Params))
+				for k, v := range job.Params {
+					newJob.Params[k] = v
+				}
+			}
+			newCfg.ScheduledJobs[i] = newJob
 		}
 	}
 	return newCfg

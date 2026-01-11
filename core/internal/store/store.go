@@ -19,6 +19,7 @@ type Store interface {
 	GetPlan(id string) (model.ExecutionPlan, error)
 	ListPlans() ([]model.ExecutionPlan, error)
 	DeletePlan(id string) error
+	CleanupOldPlans(days int) (int, error)
 
 	// Interaction Logging
 	LogInteraction(planID string, tag string, input string, output string) error
@@ -148,6 +149,39 @@ func (s *FileStore) DeletePlan(id string) error {
 	}
 
 	return nil
+}
+
+func (s *FileStore) CleanupOldPlans(days int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	plansDir := filepath.Join(s.baseDir, "plans")
+	entries, err := os.ReadDir(plansDir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read plans dir: %w", err)
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -days)
+	count := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			planPath := filepath.Join(plansDir, entry.Name(), "plan.json")
+			info, err := os.Stat(planPath)
+			if err == nil && info.ModTime().Before(cutoff) {
+				id := entry.Name()
+				// Delete dir directly since we have lock
+				dirPath := filepath.Join(plansDir, id)
+				if err := os.RemoveAll(dirPath); err == nil {
+					count++
+					fmt.Printf("[Store] Deleted old plan: %s (Age: %s)\n", id, time.Since(info.ModTime()))
+				} else {
+					fmt.Printf("[Store] Failed to delete plan %s: %v\n", id, err)
+				}
+			}
+		}
+	}
+	return count, nil
 }
 
 func (s *FileStore) LogInteraction(planID string, tag string, input string, output string) error {

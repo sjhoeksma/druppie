@@ -75,8 +75,22 @@ general:
         ensure_availability: 0.01
         check_block_status: 0.005
     server_port: "8080"
-    cleanup_days: 7
     max_agent_selections: 5
     memory:
         max_window_tokens: 12000
         summarize_after: 20
+
+scheduled_jobs:
+  - name: "Standard Cleanup"
+    type: "cleanup"
+    schedule: "@daily"
+    params:
+      days: "7"
+
+  # Example LLM Job (Uncomment to use)
+  # - name: "Nightly Analysis"
+  #   type: "llm"
+  #   schedule: "0 2 * * *" # Every day at 2 AM
+  #   params:
+  #     plan_id: "analysis_job"
+  #     prompt: "Analyze logs and update summary"

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/config"
@@ -141,6 +142,34 @@ func (tm *TaskManager) FinishTask(id string) {
 		t.Cancel()
 		delete(tm.tasks, id)
 		tm.OutputChan <- fmt.Sprintf("[Task Manager] Finished task %s (User Requested)", id)
+	}
+}
+
+// SubmitInput sends input to a running task or resumes a plan to handle it
+func (tm *TaskManager) SubmitInput(ctx context.Context, planID, input string) error {
+	tm.mu.Lock()
+	task, ok := tm.tasks[planID]
+	tm.mu.Unlock()
+
+	if !ok {
+		// Try to resume
+		plan, err := tm.planner.Store.GetPlan(planID)
+		if err != nil {
+			return fmt.Errorf("plan not found: %s", planID)
+		}
+		tm.OutputChan <- fmt.Sprintf("[%s] Resuming plan for scheduled input...", planID)
+		plan.Status = "running"
+		_ = tm.planner.Store.SavePlan(plan)
+
+		task = tm.StartTask(ctx, plan)
+	}
+
+	// Send input
+	select {
+	case task.InputChan <- input:
+		return nil
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("timeout sending input to task %s", planID)
 	}
 }
 

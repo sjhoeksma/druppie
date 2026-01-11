@@ -44,5 +44,6 @@
 - [x] Cost by task
 - [x] SD pre processing
 - [ ] Paths for project libraries
-- [ ] Feedback loop is not counting
+- [x] Feedback loop is not counting
+- [ ] A task to create repo and upload is using mcp server
 

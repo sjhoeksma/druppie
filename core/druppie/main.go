@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/planner"
 	"github.com/sjhoeksma/druppie/core/internal/registry"
 	"github.com/sjhoeksma/druppie/core/internal/router"
+	"github.com/sjhoeksma/druppie/core/internal/scheduler"
 	"github.com/sjhoeksma/druppie/core/internal/store"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -177,58 +179,58 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			cfg := cfgMgr.Get()
 
 			// Start Cleanup Routine
-			go func() {
-				storeDir, err := paths.ResolvePath(".druppie")
-				if err == nil {
-					cleanupDays := cfg.General.CleanupDays
-					if cleanupDays <= 0 {
-						cleanupDays = 7 // Default fallback if config missing
-					}
+			// ---------------------------------------------------------
+			// Scheduler Implementation
+			// ---------------------------------------------------------
+			sched := scheduler.NewScheduler()
 
-					// Helper function
-					doCleanup := func() {
-						fmt.Printf("[Cleanup] Checking for plans older than %d days...\n", cleanupDays)
-						plansDir := filepath.Join(storeDir, "plans")
-						entries, err := os.ReadDir(plansDir)
-						if err != nil {
-							fmt.Printf("[Cleanup] Failed to read plans dir: %v\n", err)
-							return
-						}
-
-						cutoff := time.Now().AddDate(0, 0, -cleanupDays)
-						count := 0
-
-						for _, entry := range entries {
-							if entry.IsDir() {
-								planPath := filepath.Join(plansDir, entry.Name(), "plan.json")
-								info, err := os.Stat(planPath)
-								if err == nil && info.ModTime().Before(cutoff) {
-									id := entry.Name()
-									// Use Store to delete (handles logs/files/plans)
-									if err := plannerService.Store.DeletePlan(id); err == nil {
-										count++
-										fmt.Printf("[Cleanup] Deleted old plan: %s (Age: %s)\n", id, time.Since(info.ModTime()).Round(time.Hour))
-									} else {
-										fmt.Printf("[Cleanup] Failed to delete plan %s: %v\n", id, err)
-									}
-								}
-							}
-						}
-						if count > 0 {
-							fmt.Printf("[Cleanup] Completed. Removed %d old plans.\n", count)
+			// 1. Configure Jobs from Config
+			for _, jobCfg := range cfg.ScheduledJobs {
+				switch jobCfg.Type {
+				case "cleanup":
+					days := 7
+					if dStr, ok := jobCfg.Params["days"]; ok {
+						if d, err := strconv.Atoi(dStr); err == nil {
+							days = d
 						}
 					}
-
-					// Initial run
-					doCleanup()
-
-					// Periodic run (every 24h)
-					ticker := time.NewTicker(24 * time.Hour)
-					for range ticker.C {
-						doCleanup()
-					}
+					sched.AddJob(&scheduler.CleanupJob{
+						Store:        plannerService.Store,
+						CleanupDays:  days,
+						CronSchedule: jobCfg.Schedule,
+					})
+				case "llm":
+					sched.AddJob(&scheduler.LLMJob{
+						JobName:      jobCfg.Name,
+						PlanID:       jobCfg.Params["plan_id"],
+						Prompt:       jobCfg.Params["prompt"],
+						CronSchedule: jobCfg.Schedule,
+						ExecuteFunc: func(ctx context.Context, planID, prompt string) error {
+							return tm.SubmitInput(ctx, planID, prompt)
+						},
+					})
 				}
-			}()
+			}
+
+			// 2. Fallback: Default Cleanup if not explicitly configured but cleanup_days > 0
+			// (Preserve legacy behavior)
+			hasCleanup := false
+			for _, j := range cfg.ScheduledJobs {
+				if j.Type == "cleanup" {
+					hasCleanup = true
+					break
+				}
+			}
+			if !hasCleanup && cfg.General.CleanupDays > 0 {
+				sched.AddJob(&scheduler.CleanupJob{
+					Store:        plannerService.Store,
+					CleanupDays:  cfg.General.CleanupDays,
+					CronSchedule: "@daily",
+				})
+			}
+
+			sched.Start()
+			defer sched.Stop()
 
 			// Start log drainer to:
 			// 1. Unblock the buffered channel
