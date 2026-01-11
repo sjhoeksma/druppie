@@ -15,12 +15,17 @@ import (
 
 // StableDiffusionProvider implements the LLMProvider interface for Stable Diffusion.
 // ./webui.sh --listen --port 7860 --api
+
+// StableDiffusionProvider implements the LLMProvider interface for Stable Diffusion.
+// ./webui.sh --listen --port 7860 --api
 type StableDiffusionProvider struct {
 	BaseURL string
-	Model   string // Optional: checkpoint name if API supports switching via payload
+	Model   string
+	Price   float64
+	LLM     Provider
 }
 
-func NewStableDiffusionProvider(baseURL, modelName string) *StableDiffusionProvider {
+func NewStableDiffusionProvider(baseURL, modelName string, price float64, llm Provider) *StableDiffusionProvider {
 	// Normalize URL
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	if !strings.HasPrefix(baseURL, "http") {
@@ -29,8 +34,12 @@ func NewStableDiffusionProvider(baseURL, modelName string) *StableDiffusionProvi
 	return &StableDiffusionProvider{
 		BaseURL: baseURL,
 		Model:   modelName,
+		Price:   price,
+		LLM:     llm,
 	}
 }
+
+// ... (req/resp structs) ...
 
 type sdText2ImgRequest struct {
 	Prompt         string `json:"prompt"`
@@ -39,7 +48,6 @@ type sdText2ImgRequest struct {
 	Width          int    `json:"width,omitempty"`
 	Height         int    `json:"height,omitempty"`
 	CfgScale       int    `json:"cfg_scale,omitempty"`
-	// Add other fields as needed
 }
 
 type sdText2ImgResponse struct {
@@ -48,16 +56,38 @@ type sdText2ImgResponse struct {
 }
 
 func (p *StableDiffusionProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	var totalUsage model.TokenUsage
+
+	// 1. Enhance Prompt using Default LLM
+	enhancedPrompt := prompt
+	if p.LLM != nil {
+		sysPrompt := "You are an expert Stable Diffusion prompt engineer. Rewrite the user's prompt to be detailed, descriptive, and optimized for Stable Diffusion XL. Focus on artistic style, lighting, texture, and composition. Output ONLY the refined prompt text, no explanations."
+
+		// If systemPrompt contains specific instructions like 'style: anime', append it?
+		// For now, prompt engineering is handled by the enhancing LLM.
+
+		llmResp, llmUsage, err := p.LLM.Generate(ctx, prompt, sysPrompt)
+		if err == nil {
+			enhancedPrompt = strings.TrimSpace(llmResp)
+			totalUsage = llmUsage
+			Log(ctx, fmt.Sprintf("[SD] Enhanced Prompt: %s", enhancedPrompt))
+		} else {
+			Log(ctx, fmt.Sprintf("[SD] Warning: Prompt enhancement failed: %v. Using original prompt: %s", err, prompt))
+		}
+	} else {
+		Log(ctx, fmt.Sprintf("[SD] Using original prompt: %s", prompt))
+	}
+
 	// Default params
 	req := sdText2ImgRequest{
-		Prompt:   prompt,
-		Steps:    20,
-		Width:    512,
-		Height:   512,
+		Prompt:   enhancedPrompt,
+		Steps:    25,   // Increased slightly for quality
+		Width:    1024, // SDXL preference
+		Height:   1024,
 		CfgScale: 7,
 	}
 
-	// Parse System Prompt for overrides
+	// Parse System Prompt for overrides (apply to request directly)
 	lines := strings.Split(systemPrompt, "\n")
 	for _, line := range lines {
 		parts := strings.SplitN(line, ":", 2)
@@ -79,7 +109,7 @@ func (p *StableDiffusionProvider) Generate(ctx context.Context, prompt string, s
 				if n, err := strconv.Atoi(val); err == nil {
 					req.Height = n
 				}
-			case "cfg_scale", "cfg scale": // Corrected from "cfg", "scale" syntax error
+			case "cfg_scale", "cfg scale":
 				if n, err := strconv.Atoi(val); err == nil {
 					req.CfgScale = n
 				}
@@ -89,39 +119,41 @@ func (p *StableDiffusionProvider) Generate(ctx context.Context, prompt string, s
 
 	bodyBytes, err := json.Marshal(req)
 	if err != nil {
-		return "", model.TokenUsage{}, err
+		return "", totalUsage, err
 	}
 
 	url := fmt.Sprintf("%s/sdapi/v1/txt2img", p.BaseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
 	if err != nil {
-		return "", model.TokenUsage{}, err
+		return "", totalUsage, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		return "", model.TokenUsage{}, err
+		return "", totalUsage, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", model.TokenUsage{}, fmt.Errorf("SD API Error %d: %s", resp.StatusCode, string(body))
+		return "", totalUsage, fmt.Errorf("SD API Error %d: %s", resp.StatusCode, string(body))
 	}
 
 	var parsed sdText2ImgResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", model.TokenUsage{}, fmt.Errorf("failed to decode response: %w", err)
+		return "", totalUsage, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	if len(parsed.Images) == 0 {
-		return "", model.TokenUsage{}, fmt.Errorf("no images returned")
+		return "", totalUsage, fmt.Errorf("no images returned")
 	}
 
+	// Add SD execution cost
+	totalUsage.EstimatedCost += p.Price
+
 	// Return first image as base64 data URI
-	// SD API returns raw base64 string
-	return fmt.Sprintf("base64,%s", parsed.Images[0]), model.TokenUsage{}, nil
+	return fmt.Sprintf("base64,%s", parsed.Images[0]), totalUsage, nil
 }
 
 func (p *StableDiffusionProvider) Close() error {

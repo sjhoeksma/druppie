@@ -11,6 +11,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/config"
 	"github.com/sjhoeksma/druppie/core/internal/executor"
 	"github.com/sjhoeksma/druppie/core/internal/iam"
+	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/planner"
@@ -665,13 +666,15 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 									case "CONSOLE_OUTPUT":
 										resultBuilder.WriteString(parts[1] + "\n")
 									case "TOKEN_USAGE":
-										// Parse: "prompt,completion,total"
+										// Parse: "prompt,completion,total,[cost]"
 										usageParts := strings.Split(parts[1], ",")
-										if len(usageParts) == 3 {
+										if len(usageParts) >= 4 {
 											var prompt, completion, total int
+											var cost float64
 											fmt.Sscanf(usageParts[0], "%d", &prompt)
 											fmt.Sscanf(usageParts[1], "%d", &completion)
 											fmt.Sscanf(usageParts[2], "%d", &total)
+											fmt.Sscanf(usageParts[3], "%f", &cost)
 
 											// Initialize step usage if needed
 											if step.Usage == nil {
@@ -680,6 +683,7 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 											step.Usage.PromptTokens += prompt
 											step.Usage.CompletionTokens += completion
 											step.Usage.TotalTokens += total
+											step.Usage.EstimatedCost += cost
 										}
 									default:
 										resultBuilder.WriteString(fmt.Sprintf("%s: %s\n", key, parts[1]))
@@ -786,7 +790,16 @@ func (tm *TaskManager) runTaskLoop(task *Task) {
 						}
 
 						for attempt := 0; attempt <= maxRetries; attempt++ {
-							execErr = exec.Execute(task.Ctx, *step, outputBridge)
+							// Inject LLM Logger into context
+							logCtx := llm.WithLogger(task.Ctx, func(msg string) {
+								select {
+								case outputBridge <- msg:
+								default:
+									// Non-blocking drop if full, or log to stderr?
+									// Ideally outputBridge has buffer
+								}
+							})
+							execErr = exec.Execute(logCtx, *step, outputBridge)
 
 							if execErr == nil {
 								break
@@ -896,6 +909,21 @@ Do NOT return YAML or Markdown blocks.
 						step.Status = "completed"
 						if res := resultBuilder.String(); res != "" {
 							step.Result = res
+						}
+
+						// Apply Internal Costs
+						if step.Usage == nil {
+							step.Usage = &model.TokenUsage{}
+						}
+						if step.Usage.EstimatedCost == 0 {
+							if cfgBytes, err := tm.planner.Store.LoadConfig(); err == nil {
+								var cfg config.Config
+								if yaml.Unmarshal(cfgBytes, &cfg) == nil && cfg.General.InternalCosts != nil {
+									if cost, ok := cfg.General.InternalCosts[step.Action]; ok {
+										step.Usage.EstimatedCost += cost
+									}
+								}
+							}
 						}
 					}
 				}(idx)

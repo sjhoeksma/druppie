@@ -77,13 +77,16 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	if e.LLM != nil {
 		if mgr, ok := e.LLM.(*llm.Manager); ok {
 			prompt := fmt.Sprintf("Create a video based on: %s", visual)
-			resp, _, err := mgr.GenerateWithProvider(ctx, "video_creator", prompt, "Generate Video")
+			resp, usage, err := mgr.GenerateWithProvider(ctx, "video_creator", prompt, "Generate Video")
 			if err == nil && resp != "" {
 				filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
 				if planID != "" {
 					if err := saveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Video Creator] Generated via Provider: %s", filename)
 						outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
+						if usage.EstimatedCost > 0 || usage.TotalTokens > 0 {
+							outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d,%.5f", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
+						}
 						return nil
 					}
 					outputChan <- fmt.Sprintf("⚠️ Failed to save video from provider: %v", err)
@@ -107,6 +110,7 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	// Mock
 	outputChan <- fmt.Sprintf("✅ [Video Creator] Asset Generated (Mock): %s", filename)
 	outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
+	outputChan <- "RESULT_TOKEN_USAGE=0,0,0,0.00100"
 
 	return nil
 }

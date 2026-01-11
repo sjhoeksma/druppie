@@ -150,8 +150,8 @@ func (e *BusinessAnalystExecutor) Execute(ctx context.Context, step model.Step, 
 	outputChan <- fmt.Sprintf("Document saved to: %s", filePath)
 
 	// Report usage
-	if usage.TotalTokens > 0 {
-		outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+	if usage.TotalTokens > 0 || usage.EstimatedCost > 0 {
+		outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d,%.5f", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
 	}
 
 	return nil

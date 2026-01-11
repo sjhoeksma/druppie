@@ -70,7 +70,7 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 				sysPrompt += fmt.Sprintf("\nVoice: %s", voice)
 			}
 
-			resp, _, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, sysPrompt)
+			resp, usage, err := mgr.GenerateWithProvider(ctx, "audio_creator", text, sysPrompt)
 			if err == nil && resp != "" {
 				// Detect format
 				ext := ".mp3"
@@ -96,6 +96,9 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 					if err := saveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated via Provider: %s", filename)
 						outputChan <- fmt.Sprintf("RESULT_AUDIO_FILE=%s", filename)
+						if usage.EstimatedCost > 0 || usage.TotalTokens > 0 {
+							outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d,%.5f", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
+						}
 						return nil
 					}
 					outputChan <- fmt.Sprintf("⚠️ Failed to save audio from provider: %v", err)
@@ -128,6 +131,7 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	// Return structural result
 	outputChan <- fmt.Sprintf("RESULT_DURATION=%s", durationStr)
 	outputChan <- fmt.Sprintf("RESULT_AUDIO_FILE=%s", filename)
+	outputChan <- "RESULT_TOKEN_USAGE=0,0,0,0.00100"
 
 	return nil
 }

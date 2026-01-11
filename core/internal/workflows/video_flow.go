@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"strconv"
+
 	"github.com/sjhoeksma/druppie/core/internal/model"
 )
 
@@ -105,7 +107,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- "🎙️ [VideoWorkflow] Phase 1/3: Audio Generation..."
 	for {
 		var err error
-		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, func(wc *WorkflowContext, s Scene) (Scene, error) {
+		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, func(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
 			return w.generateAudio(wc, s, intent.Language)
 		})
 		if err != nil {
@@ -175,7 +177,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 }
 
 // runPhase executes a generator function for all scenes in parallel
-func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action string, scenes []Scene, generator func(*WorkflowContext, Scene) (Scene, error)) ([]Scene, error) {
+func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action string, scenes []Scene, generator func(*WorkflowContext, Scene) (Scene, *model.TokenUsage, error)) ([]Scene, error) {
 	var wg sync.WaitGroup
 	resultChan := make(chan Scene, len(scenes))
 	errChan := make(chan error, len(scenes))
@@ -213,7 +215,7 @@ func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action st
 				Params:  map[string]interface{}{"scene_id": scene.ID},
 			})
 
-			res, err := generator(wc, scene)
+			res, usagePtr, err := generator(wc, scene)
 			if err != nil {
 				// Mark as failed
 				wc.AppendStep(model.Step{
@@ -252,6 +254,7 @@ func (w *VideoCreationWorkflow) runPhase(wc *WorkflowContext, agentID, action st
 				Action:  action,
 				Status:  "completed",
 				Params:  params,
+				Usage:   usagePtr,
 			})
 			resultChan <- res
 		}(s)
@@ -468,6 +471,7 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 					Status:  "completed",
 					Result:  "Intent finalized",
 					Params:  map[string]interface{}{"refined": intent.RefinedPrompt, "language": intent.Language},
+					Usage:   usagePtr,
 				})
 				return intent, nil
 			}
@@ -580,6 +584,7 @@ Key Rules:
 					Action:  "draft_scenes",
 					Status:  "completed",
 					Result:  "Approved",
+					Usage:   usagePtr,
 				})
 				return script, nil
 			}
@@ -606,10 +611,11 @@ func (w *VideoCreationWorkflow) formatScript(script AVScript) string {
 	return sb.String()
 }
 
-func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, language string) (Scene, error) {
+func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, language string) (Scene, *model.TokenUsage, error) {
 	executor, _ := wc.Dispatcher.GetExecutor("text-to-speech")
 	execChan := make(chan string, 100)
 	var capturedFile string
+	var usage *model.TokenUsage
 	go func() {
 		params := map[string]interface{}{
 			"audio_text": s.AudioText,
@@ -627,19 +633,23 @@ func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, lang
 		if strings.HasPrefix(msg, "RESULT_AUDIO_FILE=") {
 			capturedFile = strings.TrimPrefix(msg, "RESULT_AUDIO_FILE=")
 		}
+		if u := parseUsage(msg); u != nil {
+			usage = u
+		}
 	}
 	if capturedFile != "" {
 		s.AudioFile = capturedFile
 	} else {
 		s.AudioFile = fmt.Sprintf("audio_scene_%d.mp3", s.ID)
 	}
-	return s, nil
+	return s, usage, nil
 }
 
-func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Scene, error) {
+func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
 	executor, _ := wc.Dispatcher.GetExecutor("image-generation")
 	execChan := make(chan string, 100)
 	var capturedFile string
+	var usage *model.TokenUsage
 	go func() {
 		_ = executor.Execute(wc.Ctx, model.Step{Action: "image-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
@@ -649,19 +659,23 @@ func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Sce
 		if strings.HasPrefix(msg, "RESULT_IMAGE_FILE=") {
 			capturedFile = strings.TrimPrefix(msg, "RESULT_IMAGE_FILE=")
 		}
+		if u := parseUsage(msg); u != nil {
+			usage = u
+		}
 	}
 	if capturedFile != "" {
 		s.ImageFile = capturedFile
 	} else {
 		s.ImageFile = fmt.Sprintf("image_scene_%d.png", s.ID)
 	}
-	return s, nil
+	return s, usage, nil
 }
 
-func (w *VideoCreationWorkflow) generateVideo(wc *WorkflowContext, s Scene) (Scene, error) {
+func (w *VideoCreationWorkflow) generateVideo(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
 	executor, _ := wc.Dispatcher.GetExecutor("video-generation")
 	execChan := make(chan string, 100)
 	var capturedFile string
+	var usage *model.TokenUsage
 	go func() {
 		_ = executor.Execute(wc.Ctx, model.Step{Action: "video-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "audio_file": s.AudioFile, "image_file": s.ImageFile, "duration": s.Duration, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
@@ -671,13 +685,38 @@ func (w *VideoCreationWorkflow) generateVideo(wc *WorkflowContext, s Scene) (Sce
 		if strings.HasPrefix(msg, "RESULT_VIDEO_FILE=") {
 			capturedFile = strings.TrimPrefix(msg, "RESULT_VIDEO_FILE=")
 		}
+		if u := parseUsage(msg); u != nil {
+			usage = u
+		}
 	}
 	if capturedFile != "" {
 		s.VideoFile = capturedFile
 	} else {
 		s.VideoFile = fmt.Sprintf("video_scene_%d.mp4", s.ID)
 	}
-	return s, nil
+	return s, usage, nil
+}
+
+func parseUsage(msg string) *model.TokenUsage {
+	if strings.HasPrefix(msg, "RESULT_TOKEN_USAGE=") {
+		parts := strings.Split(strings.TrimPrefix(msg, "RESULT_TOKEN_USAGE="), ",")
+		if len(parts) >= 3 {
+			p, _ := strconv.Atoi(parts[0])
+			c, _ := strconv.Atoi(parts[1])
+			t, _ := strconv.Atoi(parts[2])
+			var cost float64
+			if len(parts) >= 4 {
+				cost, _ = strconv.ParseFloat(parts[3], 64)
+			}
+			return &model.TokenUsage{
+				PromptTokens:     p,
+				CompletionTokens: c,
+				TotalTokens:      t,
+				EstimatedCost:    cost,
+			}
+		}
+	}
+	return nil
 }
 
 func (w *VideoCreationWorkflow) mergeVideo(wc *WorkflowContext, _ []Scene) (string, error) {

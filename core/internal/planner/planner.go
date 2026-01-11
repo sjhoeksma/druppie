@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
@@ -844,10 +842,21 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	plan.TotalUsage.PromptTokens += usage.PromptTokens
 	plan.TotalUsage.CompletionTokens += usage.CompletionTokens
 	plan.TotalUsage.TotalTokens += usage.TotalTokens
+	plan.TotalUsage.EstimatedCost += usage.EstimatedCost
 
 	plan.PlanningUsage.PromptTokens += usage.PromptTokens
 	plan.PlanningUsage.CompletionTokens += usage.CompletionTokens
 	plan.PlanningUsage.TotalTokens += usage.TotalTokens
+	plan.PlanningUsage.EstimatedCost += usage.EstimatedCost
+
+	// Attribute usage to the replanning step
+	for i := range plan.Steps {
+		if plan.Steps[i].Action == "replanning" && plan.Steps[i].Status == "running" {
+			plan.Steps[i].Status = "completed"
+			plan.Steps[i].Usage = &usage
+			break
+		}
+	}
 
 	// 3. Parse and Append
 	cleanResp := p.cleanJSONResponse(resp)
@@ -1049,28 +1058,6 @@ func (p *Planner) updatePlanCost(plan *model.ExecutionPlan) {
 		return
 	}
 
-	// Get current config
-	cfgBytes, err := p.Store.LoadConfig()
-	if err != nil {
-		return // Silently fail if config not available
-	}
-
-	var cfg struct {
-		LLM struct {
-			DefaultProvider string
-			Providers       map[string]struct {
-				PricePerPromptToken     float64 `yaml:"price_per_prompt_token"`
-				PricePerCompletionToken float64 `yaml:"price_per_completion_token"`
-			}
-		}
-	}
-
-	if err := yaml.Unmarshal(cfgBytes, &cfg); err != nil {
-		return
-	}
-
-	// Get pricing for the default provider
-	if providerCfg, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; ok {
-		plan.CalculateCost(providerCfg.PricePerPromptToken, providerCfg.PricePerCompletionToken)
-	}
+	// CalculateCost now aggregates individual step costs
+	plan.CalculateCost()
 }

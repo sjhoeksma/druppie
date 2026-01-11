@@ -47,9 +47,10 @@ type Intent struct {
 
 // TokenUsage tracks LLM token consumption
 type TokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	EstimatedCost    float64 `json:"estimated_cost,omitempty"` // Cost in EUR (or base currency)
 }
 
 // Step represents a single unit of work in a plan

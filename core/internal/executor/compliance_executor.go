@@ -63,8 +63,8 @@ Additional Context: %v`, region, access, step.Params)
 			outputChan <- fmt.Sprintf("RESULT_CONSOLE_OUTPUT=%s", strings.TrimSpace(result))
 
 			// Report usage
-			if usage.TotalTokens > 0 {
-				outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+			if usage.TotalTokens > 0 || usage.EstimatedCost > 0 {
+				outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d,%.5f", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
 			}
 
 			return nil

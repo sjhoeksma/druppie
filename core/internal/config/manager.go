@@ -20,12 +20,15 @@ type Config struct {
 }
 
 type GeneralConfig struct {
-	MaxUnattendedCost float64      `yaml:"max_unattended_cost" json:"max_unattended_cost"`
-	ServerPort        string       `yaml:"server_port" json:"server_port"`
-	CleanupDays       int          `yaml:"cleanup_days" json:"cleanup_days"`
-	MaxAgentSelection int          `yaml:"max_agent_selections" json:"max_agent_selections"`
-	Memory            MemoryConfig `yaml:"memory" json:"memory"`
+	MaxUnattendedCost float64            `yaml:"max_unattended_cost" json:"max_unattended_cost"`
+	InternalCosts     map[string]float64 `yaml:"internal_costs" json:"internal_costs"`
+	ServerPort        string             `yaml:"server_port" json:"server_port"`
+	CleanupDays       int                `yaml:"cleanup_days" json:"cleanup_days"`
+	MaxAgentSelection int                `yaml:"max_agent_selections" json:"max_agent_selections"`
+	Memory            MemoryConfig       `yaml:"memory" json:"memory"`
 }
+
+// ... (other types unchanged)
 
 type MemoryConfig struct {
 	MaxWindowTokens int `yaml:"max_window_tokens" json:"max_window_tokens"` // e.g. 128000
@@ -82,6 +85,8 @@ type ProviderConfig struct {
 	ClientSecret            string  `yaml:"client_secret,omitempty" json:"client_secret,omitempty"`
 	PricePerPromptToken     float64 `yaml:"price_per_prompt_token,omitempty" json:"price_per_prompt_token,omitempty"`         // € per 1M tokens
 	PricePerCompletionToken float64 `yaml:"price_per_completion_token,omitempty" json:"price_per_completion_token,omitempty"` // € per 1M tokens
+	PricePerRequest         float64 `yaml:"price_per_request,omitempty" json:"price_per_request,omitempty"`                   // € per request (e.g. image)
+	PricePerWord            float64 `yaml:"price_per_word,omitempty" json:"price_per_word,omitempty"`                         // € per word (e.g. TTS)
 }
 
 // Manager handles concurrent access to the configuration
@@ -211,6 +216,12 @@ func (c Config) Clone() Config {
 		newCfg.Build.Providers = make(map[string]BuildProviderConfig, len(c.Build.Providers))
 		for k, v := range c.Build.Providers {
 			newCfg.Build.Providers[k] = v
+		}
+	}
+	if c.General.InternalCosts != nil {
+		newCfg.General.InternalCosts = make(map[string]float64, len(c.General.InternalCosts))
+		for k, v := range c.General.InternalCosts {
+			newCfg.General.InternalCosts[k] = v
 		}
 	}
 	return newCfg

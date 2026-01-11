@@ -63,7 +63,12 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				if err != nil {
 					return nil, err
 				}
-				return &GeminiProvider{genaiClient: client, model: model}, nil
+				return &GeminiProvider{
+					genaiClient:             client,
+					model:                   model,
+					PricePerPromptToken:     pCfg.PricePerPromptToken,
+					PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				}, nil
 			} else {
 				if pCfg.ProjectID == "" && pCfg.ClientID == "" {
 					return nil, fmt.Errorf("gemini config incomplete (missing api_key or project_id/client_id)")
@@ -74,7 +79,13 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				if err != nil {
 					return nil, fmt.Errorf("failed to authenticate gemini: %w", err)
 				}
-				return &GeminiProvider{httpClient: client, projectID: finalProjectID, model: model}, nil
+				return &GeminiProvider{
+					httpClient:              client,
+					projectID:               finalProjectID,
+					model:                   model,
+					PricePerPromptToken:     pCfg.PricePerPromptToken,
+					PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				}, nil
 			}
 		case "ollama":
 			model := pCfg.Model
@@ -85,13 +96,23 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 			if pCfg.URL != "" {
 				baseURL = pCfg.URL
 			}
-			return &OllamaProvider{Model: model, BaseURL: baseURL}, nil
+			return &OllamaProvider{
+				Model:                   model,
+				BaseURL:                 baseURL,
+				PricePerPromptToken:     pCfg.PricePerPromptToken,
+				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+			}, nil
 		case "lmstudio":
 			baseURL := "http://localhost:1234/v1"
 			if pCfg.URL != "" {
 				baseURL = pCfg.URL
 			}
-			return &LMStudioProvider{Model: pCfg.Model, BaseURL: baseURL}, nil
+			return &LMStudioProvider{
+				Model:                   pCfg.Model,
+				BaseURL:                 baseURL,
+				PricePerPromptToken:     pCfg.PricePerPromptToken,
+				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+			}, nil
 		case "openrouter":
 			model := pCfg.Model
 			if model == "" {
@@ -107,13 +128,13 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 			if strings.Contains(strings.ToLower(pCfg.Model), "dutch") || strings.Contains(strings.ToLower(pCfg.Model), "nl") {
 				lang = "nl"
 			}
-			return NewSherpaTTSProvider(lang, pCfg.Model)
+			return NewSherpaTTSProvider(lang, pCfg.Model, pCfg.PricePerWord)
 		case "stable-diffusion":
 			// Use BaseURL field from config which maps to APIURL usually?
 			// Config struct has APIURL? Let's check config struct in next step if needed,
 			// but usually provider config has generic fields.
 			// provider.go uses pCfg.APIURL for OpenAI, so we assume BaseURL is passed there.
-			return NewStableDiffusionProvider(pCfg.URL, pCfg.Model), nil
+			return NewStableDiffusionProvider(pCfg.URL, pCfg.Model, pCfg.PricePerRequest, mgr), nil
 		default:
 			return nil, fmt.Errorf("unknown provider type: %s", pCfg.Type)
 		}
@@ -248,10 +269,12 @@ func (m *Manager) GetProvider(name string) (Provider, error) {
 // --- Gemini Provider ---
 
 type GeminiProvider struct {
-	genaiClient *genai.Client // For API Key
-	httpClient  *http.Client  // For OAuth
-	projectID   string
-	model       string
+	genaiClient             *genai.Client // For API Key
+	httpClient              *http.Client  // For OAuth
+	projectID               string
+	model                   string
+	PricePerPromptToken     float64
+	PricePerCompletionToken float64
 }
 
 func (p *GeminiProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
@@ -280,6 +303,9 @@ func (p *GeminiProvider) Generate(ctx context.Context, prompt string, systemProm
 			usage.PromptTokens = int(resp.UsageMetadata.PromptTokenCount)
 			usage.CompletionTokens = int(resp.UsageMetadata.CandidatesTokenCount)
 			usage.TotalTokens = int(resp.UsageMetadata.TotalTokenCount)
+
+			usage.EstimatedCost = (float64(usage.PromptTokens)/1000000.0)*p.PricePerPromptToken +
+				(float64(usage.CompletionTokens)/1000000.0)*p.PricePerCompletionToken
 		}
 
 		return cleanResponse(sb.String()), usage, nil
@@ -486,8 +512,10 @@ func (p *GeminiProvider) Close() error {
 // --- Ollama Provider ---
 
 type OllamaProvider struct {
-	Model   string
-	BaseURL string
+	Model                   string
+	BaseURL                 string
+	PricePerPromptToken     float64
+	PricePerCompletionToken float64
 }
 
 func (p *OllamaProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
@@ -541,8 +569,10 @@ func (p *OllamaProvider) Close() error {
 // --- LM Studio Provider (OpenAI Compatible) ---
 
 type LMStudioProvider struct {
-	Model   string
-	BaseURL string
+	Model                   string
+	BaseURL                 string
+	PricePerPromptToken     float64
+	PricePerCompletionToken float64
 }
 
 func (p *LMStudioProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
@@ -613,6 +643,8 @@ func (p *LMStudioProvider) Generate(ctx context.Context, prompt string, systemPr
 		CompletionTokens: result.Usage.CompletionTokens,
 		TotalTokens:      result.Usage.TotalTokens,
 	}
+	usage.EstimatedCost = (float64(usage.PromptTokens)/1000000.0)*p.PricePerPromptToken +
+		(float64(usage.CompletionTokens)/1000000.0)*p.PricePerCompletionToken
 
 	return cleanResponse(result.Choices[0].Message.Content), usage, nil
 }

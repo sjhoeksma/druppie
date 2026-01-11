@@ -45,6 +45,7 @@ git:
     url: ""
     user: ""
     token: ""
+    
 iam: # ProviderOptions: local, keycloak, demo
     provider: local
 
@@ -59,7 +60,21 @@ approval_groups:
 
 general:
     max_unattended_cost: 1.0 # Pause task if cost since last interaction exceeds this amount (Euros)
-    server_port: "80"
+    internal_costs:
+        create_repo: 0.05
+        modify_code: 0.05
+        build_code: 0.02
+        run_code: 0.01
+        read_file: 0.005
+        analyze_file: 0.01
+        create_project: 0.01
+        coding: 0.05
+        validation: 0.01
+        deployment: 0.05
+        verification: 0.01
+        ensure_availability: 0.01
+        check_block_status: 0.005
+    server_port: "8080"
     cleanup_days: 7
     max_agent_selections: 5
     memory:

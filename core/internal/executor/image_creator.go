@@ -64,13 +64,14 @@ func (e *ImageCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 		if mgr, ok := e.LLM.(*llm.Manager); ok {
 			// Check if provider exists (or we can just try Call)
 			// Manager.GenerateWithProvider handles retrieval
-			resp, _, err := mgr.GenerateWithProvider(ctx, "image_creator", prompt, "Generate Image")
+			resp, usage, err := mgr.GenerateWithProvider(ctx, "image_creator", prompt, "Generate Image")
 			if err == nil && resp != "" {
 				filename := fmt.Sprintf("image_scene_%s.png", sceneID)
 				if planID != "" {
 					if err := saveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Image Creator] Generated via Provider: %s", filename)
 						outputChan <- fmt.Sprintf("RESULT_IMAGE_FILE=%s", filename)
+						outputChan <- fmt.Sprintf("RESULT_TOKEN_USAGE=%d,%d,%d,%.5f", usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCost)
 						return nil
 					}
 					outputChan <- fmt.Sprintf("⚠️ Failed to save image from provider: %v", err)
@@ -100,6 +101,7 @@ func (e *ImageCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	// For now just return path as before
 	outputChan <- fmt.Sprintf("✅ [Image Creator] Generated (Mock): %s", filename)
 	outputChan <- fmt.Sprintf("RESULT_IMAGE_FILE=%s", filename)
+	outputChan <- "RESULT_TOKEN_USAGE=0,0,0,0.00100"
 
 	return nil
 }

@@ -99,10 +99,11 @@ type SherpaTTSProvider struct {
 	modelsMu sync.Mutex
 	models   map[string]*sherpa.OfflineTts
 
-	baseDir string
+	baseDir      string
+	PricePerWord float64
 }
 
-func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
+func NewSherpaTTSProvider(lang, modelName string, pricePerWord float64) (*SherpaTTSProvider, error) {
 	// Determine paths usage
 	// Use project relative path as requested
 	baseDir := filepath.Join(".druppie", "sherpa")
@@ -112,6 +113,7 @@ func NewSherpaTTSProvider(lang, modelName string) (*SherpaTTSProvider, error) {
 		DefaultModel: modelName,
 		models:       make(map[string]*sherpa.OfflineTts),
 		baseDir:      baseDir,
+		PricePerWord: pricePerWord,
 	}
 
 	// Pre-load default model
@@ -267,7 +269,11 @@ func (p *SherpaTTSProvider) Generate(ctx context.Context, prompt string, systemP
 		return "", model.TokenUsage{}, err
 	}
 
-	return fmt.Sprintf("base64,%s", base64.StdEncoding.EncodeToString(wavBytes)), model.TokenUsage{}, nil
+	// Calculate Cost
+	wordCount := len(strings.Fields(prompt))
+	cost := float64(wordCount) * p.PricePerWord
+
+	return fmt.Sprintf("base64,%s", base64.StdEncoding.EncodeToString(wavBytes)), model.TokenUsage{EstimatedCost: cost}, nil
 }
 
 func (p *SherpaTTSProvider) Close() error {

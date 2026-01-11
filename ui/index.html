@@ -2769,8 +2769,8 @@
                     <div class="step-log-header">
                         <span class="tag-agent">[${s.agent_id}]</span>
                         <span class="tag-action">${s.action}</span>
-                        ${s.usage && s.usage.total_tokens > 0 ? `<span style="margin-left: auto; margin-right: 1rem; color: var(--text-dim); font-size: 0.75rem; display: flex; align-items: center; gap: 4px;"><i data-lucide="cpu" size="6"></i> ${s.usage.total_tokens.toLocaleString()}</span>` : ''}
-                        <span style="${(!s.usage || s.usage.total_tokens <= 0) ? 'margin-left:auto;' : ''} color: ${s.status === 'waiting_input' ? 'var(--accent)' : ((s.status === 'rejected' || s.status === 'cancelled') ? '#ef4444' : 'inherit')}">${s.status}</span>
+                        ${s.usage && (s.usage.total_tokens > 0 || s.usage.estimated_cost > 0) ? `<span style="margin-left: auto; margin-right: 1rem; color: var(--text-dim); font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">${s.usage.total_tokens ? s.usage.total_tokens.toLocaleString() : ''} ${s.usage.estimated_cost > 0 ? `&nbsp;(€${s.usage.estimated_cost.toFixed(4)})` : ''}</span>` : ''}
+                        <span style="${(!s.usage || (s.usage.total_tokens <= 0 && (!s.usage.estimated_cost || s.usage.estimated_cost <= 0))) ? 'margin-left:auto;' : ''} color: ${s.status === 'waiting_input' ? 'var(--accent)' : ((s.status === 'rejected' || s.status === 'cancelled') ? '#ef4444' : 'inherit')}">${s.status}</span>
                     </div>
                     ${s.result ? `<div class="step-log-content">${s.result}</div>` : ''}
                 `;
