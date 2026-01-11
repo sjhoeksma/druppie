@@ -2,6 +2,8 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -92,6 +94,7 @@ type Step struct {
 	Error         string                 `json:"error,omitempty"`          // captured error message
 	Status        string                 `json:"status"`                   // pending, running, completed, requires_approval
 	DependsOn     []int                  `json:"depends_on,omitempty"`     // List of step IDs that must complete before this step starts
+	DependsOnRaw  interface{}            `json:"-"`                        // Raw value for Mixed Dependency resolution
 	AssignedGroup string                 `json:"assigned_group,omitempty"` // The group (e.g. "compliance") that must approve this step
 	ApprovedBy    string                 `json:"approved_by,omitempty"`    // The user/agent that approved this step
 	Usage         *TokenUsage            `json:"usage,omitempty"`          // Token usage for this step
@@ -100,6 +103,8 @@ type Step struct {
 func (s *Step) UnmarshalJSON(data []byte) error {
 	type Alias Step
 	aux := &struct {
+		// Override DependsOn to accept any type (int array or mixed with strings)
+		DependsOn interface{} `json:"depends_on"`
 		*Alias
 	}{
 		Alias: (*Alias)(s),
@@ -109,6 +114,28 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	}
 	s.AgentID = strings.ReplaceAll(s.AgentID, "-", "_")
 	s.Action = strings.ReplaceAll(s.Action, "-", "_")
+
+	// Parse DependsOn
+	if aux.DependsOn != nil {
+		s.DependsOnRaw = aux.DependsOn // Store raw for planner resolution
+		if os.Getenv("DEBUG_PLANNER") == "true" {
+			fmt.Printf("[Types DEBUG] Unmarshal Step %d (%s) DependsOn raw: %v\n", s.ID, s.Action, s.DependsOnRaw)
+		}
+		if arr, ok := aux.DependsOn.([]interface{}); ok {
+			var ids []int
+			allInts := true
+			for _, v := range arr {
+				if f, ok := v.(float64); ok {
+					ids = append(ids, int(f))
+				} else {
+					allInts = false
+				}
+			}
+			if allInts {
+				s.DependsOn = ids
+			}
+		}
+	}
 	return nil
 }
 

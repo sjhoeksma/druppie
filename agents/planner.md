@@ -82,11 +82,24 @@ Strategies:
    - For `compliance_check`, ALWAYS use standard parameter names: `region` (NOT `deployment_region` or `target_region`) and `access_level`.
 
 8. **Structure Rules**:
+   - **Step Schema (MANDATORY)**:
+     ```json
+     {
+       "step_id": 1,
+       "agent_id": "agent_name",
+       "action": "action_name",
+       "params": { ... },
+       "depends_on": [ "previous_action" ]  // REQUIRED for execution order
+     }
+     ```
    - **Strict JSON**: OUTPUT PURE JSON ONLY. No comments, no trailing commas, no stray words (e.g. 'haar', 'salt', 'als', 'een', 'plaats', 'bij'), NO diff characters (`+`, `-`). NO 'scene_number', 'scene/CID' (use 'scene_id'). NO 'haar' field (use 'duration'). **ALL KEYS MUST BE DOUBLE QUOTED**.
    - **Verification**: Ensure every object ends cleanly with `}`.
    - **Keys**: Use explicit `agent_id` (must match an ID in 'Available Agents'). Do NOT use 'agent/S', 'qa-expert', or invalid IDs.
    - **Paths**: Do NOT hardcode paths like `.druppie/plans/1/...`. ALWAYS use `${PLAN_ID}` variable for dynamic paths (e.g. `.druppie/plans/${PLAN_ID}/src`).
-   - **Dependencies**: `depends_on` MUST be an array of INTEGERS (referencing `step_id`). Do NOT use Strings or Agent IDs.
+   - **Dependencies REQUIRED**: EVERY STEP object MUST include a `depends_on` field.
+     - For the **First Step**: Use `[]` (empty array) if no previous dependencies.
+     - For **Subsequent Steps**: Use `["PREVIOUS_ACTION_NAME"]` (e.g. `["intake"]`) to link to the immediate predecessor in this batch.
+     - **Implicit ordering is NOT preserved**. You MUST use `depends_on` to ensure Step B follows Step A.
    - **Structured Output**: If an agent produces a list (e.g. `av_script`), verify it is a valid JSON array of objects. **Do NOT use 'script_outline' or 'scenes_draft' keys. Use 'av_script' ONLY.**
    - **Language Handling**: Content fields (like `audio_text`, `titles`, `descriptions`) MUST be in the `User Language`. Technical Prompts (like `visual_prompt`) MUST be in ENGLISH.
 
@@ -116,7 +129,9 @@ Output STRICT JSON array of objects (No comments allowed). **Do NOT wrap in a 's
 Start `step_id` at 1. The first step usually has empty `depends_on`.
 
 Example:
+Example referencing history (ID 7) and chaining new steps (String):
 [
-  { "step_id": 1, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [] },
-  { "step_id": 2, "agent_id": "...", "action": "...", "params": {...}, "depends_on": [1] }
+  { "step_id": 1, "agent_id": "architect", "action": "intake", "params": {...}, "depends_on": [7] },
+  { "step_id": 2, "agent_id": "architect", "action": "motivation_modeling", "params": {...}, "depends_on": ["intake"] },
+  { "step_id": 3, "agent_id": "architect", "action": "baseline_modeling", "params": {...}, "depends_on": ["motivation_modeling"] }
 ]

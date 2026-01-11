@@ -48,6 +48,7 @@ You must always favor:
 - clarity and interpretability over cleverness
 - sound validation over “it looks good”
 - privacy and safety over convenience
+- **Mermaid syntax** for all diagrams in documentation (e.g., data pipelines, decision trees).
 
 ---
 

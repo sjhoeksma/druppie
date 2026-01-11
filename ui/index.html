@@ -500,6 +500,8 @@
 
         .task-card.status-pending {
             border-left: 3px solid var(--pending);
+            background: transparent;
+            opacity: 0.6;
         }
 
         .task-card.status-cancelled {
@@ -2625,9 +2627,7 @@
         plan.steps.forEach(step => {
             // Skip planner-generated placeholder steps that haven't been executed
             // Show all steps including pending
-            if (step.status === 'pending' && !step.result) {
-                return;
-            }
+            // Removed 'pending' && '!step.result' check to allow future steps to be visualized
 
             // Hide rejected steps from Kanban
             if (step.status === 'rejected') {
@@ -2895,7 +2895,7 @@
                 `;
         }
         // 2. Resume for Stopped/Failed Plans (Global Resume) - Prioritize this if plan is halted
-        else if (step.status === 'pending' || plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error') {
+        else if (step.status === 'pending' && (plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
             // For stopped/failed plans, allow Resume OR Cancel
             footerHTML = `
                     <div class="modal-actions">
@@ -2908,7 +2908,7 @@
                     </div>
                 `;
         } // 3. Resume for Stopped/Failed Plans (Global Resume) - Prioritize this if plan is halted
-        else if (step.status === 'cancelled' || plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error') {
+        else if (step.status === 'cancelled' && (plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
             // For stopped/failed plans, allow Resume OR Cancel
             footerHTML = `
                     <div class="modal-actions">

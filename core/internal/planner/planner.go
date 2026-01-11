@@ -469,6 +469,49 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 				steps[i].Params["language"] = intent.Language
 			}
 
+			// Resolve Dependencies (String -> Int) - Ported from UpdatePlan
+			if steps[i].DependsOnRaw != nil {
+				resolveDep := func(dep interface{}) {
+					if idFloat, ok := dep.(float64); ok {
+						steps[i].DependsOn = append(steps[i].DependsOn, int(idFloat))
+					} else if depStr, ok := dep.(string); ok {
+						depStr = strings.ReplaceAll(depStr, "-", "_")
+						for j := i - 1; j >= 0; j-- {
+							targetAction := strings.ReplaceAll(steps[j].Action, "-", "_") // Normalize
+							checkStr := depStr
+							if strings.Contains(depStr, ":") {
+								parts := strings.SplitN(depStr, ":", 2)
+								if len(parts) == 2 {
+									checkStr = parts[1]
+								}
+							}
+							if strings.EqualFold(targetAction, checkStr) {
+								steps[i].DependsOn = append(steps[i].DependsOn, steps[j].ID)
+								break
+							}
+						}
+					}
+				}
+
+				switch v := steps[i].DependsOnRaw.(type) {
+				case []interface{}:
+					for _, d := range v {
+						resolveDep(d)
+					}
+				case string:
+					resolveDep(v)
+				case float64:
+					resolveDep(v)
+				}
+			}
+
+			// Fallback: If no dependencies defined, enforce sequential execution within the batch
+			if len(steps[i].DependsOn) == 0 && i > 0 {
+				// Debug Log
+				fmt.Printf("[Planner Create TRACER] Fallback triggered for Step %d -> %d\n", steps[i].ID, steps[i-1].ID)
+				steps[i].DependsOn = append(steps[i].DependsOn, steps[i-1].ID)
+			}
+
 			// CRITICAL VALIDATION: Content Review MUST have av_script
 			action := strings.ToLower(steps[i].Action)
 			// Action is normalized to snake_case in CreatePlan parsing, but here we process raw steps from slice
@@ -980,18 +1023,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			s.Params["language"] = plan.Intent.Language
 		}
 
-		// Resolve Dependencies
-		if ps.DependsOnRaw != nil {
-			if arr, ok := ps.DependsOnRaw.([]interface{}); ok {
-				for _, item := range arr {
-					if f, ok := item.(float64); ok {
-						s.DependsOn = append(s.DependsOn, int(f))
-					}
-				}
-			} else if f, ok := ps.DependsOnRaw.(float64); ok {
-				s.DependsOn = append(s.DependsOn, int(f))
-			}
-		}
+		// Preserve raw dependencies for later resolution
+		s.DependsOnRaw = ps.DependsOnRaw
 
 		// --- Duplicate Audit Prevention (User Request) ---
 		if s.Action == "audit_request" {
@@ -1053,24 +1086,50 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		}
 
 		// Resolve Dependencies (String -> Int)
-		ps := parsingSteps[i]
-		if ps.DependsOnRaw != nil {
+		if newSteps[i].DependsOnRaw != nil {
+			fmt.Printf("[Planner DEBUG] Step %d (%s) DependsOnRaw: %v\n", newSteps[i].ID, newSteps[i].Action, newSteps[i].DependsOnRaw)
 			// Helper to resolve one dependency item
 			resolveDep := func(dep interface{}) {
 				if idFloat, ok := dep.(float64); ok {
 					newSteps[i].DependsOn = append(newSteps[i].DependsOn, int(idFloat))
 				} else if depStr, ok := dep.(string); ok {
+					// Normalize dependency string (replace - with _)
+					depStr = strings.ReplaceAll(depStr, "-", "_")
+
 					// Look for matching action in *newly created* steps (preceding this one)
-					for j := 0; j < i; j++ {
-						if newSteps[j].Action == depStr {
+					// Search backwards to find the nearest previous step with this action
+					// This handles cases where actions repeat (like iterations)
+					found := false
+					for j := i - 1; j >= 0; j-- {
+						// Match action name (normalized snake_case check?)
+						// Also handle "agent:action" format if present
+						targetAction := newSteps[j].Action
+						checkStr := depStr
+						if strings.Contains(depStr, ":") {
+							parts := strings.SplitN(depStr, ":", 2)
+							if len(parts) == 2 {
+								// validation: check agent match too? For now, just match action part if ambiguous?
+								// Or strictly match "agent:action"?
+								// simpler: if "architect:intake", just match "intake" part against action
+								checkStr = parts[1]
+							}
+						}
+
+						fmt.Printf("[Planner DEBUG] Checking dep '%s' (normalized: '%s') against step %d action '%s'\n", depStr, checkStr, newSteps[j].ID, newSteps[j].Action)
+						if strings.EqualFold(targetAction, checkStr) {
+							fmt.Printf("[Planner DEBUG] MATCH FOUND! Linking step %d to %d\n", newSteps[i].ID, newSteps[j].ID)
 							newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[j].ID)
+							found = true
 							break
 						}
+					}
+					if !found && p.Debug {
+						fmt.Printf("[Planner DEBUG] WARNING: Dependency '%s' not found in current batch (preceding steps)\n", depStr)
 					}
 				}
 			}
 
-			switch v := ps.DependsOnRaw.(type) {
+			switch v := newSteps[i].DependsOnRaw.(type) {
 			case []interface{}:
 				for _, d := range v {
 					resolveDep(d)
@@ -1080,6 +1139,17 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			case float64:
 				resolveDep(v)
 			}
+		}
+
+		// Debug verification log (Always visible for diagnosis)
+		fmt.Printf("[Planner TRACER] Step index %d (ID %d): Action='%s', DependsOn Count=%d\n", i, newSteps[i].ID, newSteps[i].Action, len(newSteps[i].DependsOn))
+
+		// Fallback: If no dependencies defined, enforce sequential execution within the batch
+		if len(newSteps[i].DependsOn) == 0 && i > 0 {
+			if p.Debug {
+				fmt.Printf("[Planner DEBUG] Step %d (%s) has no explicit dependencies. Defaulting to depend on Step %d (%s)\n", newSteps[i].ID, newSteps[i].Action, newSteps[i-1].ID, newSteps[i-1].Action)
+			}
+			newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[i-1].ID)
 		}
 	}
 

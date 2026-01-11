@@ -15,9 +15,6 @@ import (
 
 // StableDiffusionProvider implements the LLMProvider interface for Stable Diffusion.
 // ./webui.sh --listen --port 7860 --api
-
-// StableDiffusionProvider implements the LLMProvider interface for Stable Diffusion.
-// ./webui.sh --listen --port 7860 --api
 type StableDiffusionProvider struct {
 	BaseURL string
 	Model   string

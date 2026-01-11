@@ -18,6 +18,7 @@
         rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <link rel="stylesheet" href="common.css">
     <script src="common.js"></script>
     <style>
@@ -397,6 +398,7 @@
                 domReadOnly: false
             });
             refreshFiles();
+            setInterval(() => refreshFiles(true), 5000);
         });
 
 
@@ -406,9 +408,13 @@
         };
 
         // ... existing refreshFiles and tree logic ...
-        async function refreshFiles() {
+        // State for file tree
+        let lastFilesHash = '';
+        const collapsedPaths = new Set();
+
+        async function refreshFiles(silent = false) {
             if (!planID) {
-                document.getElementById('file-tree').innerText = 'No Plan ID provided';
+                if (!silent) document.getElementById('file-tree').innerText = 'No Plan ID provided';
                 return;
             }
             try {
@@ -418,10 +424,25 @@
                     throw new Error(`Server returned ${res.status}`);
                 }
                 const files = await res.json();
-                renderTree(files);
+
+                // Sort for determinism (by path)
+                files.sort((a, b) => a.path.localeCompare(b.path));
+                const currentHash = JSON.stringify(files);
+
+                if (currentHash !== lastFilesHash) {
+                    lastFilesHash = currentHash;
+                    // Save Scroll
+                    const container = document.getElementById('file-tree');
+                    const savedScroll = container ? container.scrollTop : 0;
+
+                    renderTree(files);
+
+                    // Restore Scroll
+                    if (container) container.scrollTop = savedScroll;
+                }
             } catch (e) {
                 console.error(e);
-                document.getElementById('file-tree').innerHTML = '<div style="padding:1rem;">Failed to load files</div>';
+                if (!silent) document.getElementById('file-tree').innerHTML = '<div style="padding:1rem;">Failed to load files</div>';
             }
         }
 
@@ -449,12 +470,16 @@
 
         function buildFileTree(files) {
             const root = {};
-            files.forEach(path => {
-                const parts = path.split('/');
+            files.forEach(file => { // file is now {path, mod_time}
+                const parts = file.path.split('/');
                 let current = root;
                 parts.forEach((part, index) => {
                     if (!current[part]) {
-                        current[part] = index === parts.length - 1 ? null : {}; // null indicates file, object indicates folder
+                        if (index === parts.length - 1) {
+                            current[part] = { _isFile: true, ...file };
+                        } else {
+                            current[part] = {};
+                        }
                     }
                     current = current[part];
                 });
@@ -462,19 +487,28 @@
             return root;
         }
 
-        function renderRecursive(container, node, currentPath) {
-            // Sort: folders first, then files
+        function renderRecursive(container, node, parentPath) {
+            // Sort: folders first (Alpha), then files (Oldest First)
             const entries = Object.keys(node).sort((a, b) => {
-                const aIsFolder = node[a] !== null;
-                const bIsFolder = node[b] !== null;
-                if (aIsFolder && !bIsFolder) return -1;
-                if (!aIsFolder && bIsFolder) return 1;
-                return a.localeCompare(b);
+                const itemA = node[a];
+                const itemB = node[b];
+                const isFolderA = !itemA._isFile;
+                const isFolderB = !itemB._isFile;
+
+                if (isFolderA && !isFolderB) return -1;
+                if (!isFolderA && isFolderB) return 1;
+
+                if (isFolderA) { // Both folders
+                    return a.localeCompare(b);
+                }
+                // Both Files: Sort by Creation/Mod Time
+                return (itemA.mod_time || 0) - (itemB.mod_time || 0);
             });
 
             entries.forEach(key => {
-                const isFolder = node[key] !== null;
-                const fullPath = currentPath ? `${currentPath}/${key}` : key;
+                const item = node[key];
+                const isFolder = !item._isFile;
+                const fullPath = parentPath ? `${parentPath}/${key}` : key;
 
                 const itemDiv = document.createElement('div');
                 itemDiv.style.marginLeft = '0.5rem'; // Indent for children
@@ -485,11 +519,23 @@
                 contentDiv.style.alignItems = 'center';
                 contentDiv.style.gap = '6px';
 
+                // Highlight active file
+                if (!isFolder && currentPath && fullPath === currentPath) {
+                    contentDiv.classList.add('active');
+                }
+
                 if (isFolder) {
                     contentDiv.innerHTML = `<i data-lucide="folder" style="width:14px; color:var(--text-dim);"></i> <span>${key}</span>`;
 
                     const childrenContainer = document.createElement('div');
-                    childrenContainer.style.display = 'block'; // Open by default
+
+                    // Restore collapsed state (default open)
+                    if (collapsedPaths.has(fullPath)) {
+                        childrenContainer.style.display = 'none';
+                    } else {
+                        childrenContainer.style.display = 'block';
+                    }
+
                     childrenContainer.style.borderLeft = '1px solid rgba(255,255,255,0.05)';
                     childrenContainer.style.marginLeft = '4px';
 
@@ -498,9 +544,10 @@
                         e.stopPropagation();
                         if (childrenContainer.style.display === 'none') {
                             childrenContainer.style.display = 'block';
-                            // Start icon update logic if feasible (e.g. swap svg)
+                            collapsedPaths.delete(fullPath);
                         } else {
                             childrenContainer.style.display = 'none';
+                            collapsedPaths.add(fullPath);
                         }
                     };
 
@@ -604,9 +651,34 @@
             document.getElementById('media-player').style.display = 'none';
             const preview = document.getElementById('markdown-preview');
             preview.style.display = 'block';
+
             // Parse Markdown
             if (typeof marked !== 'undefined') {
                 preview.innerHTML = marked.parse(content);
+
+                // Render Mermaid Diagrams
+                if (typeof mermaid !== 'undefined') {
+                    const blocks = preview.querySelectorAll('pre code.language-mermaid');
+                    const mermaidNodes = [];
+
+                    blocks.forEach(block => {
+                        const div = document.createElement('div');
+                        div.className = 'mermaid';
+                        div.textContent = block.textContent;
+
+                        const pre = block.parentElement;
+                        if (pre && pre.tagName === 'PRE') {
+                            pre.replaceWith(div);
+                            mermaidNodes.push(div);
+                        }
+                    });
+
+                    if (mermaidNodes.length > 0) {
+                        mermaid.run({
+                            nodes: mermaidNodes
+                        }).catch(e => console.error('Mermaid error:', e));
+                    }
+                }
             } else {
                 preview.innerHTML = '<div style="padding:1rem;">Marked.js not loaded</div>';
             }
@@ -687,6 +759,9 @@
 
         // Initialize icons after DOM updates
         lucide.createIcons();
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+        }
 
     </script>
 </body>

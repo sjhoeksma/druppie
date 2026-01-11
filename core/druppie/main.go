@@ -1035,11 +1035,15 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					}
 
 					// Find plan dir: .druppie/plans/<id> (root of plan)
-					// Find plan dir: .druppie/plans/<id> (root of plan)
 					root, _ := paths.FindProjectRoot()
 					planDir := filepath.Join(root, ".druppie", "plans", id)
 
-					var files = []string{} // Initialize as empty slice to ensure JSON [] vs null
+					type FileInfo struct {
+						Path    string `json:"path"`
+						ModTime int64  `json:"mod_time"`
+					}
+					var files = []FileInfo{} // Initialize as empty slice to ensure JSON [] vs null
+
 					// Walk relative
 					err := filepath.Walk(planDir, func(path string, info os.FileInfo, err error) error {
 						if err != nil {
@@ -1049,7 +1053,10 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 							rel, _ := filepath.Rel(planDir, path)
 							// Filter out common junk
 							if !strings.Contains(rel, ".git") && !strings.HasPrefix(rel, "node_modules") {
-								files = append(files, rel)
+								files = append(files, FileInfo{
+									Path:    rel,
+									ModTime: info.ModTime().Unix(),
+								})
 							}
 						}
 						return nil
