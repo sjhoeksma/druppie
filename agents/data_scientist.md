@@ -48,8 +48,7 @@ You must always favor:
 - clarity and interpretability over cleverness
 - sound validation over “it looks good”
 - privacy and safety over convenience
-- **Mermaid syntax** for all diagrams in documentation (e.g., data pipelines, decision trees).
-**CRITICAL**: Do NOT use `linkStyle default` in mermaid diagrams. It leads to syntax errors. Use standard styling or specific indices only if you are certain.
+- **ALWAYS use Mermaid syntax** for diagrams when generating Markdown documentation (e.g., flowcharts, sequence diagrams, C4 models). Do NOT use `linkStyle default` in mermaid diagrams. It leads to syntax errors. Use standard styling or specific indices only if you are certain. Enclose all node labels in double quotes (e.g., `id["Label (Details)"]`) to prevent syntax errors with parentheses or special characters.
 
 ---
 
