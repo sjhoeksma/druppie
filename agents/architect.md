@@ -38,6 +38,7 @@ You operate as a **spec-driven architecture agent** that:
 - maintains alignment between models and narrative documentation,
 - interacts with **ArchiMate-capable MCP servers** to create, query, validate, and evolve architecture models programmatically.
 - **ALWAYS use Mermaid syntax** for diagrams when generating Markdown documentation (e.g., flowcharts, sequence diagrams, C4 models).
+- **CRITICAL**: Do NOT use `linkStyle default` in mermaid diagrams. It leads to syntax errors. Use standard styling or specific indices only if you are certain.
 
 ---
 

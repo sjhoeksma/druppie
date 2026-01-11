@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"reflect"
+
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
@@ -444,7 +446,15 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 
 		// Ensure all steps have a status and normalized params
 		validationErr = nil // Reset
+		idMap := make(map[int]int)
 		for i := range steps {
+			// Enforce valid, sequential ID and map original ID
+			originalID := steps[i].ID
+			steps[i].ID = i + 1
+			if originalID != 0 {
+				idMap[originalID] = steps[i].ID
+			}
+
 			if steps[i].Status == "" {
 				steps[i].Status = "pending"
 			}
@@ -473,7 +483,12 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 			if steps[i].DependsOnRaw != nil {
 				resolveDep := func(dep interface{}) {
 					if idFloat, ok := dep.(float64); ok {
-						steps[i].DependsOn = append(steps[i].DependsOn, int(idFloat))
+						oldID := int(idFloat)
+						if newID, matches := idMap[oldID]; matches {
+							steps[i].DependsOn = append(steps[i].DependsOn, newID)
+						} else {
+							steps[i].DependsOn = append(steps[i].DependsOn, oldID)
+						}
 					} else if depStr, ok := dep.(string); ok {
 						depStr = strings.ReplaceAll(depStr, "-", "_")
 						for j := i - 1; j >= 0; j-- {
@@ -1003,6 +1018,41 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			Params:  ps.Params,
 		}
 
+		// --- LOOP PREVENTION (Strict) ---
+		// Check against LAST completed/running step in history (plan.Steps) to prevent immediate stutter/loop
+		// We iterate backwards to find the most recent relevant step
+		isDuplicate := false
+		if len(plan.Steps) > 0 {
+			// Check against the last few steps (window of 3)
+			limit := len(plan.Steps) - 3
+			if limit < 0 {
+				limit = 0
+			}
+			for k := len(plan.Steps) - 1; k >= limit; k-- {
+				oldStep := plan.Steps[k]
+				// Skip 'replanning' steps in history comparison
+				if oldStep.Action == "replanning" {
+					continue
+				}
+
+				if oldStep.AgentID == s.AgentID && oldStep.Action == s.Action {
+					// Deep Compare Params
+					// Note: JSON unmarshal might produce different types (float64 vs int), but let's assume standard unmarshal
+					if reflect.DeepEqual(s.Params, oldStep.Params) {
+						isDuplicate = true
+						if p.Debug {
+							fmt.Printf("[Planner] Dropping Loop Duplicate: Step %s:%s (Matches Step %d)\n", s.AgentID, s.Action, oldStep.ID)
+						}
+						break
+					}
+				}
+			}
+		}
+
+		if isDuplicate {
+			continue // Skip adding this step
+		}
+
 		// Normalize 'av_script' aliases
 		if s.Params != nil {
 			for _, alias := range []string{"script_outline", "scene_outline", "scenes_draft", "scenes"} {
@@ -1087,19 +1137,18 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 		// Resolve Dependencies (String -> Int)
 		if newSteps[i].DependsOnRaw != nil {
-			fmt.Printf("[Planner DEBUG] Step %d (%s) DependsOnRaw: %v\n", newSteps[i].ID, newSteps[i].Action, newSteps[i].DependsOnRaw)
 			// Helper to resolve one dependency item
 			resolveDep := func(dep interface{}) {
 				if idFloat, ok := dep.(float64); ok {
 					newSteps[i].DependsOn = append(newSteps[i].DependsOn, int(idFloat))
 				} else if depStr, ok := dep.(string); ok {
+					found := false
 					// Normalize dependency string (replace - with _)
 					depStr = strings.ReplaceAll(depStr, "-", "_")
 
 					// Look for matching action in *newly created* steps (preceding this one)
 					// Search backwards to find the nearest previous step with this action
 					// This handles cases where actions repeat (like iterations)
-					found := false
 					for j := i - 1; j >= 0; j-- {
 						// Match action name (normalized snake_case check?)
 						// Also handle "agent:action" format if present
@@ -1115,16 +1164,39 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 							}
 						}
 
-						fmt.Printf("[Planner DEBUG] Checking dep '%s' (normalized: '%s') against step %d action '%s'\n", depStr, checkStr, newSteps[j].ID, newSteps[j].Action)
 						if strings.EqualFold(targetAction, checkStr) {
-							fmt.Printf("[Planner DEBUG] MATCH FOUND! Linking step %d to %d\n", newSteps[i].ID, newSteps[j].ID)
 							newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[j].ID)
 							found = true
 							break
 						}
 					}
-					if !found && p.Debug {
-						fmt.Printf("[Planner DEBUG] WARNING: Dependency '%s' not found in current batch (preceding steps)\n", depStr)
+
+					// If not found in new steps, search HISTORY (plan.Steps)
+					// This ensures we can depend on steps that are currently running or just completed
+					if !found && len(plan.Steps) > 0 {
+						for k := len(plan.Steps) - 1; k >= 0; k-- {
+							targetAction := plan.Steps[k].Action
+							// Normalize target action to snake_case just in case history has mixed format
+							targetAction = strings.ReplaceAll(targetAction, "-", "_")
+
+							checkStr := depStr
+							if strings.Contains(depStr, ":") {
+								parts := strings.SplitN(depStr, ":", 2)
+								if len(parts) == 2 {
+									checkStr = parts[1]
+								}
+							}
+
+							if strings.EqualFold(targetAction, checkStr) {
+								newSteps[i].DependsOn = append(newSteps[i].DependsOn, plan.Steps[k].ID)
+								found = true
+								// Debug Log
+								if p.Debug {
+									fmt.Printf("[Planner] Resolved dependency '%s' to History Step %d\n", depStr, plan.Steps[k].ID)
+								}
+								break
+							}
+						}
 					}
 				}
 			}
@@ -1140,22 +1212,37 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 				resolveDep(v)
 			}
 		}
-
-		// Debug verification log (Always visible for diagnosis)
-		fmt.Printf("[Planner TRACER] Step index %d (ID %d): Action='%s', DependsOn Count=%d\n", i, newSteps[i].ID, newSteps[i].Action, len(newSteps[i].DependsOn))
-
 		// Fallback: If no dependencies defined, enforce sequential execution within the batch
 		if len(newSteps[i].DependsOn) == 0 && i > 0 {
-			if p.Debug {
-				fmt.Printf("[Planner DEBUG] Step %d (%s) has no explicit dependencies. Defaulting to depend on Step %d (%s)\n", newSteps[i].ID, newSteps[i].Action, newSteps[i-1].ID, newSteps[i-1].Action)
-			}
 			newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[i-1].ID)
+		}
+
+		// Enforce Sequential Execution for Spec-Driven Agents (Architect, Compliance)
+		// This prevents race conditions where dependent steps (e.g. Intake -> Motivation) run in parallel
+		// due to missed dependencies in LLM output.
+		// Infrastructure agents are exempted to allow parallel deployments.
+		if i > 0 && newSteps[i].AgentID == newSteps[i-1].AgentID {
+			agent := strings.ToLower(newSteps[i].AgentID)
+			if agent == "architect" || agent == "compliance" || agent == "business_analyst" || agent == "data_scientist" {
+				hasDep := false
+				prevID := newSteps[i-1].ID
+				for _, d := range newSteps[i].DependsOn {
+					if d == prevID {
+						hasDep = true
+						break
+					}
+				}
+				if !hasDep {
+					newSteps[i].DependsOn = append(newSteps[i].DependsOn, prevID)
+					if p.Debug {
+						fmt.Printf("[Planner] Enforcing sequential execution for agent %s (Step %d -> %d)\n", agent, newSteps[i].ID, prevID)
+					}
+				}
+			}
 		}
 	}
 
 	// Filter out duplicate steps (LLMGuard)
-	// Filter out duplicate steps (LLMGuard)
-	// DISABLED: We trust the Planner/Agent logic to avoid loops, or we WANT loops (e.g. rejection -> retry).
 	filteredSteps := newSteps
 
 	// Append

@@ -68,9 +68,9 @@ Strategies:
    - **Stop Logic**:
      - If the Lead Agent workflow is done (`[*]`), return `[]`.
      - **Execution**: If the last workflow step has completed successfully, the goal is met. STOP. Return `[]`.
-     - **Loop Prevention (CRITICAL)**: If you see a completed sequence (e.g. `Deployment` -> `Verification` -> `Audit`), **DO NOT** repeat it. A successful Audit on a completed Deployment means the goal is met. STOP.
      - **Compliance Deduplication**: If an `audit_request` step is already `completed` or `requires_approval` in the history, **DO NOT** schedule another one unless the Intent has changed or a NEW critical violation was found. Assume one approval covers the plan execution.
-     - **Idempotency**: Do not schedule `ensure_availability` or `create_repo` for items that are already 'completed' in the history.
+     - **Idempotency (STRICT)**: Do not schedule `ensure_availability`, `create_repo`, or `deployment` for items/files that are already 'completed' in the history with IDENTICAL parameters. Only schedule these actions if the parameters (e.g., content, version) have CHANGED.
+     - **Loop Prevention (STRICT)**: If the LAST steps in history contain identical Action/Agent pairs as your proposed next steps, STOP immediately. Assume the plan is stuck.
    - **Plugin Completion**: If the last completed step was `promote_plugin`, the workflow is DONE. Return `[]`.
    - **Anti-Pattern**: Do NOT generate steps like "orchestration", "quality-check", or "summary" after the final state. If the workflow is done, STOP.
 

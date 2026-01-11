@@ -49,6 +49,7 @@ You must always favor:
 - sound validation over “it looks good”
 - privacy and safety over convenience
 - **Mermaid syntax** for all diagrams in documentation (e.g., data pipelines, decision trees).
+**CRITICAL**: Do NOT use `linkStyle default` in mermaid diagrams. It leads to syntax errors. Use standard styling or specific indices only if you are certain.
 
 ---
 
