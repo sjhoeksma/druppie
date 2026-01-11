@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
+	"github.com/sjhoeksma/druppie/core/internal/logging"
 	"github.com/sjhoeksma/druppie/core/internal/model"
 	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
@@ -64,17 +65,7 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 		return fmt.Errorf("source directory '%s' is empty. You must call 'create_repo' with content before 'build_code'", repoURL)
 	}
 
-	// Define Log Path
-	var logPath string
-
-	if planID != "" {
-		logPath, _ = paths.ResolvePath(".druppie", "plans", planID, "logs", "execution.log")
-	}
-
-	// Create Log Stream Adapter
-	// Adapter that writes lines to outputChan
-	// Create Log Stream Adapter
-	// Adapter that writes lines to outputChan
+	// Create Log Stream Adapter for UI Output
 	pr, pw := io.Pipe()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -85,15 +76,27 @@ func (e *BuildExecutor) Execute(ctx context.Context, step model.Step, outputChan
 			outputChan <- scanner.Text()
 		}
 	}()
-	// Note: We need to Close pw eventually?
-	// TriggerBuild should close it? No, TriggerBuild takes Writer.
-	// We can't easily wait for TriggerBuild to finish writing before returning here?
-	// TriggerBuild is synchronous in LocalClient.
-	// So we can defer close.
+
+	// Construct Unified Log Writer
+	// 1. Write to UI (pw)
+	// 2. Write to Execution Log (via logging package)
+	var writers []io.Writer
+	writers = append(writers, pw)
+
+	if planID != "" {
+		fileWriter := logging.NewLogWriter(planID)
+		writers = append(writers, fileWriter)
+	} else {
+		outputChan <- "Warning: No Plan ID provided. Build logs will only be visible here and not persisted."
+	}
+
+	multiWriter := io.MultiWriter(writers...)
 
 	// Trigger Build
-	buildID, err := e.Builder.TriggerBuild(ctx, repoURL, commitHash, logPath, pw)
+	buildID, err := e.Builder.TriggerBuild(ctx, repoURL, commitHash, multiWriter)
 	if err != nil {
+		outputChan <- fmt.Sprintf("Build failed with error: %v", err)
+		pw.Close() // Close pipe to stop scanner
 		return err
 	}
 

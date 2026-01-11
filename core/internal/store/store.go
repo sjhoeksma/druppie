@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sjhoeksma/druppie/core/internal/logging"
 	"github.com/sjhoeksma/druppie/core/internal/model"
-	"github.com/sjhoeksma/druppie/core/internal/paths"
 )
 
 // Store defines the interface for persisting execution plans and configuration.
@@ -185,66 +185,15 @@ func (s *FileStore) CleanupOldPlans(days int) (int, error) {
 }
 
 func (s *FileStore) LogInteraction(planID string, tag string, input string, output string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if planID == "" {
-		return nil
-	}
-
-	// plans/<id>/logs/execution.log
-	logDir, _ := paths.ResolvePath(".druppie", "plans", planID, "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return err
-	}
-	path := filepath.Join(logDir, "execution.log")
-
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	timestamp := time.Now().Format(time.RFC3339)
-	entry := fmt.Sprintf("--- [%s] %s ---\nINPUT:\n%s\nOUTPUT:\n%s\n\n", tag, timestamp, input, output)
-	_, err = f.WriteString(entry)
-	return err
+	return logging.LogInteraction(planID, tag, input, output)
 }
 
 func (s *FileStore) AppendRawLog(planID string, message string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if planID == "" {
-		return fmt.Errorf("planID is empty")
-	}
-
-	logDir, _ := paths.ResolvePath(".druppie", "plans", planID, "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return err
-	}
-	path := filepath.Join(logDir, "execution.log")
-
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(message + "\n")
-	return err
+	return logging.AppendRawLog(planID, message)
 }
 
 func (s *FileStore) GetLogs(id string) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	path, _ := paths.ResolvePath(".druppie", "plans", id, "logs", "execution.log")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return logging.GetLogs(id)
 }
 
 func (s *FileStore) SaveConfig(data []byte) error {

@@ -44,7 +44,7 @@ func NewDockerClient(workingDir string) (*DockerClient, error) {
 }
 
 // TriggerBuild runs a build inside a container
-func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logPath string, logWriter io.Writer) (string, error) {
+func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitHash string, logWriter io.Writer) (string, error) {
 	// 1. Path Resolution & Security
 	targetDir := repoURL
 	if !filepath.IsAbs(targetDir) {
@@ -64,6 +64,9 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 	buildID := fmt.Sprintf("build-%d", time.Now().Unix())
 	outputDir := filepath.Join(targetDir, "../builds", buildID)
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		if logWriter != nil {
+			fmt.Fprintf(logWriter, "Error creating output directory: %v\n", err)
+		}
 		return "", fmt.Errorf("failed to create output dir: %w", err)
 	}
 
@@ -157,35 +160,12 @@ func (c *DockerClient) TriggerBuild(ctx context.Context, repoURL string, commitH
 	}
 
 	// 7. Stream Logs
-	var logFile *os.File
-	if logPath != "" {
-		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-			return "", err
-		}
-		logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			return "", err
-		}
-		//fmt.Println("Logging to file:", logPath)
-	} else {
-		// Just a dummy file or fallback
-	}
-
-	// Create MultiWriter: File + Provided Writer
-	var writers []io.Writer
-	//writers = append(writers, os.Stdout)
-	if logFile != nil {
-		writers = append(writers, logFile)
-		defer logFile.Close()
-	}
-	if logWriter != nil {
-		writers = append(writers, logWriter)
-	}
-
 	out, err := c.Client.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true, Follow: true})
 	if err == nil {
-		mw := io.MultiWriter(writers...)
-		stdcopy.StdCopy(mw, mw, out)
+		if logWriter != nil {
+			// stdcopy handles docker multiplexing
+			stdcopy.StdCopy(logWriter, logWriter, out)
+		}
 		out.Close()
 	}
 

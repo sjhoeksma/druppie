@@ -19,6 +19,7 @@ import (
 	"github.com/sjhoeksma/druppie/core/internal/config"
 	"github.com/sjhoeksma/druppie/core/internal/iam"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
+	"github.com/sjhoeksma/druppie/core/internal/logging"
 	"github.com/sjhoeksma/druppie/core/internal/mcp"
 	"github.com/sjhoeksma/druppie/core/internal/memory"
 	"github.com/sjhoeksma/druppie/core/internal/model"
@@ -739,13 +740,19 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 					var req struct {
 						RepoURL    string `json:"repo_url"`
 						CommitHash string `json:"commit_hash"`
+						PlanID     string `json:"plan_id"`
 					}
 					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 						http.Error(w, "Invalid request body", http.StatusBadRequest)
 						return
 					}
 
-					id, err := buildEngine.TriggerBuild(r.Context(), req.RepoURL, req.CommitHash, "", nil)
+					var logWriter io.Writer
+					if req.PlanID != "" {
+						logWriter = logging.NewLogWriter(req.PlanID)
+					}
+
+					id, err := buildEngine.TriggerBuild(r.Context(), req.RepoURL, req.CommitHash, logWriter)
 					if err != nil {
 						http.Error(w, fmt.Sprintf("Build failed: %v", err), http.StatusInternalServerError)
 						return

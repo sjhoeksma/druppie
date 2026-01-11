@@ -8,7 +8,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sjhoeksma/druppie/core/internal/logging"
 )
+
+// LogToExecution appends a formatted interaction log to the plan's execution.log
+func LogToExecution(planID, agent, input, output string) error {
+	return logging.LogInteraction(planID, agent, input, output)
+}
+
+// AppendLog appends a raw line to the plan's execution.log
+func AppendLog(planID, message string) error {
+	return logging.AppendRawLog(planID, message)
+}
 
 // SaveAsset helper to store files (images, audio, video) in the plan's files directory
 func SaveAsset(planID, filename, data string) error {
