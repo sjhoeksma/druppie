@@ -1668,7 +1668,11 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 			tm = NewTaskManager(planner, mcpManager, buildEngine)
 
 			fmt.Println("--- Druppie Chat (Async) ---")
-			fmt.Printf("LLM Provider: %s\n", cfg.LLM.DefaultProvider)
+			effectiveProvider := cfg.LLM.DefaultProvider
+			if llmProviderOverride != "" {
+				effectiveProvider = llmProviderOverride
+			}
+			fmt.Printf("LLM Provider: %s\n", effectiveProvider)
 			fmt.Println("Commands: /exit, /list, /stop <id>, /switch <id>")
 
 			// Resume plan if ID provided
