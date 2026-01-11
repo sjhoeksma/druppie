@@ -1107,8 +1107,13 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 
 	// Adjust IDs using existing startID
 	// Recalculate startID based on current plan state (including replanning step)
+	// Recalculate startID based on current plan state (including replanning step)
+	isReplanningSequence := false
 	if len(plan.Steps) > 0 {
 		startID = plan.Steps[len(plan.Steps)-1].ID
+		if plan.Steps[len(plan.Steps)-1].Action == "replanning" {
+			isReplanningSequence = true
+		}
 	}
 
 	for i := range newSteps {
@@ -1139,44 +1144,38 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		if newSteps[i].DependsOnRaw != nil {
 			// Helper to resolve one dependency item
 			resolveDep := func(dep interface{}) {
+				var resolvedID int
+				found := false
+
 				if idFloat, ok := dep.(float64); ok {
-					newSteps[i].DependsOn = append(newSteps[i].DependsOn, int(idFloat))
+					resolvedID = int(idFloat)
+					found = true
 				} else if depStr, ok := dep.(string); ok {
-					found := false
 					// Normalize dependency string (replace - with _)
 					depStr = strings.ReplaceAll(depStr, "-", "_")
 
 					// Look for matching action in *newly created* steps (preceding this one)
-					// Search backwards to find the nearest previous step with this action
-					// This handles cases where actions repeat (like iterations)
 					for j := i - 1; j >= 0; j-- {
-						// Match action name (normalized snake_case check?)
-						// Also handle "agent:action" format if present
 						targetAction := newSteps[j].Action
 						checkStr := depStr
 						if strings.Contains(depStr, ":") {
 							parts := strings.SplitN(depStr, ":", 2)
 							if len(parts) == 2 {
-								// validation: check agent match too? For now, just match action part if ambiguous?
-								// Or strictly match "agent:action"?
-								// simpler: if "architect:intake", just match "intake" part against action
 								checkStr = parts[1]
 							}
 						}
 
 						if strings.EqualFold(targetAction, checkStr) {
-							newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[j].ID)
+							resolvedID = newSteps[j].ID
 							found = true
 							break
 						}
 					}
 
 					// If not found in new steps, search HISTORY (plan.Steps)
-					// This ensures we can depend on steps that are currently running or just completed
 					if !found && len(plan.Steps) > 0 {
 						for k := len(plan.Steps) - 1; k >= 0; k-- {
 							targetAction := plan.Steps[k].Action
-							// Normalize target action to snake_case just in case history has mixed format
 							targetAction = strings.ReplaceAll(targetAction, "-", "_")
 
 							checkStr := depStr
@@ -1188,9 +1187,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 							}
 
 							if strings.EqualFold(targetAction, checkStr) {
-								newSteps[i].DependsOn = append(newSteps[i].DependsOn, plan.Steps[k].ID)
+								resolvedID = plan.Steps[k].ID
 								found = true
-								// Debug Log
 								if p.Debug {
 									fmt.Printf("[Planner] Resolved dependency '%s' to History Step %d\n", depStr, plan.Steps[k].ID)
 								}
@@ -1198,6 +1196,19 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 							}
 						}
 					}
+				}
+
+				if found {
+					// Apply Shift: If we are in a replanning sequence and the dependency points to the step
+					// immediately preceding the replanner (startID - 1), shift it to the replanner (startID).
+					// This ensures the new plan links to the replanning event, not just the old history.
+					if isReplanningSequence && resolvedID == startID-1 {
+						resolvedID = startID
+					}
+					for j, d := range newSteps[i].DependsOn {
+						newSteps[i].DependsOn[j] = d + 1
+					}
+					//newSteps[i].DependsOn = append(newSteps[i].DependsOn, resolvedID)
 				}
 			}
 
@@ -1217,29 +1228,24 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			newSteps[i].DependsOn = append(newSteps[i].DependsOn, newSteps[i-1].ID)
 		}
 
-		// Enforce Sequential Execution for Spec-Driven Agents (Architect, Compliance)
-		// This prevents race conditions where dependent steps (e.g. Intake -> Motivation) run in parallel
-		// due to missed dependencies in LLM output.
-		// Infrastructure agents are exempted to allow parallel deployments.
+		// Enforce Sequential Execution for SAME AGENT
+		// If the current step belongs to the same agent as the previous step,
+		// and no dependency on the previous step exists, add it.
+		// This prevents agents from racing with themselves (e.g. Architect Intake vs Motivation).
 		if i > 0 && newSteps[i].AgentID == newSteps[i-1].AgentID {
-			agent := strings.ToLower(newSteps[i].AgentID)
-			if agent == "architect" || agent == "compliance" || agent == "business_analyst" || agent == "data_scientist" {
-				hasDep := false
-				prevID := newSteps[i-1].ID
-				for _, d := range newSteps[i].DependsOn {
-					if d == prevID {
-						hasDep = true
-						break
-					}
-				}
-				if !hasDep {
-					newSteps[i].DependsOn = append(newSteps[i].DependsOn, prevID)
-					if p.Debug {
-						fmt.Printf("[Planner] Enforcing sequential execution for agent %s (Step %d -> %d)\n", agent, newSteps[i].ID, prevID)
-					}
+			hasDep := false
+			prevID := newSteps[i-1].ID
+			for _, d := range newSteps[i].DependsOn {
+				if d == prevID {
+					hasDep = true
+					break
 				}
 			}
+			if !hasDep {
+				newSteps[i].DependsOn = append(newSteps[i].DependsOn, prevID)
+			}
 		}
+
 	}
 
 	// Filter out duplicate steps (LLMGuard)
