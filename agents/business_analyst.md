@@ -2,10 +2,10 @@
 id: business-analyst
 name: "Business Analyst"
 description: "Specialized in eliciting and structuring requirements."
-type: spec-agent
+type: spec_agent
 condition: "Run primarily to elicit requirements if the User Goal is vague or incomplete."
 version: 1.0.0
-skills: ["main-agent", "ask_questions"]
+skills: ["main_agent", "ask_questions"]
 tools: []
 priority: 100.0
 workflow: |

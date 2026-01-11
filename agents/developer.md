@@ -2,7 +2,7 @@
 id: developer
 name: "Developer"
 description: "Specialized agent for writing code. MUST include 'package.json' for Node, 'go.mod' for Go, and 'requirements.txt' for Python."
-type: execution-agent
+type: execution_agent
 version: 1.0.0
 native: true
 skills: ["create_repo", "modify_code"]

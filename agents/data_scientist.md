@@ -1,11 +1,11 @@
 ---
-id: data-scientist
+id: data_scientist
 name: "Data Scientist"
 description: "Expert in Python data science solution design and implementation."
-type: spec-agent
+type: spec_agent
 version: 1.0.0
 auth_group: ["datalab"]
-skills: ["python", "mermaid", "sub-agent"]
+skills: ["python", "mermaid", "sub_agent"]
 tools: []
 priority: 5.0
 workflow: |

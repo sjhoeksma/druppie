@@ -140,18 +140,28 @@
         #media-player {
             display: none;
             flex: 1;
-            padding: 2rem;
+            overflow: auto;
+            padding: 1rem;
             background: var(--bg-deep);
             color: var(--text-main);
-            text-align: center;
+            scrollbar-width: thin;
         }
 
-        #media-player audio,
+        #media-player audio {
+            width: 100%;
+            max-width: 500px;
+            display: block;
+            margin: 2rem auto;
+        }
+
+        #media-player img,
         #media-player video {
             max-width: 100%;
-            max-height: 80%;
+            height: auto;
             border-radius: 0.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: block;
+            margin: auto;
         }
 
         #file-tree {
@@ -628,10 +638,7 @@
             document.getElementById('markdown-preview').style.display = 'none';
             document.getElementById('monaco').style.display = 'none';
             const mediaDiv = document.getElementById('media-player');
-            mediaDiv.style.display = 'flex';
-            mediaDiv.style.flexDirection = 'column';
-            mediaDiv.style.alignItems = 'center';
-            mediaDiv.style.justifyContent = 'center';
+            mediaDiv.style.display = 'block'; // Change to block to support scrollable children
             mediaDiv.innerHTML = '<div style="color:var(--text-dim);">Loading media...</div>';
 
             const url = `/v1/plans/${planID}/files/content?path=${encodeURIComponent(path)}`;
@@ -652,11 +659,6 @@
 
                 mediaDiv.innerHTML = '';
 
-                const title = document.createElement('h3');
-                title.innerText = path.split('/').pop();
-                title.style.marginBottom = '1rem';
-                mediaDiv.appendChild(title);
-
                 if (path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.ogg')) {
                     const audio = document.createElement('audio');
                     audio.controls = true;
@@ -672,10 +674,6 @@
                 } else if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.gif') || path.endsWith('.webp')) {
                     const img = document.createElement('img');
                     img.src = objectURL;
-                    img.style.maxWidth = '100%';
-                    img.style.maxHeight = '80vh';
-                    img.style.borderRadius = '8px';
-                    img.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
                     mediaDiv.appendChild(img);
                 }
             } catch (e) {

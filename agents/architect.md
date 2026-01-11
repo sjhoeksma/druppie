@@ -2,10 +2,10 @@
 id: architect
 name: "Architect"
 description: "Primary architecture agent for designing complex enterprise systems and solution architectures. Use for multi-service or high-level design tasks."
-type: spec-agent
+type: spec_agent
 version: 1.0.0
-skills: ["mermaid", "main-agent", "architectural-design", "intake", "motivation-modeling", "baseline-modeling", "target-modeling", "viewpoint-derivation", "principles-consistency-check", "decision-recording", "roadmap-gaps", "documentation-assembly", "review-governance"]
-subagents: ["business-analyst", "data-scientist", "tester"] 
+skills: ["mermaid", "main_agent", "architectural_design", "intake", "motivation_modeling", "baseline_modeling", "target_modeling", "viewpoint_derivation", "principles_consistency_check", "decision_recording", "roadmap_gaps", "documentation_assembly", "review_governance"]
+subagents: ["business_analyst", "data_scientist", "tester"] 
 tools: []
 priority: 90.0
 workflow: |

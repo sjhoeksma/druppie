@@ -1,7 +1,7 @@
 ---
 id: planner
 name: "Planner"
-type: system-agent
+type: system_agent
 description: "System agent responsible for breaking down user goals into actionable plans."
 native: true
 version: 1.0.0
@@ -29,8 +29,8 @@ Strategies:
         - **Action**: Schedule a **SINGLE** step with `action: "expand_loop"` and `agent_id: "planner"`.
         - **Params**:
           - `iterator_key`: Value after `Key:` (e.g. "av_script").
-          - `target_agent`: Value after `Target:` (e.g. "audio-creator").
-          - `target_action`: Value after `Do:` (e.g. "text-to-speech").
+          - `target_agent`: Value after `Target:` (e.g. "audio_creator").
+          - `target_action`: Value after `Do:` (e.g. "text_to_speech").
         - **STOP**: Do NOT generate further steps for this node. The system expands it.
      2. **Priority Check**: Check the **Current Agent's Workflow**.
         - If the Current Agent is in a state (e.g. `Scenes`) and has a transition to another state, schedule that internal transition first.
@@ -50,16 +50,16 @@ Strategies:
     - **Code Lifecycle (STRICT ORDER)**: If the User wants to Run or Deploy code:
       1. **Creation**: You MUST ALWAYS first schedule `developer` (`create_repo`) if the goal is to create something new (Maak, Create, Schrijf). 
          - **CRITICAL**: Do NOT schedule `build_code` as Step 1.
-      2. **Build**: Only AFTER `create_repo` is completed, schedule `build-agent` (`build_code`).
-      3. **Run**: Only AFTER `build_code` is completed, schedule `run-agent` (`run_code`).
+      2. **Build**: Only AFTER `create_repo` is completed, schedule `build_agent` (`build_code`).
+      3. **Run**: Only AFTER `build_code` is completed, schedule `run_agent` (`run_code`).
     - **Plugin Lifecycle (specialized)**:
       1. **Create**: Use `developer` (`create_repo`). files MUST be at root (e.g. `index.js`), NOT in subfolders. 
          - **ANTI-PATTERN**: Do NOT use `create_directory` or `move_file`. These actions do not exist.
-      2. **Build**: Use `build-agent` (`build_code`).
+      2. **Build**: Use `build_agent` (`build_code`).
          - **MANDATORY**: You MUST run this step to generate a `build_id`, even if the code needs no compilation (Node.js/Python). `promote_plugin` requires `build_id`.
-      3. **Test**: Use `plugin-converter` (`test_plugin` or `execute_plugin`).
-         - **CRITICAL**: Do NOT assign test/execute actions to `developer` or `tester`. Only `plugin-converter` can run plugins.
-      4. **Promote**: Use `plugin-converter` (`promote_plugin`).
+      3. **Test**: Use `mcp_plugin_developer` (`test_plugin` or `execute_plugin`).
+         - **CRITICAL**: Do NOT assign test/execute actions to `developer` or `tester`. Only `mcp_plugin_developer` can run plugins.
+      4. **Promote**: Use `mcp_plugin_developer` (`promote_plugin`).
          - **Requirement**: Must depend on `test_plugin` and use the `${BUILD_ID}` from step 2.
     - **Missing Files**: If an agent reports "files missing", "empty directory", or "no build system", you must insert or retry a `create_repo` step before the failing step to fix it.
 
@@ -103,7 +103,7 @@ The 'User Language' is defined above.
 Example if User Language code is 'nl' (Dutch):
 {
   "step_id": 1,
-  "agent_id": "business-analyst",
+  "agent_id": "business_analyst",
   "action": "ask_questions", 
   "params": { 
      "questions": ["Wat is de visuele stijl van de video?"],

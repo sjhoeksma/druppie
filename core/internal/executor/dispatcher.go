@@ -2,6 +2,7 @@ package executor
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/sjhoeksma/druppie/core/internal/builder"
 	"github.com/sjhoeksma/druppie/core/internal/llm"
@@ -39,6 +40,7 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 			&BusinessAnalystExecutor{LLM: llmProvider, Registry: reg}, // Business Analyst Handler
 			&StandardExecutor{StdCtx: stdCtx},                         // Standard/Infra Handler (Replaces InfrastructureExecutor)
 			&ArchitectExecutor{LLM: llmProvider, Registry: reg},       // Architect Handler
+			&ContentMergerExecutor{},                                  // Final Video Merger
 			// Legacy/Fallback last
 			&SceneCreatorExecutor{},
 		},
@@ -46,6 +48,9 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 }
 
 func (d *Dispatcher) GetExecutor(action string) (Executor, error) {
+	// Normalize action to snake_case to match user requirement
+	// e.g. "text-to-speech" -> "text_to_speech"
+	action = strings.ReplaceAll(action, "-", "_")
 	for _, e := range d.executors {
 		if e.CanHandle(action) {
 			return e, nil

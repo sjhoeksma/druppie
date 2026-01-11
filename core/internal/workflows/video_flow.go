@@ -14,13 +14,14 @@ import (
 
 type VideoCreationWorkflow struct{}
 
-func (w *VideoCreationWorkflow) Name() string { return "video-content-creator" }
+func (w *VideoCreationWorkflow) Name() string { return "video_content_creator" }
 
 // Data Structures for State
 type ProjectIntent struct {
 	OriginalPrompt string
 	RefinedPrompt  string
 	Language       string
+	TargetAudience string
 	Parameters     map[string]interface{}
 }
 
@@ -45,23 +46,23 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 
 	// 1. Refine Intent (Ask Questions)
 	var intent ProjectIntent
-	// Check if already completed
-	if existing := wc.FindCompletedStep("refine_intent", "", nil); existing != nil {
+	// Check if already completed (Planner uses 'ask_questions' for the initial phase)
+	if existing := wc.FindCompletedStep("ask_questions", "", nil); existing != nil {
 		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Intent already refined."
-		// Reconstruct Intent from Params
-		if refined, ok := existing.Params["refined"].(string); ok {
-			intent.RefinedPrompt = refined
-			// We might be missing Language and other fields if we don't save them all.
-			// Ideally we save the whole intent object or critical fields.
-			// Let's assume we can proceed with just RefinedPrompt or we should have saved more.
-			// Let's rely on what we saved. In refineIntent below we only saved 'refined'.
-			// Update: We should update refineIntent to save language too.
-			// For now, let's just proceed.
-			if lang, ok := existing.Params["language"].(string); ok {
-				intent.Language = lang
-			} else {
-				intent.Language = "en" // Default fallback
-			}
+		if lang, ok := existing.Params["language"].(string); ok {
+			intent.Language = lang
+		} else {
+			intent.Language = "nl" // Default for this plan
+		}
+		// Refined prompt might be in the result or prompt field of intent
+		intent.RefinedPrompt = initialPrompt
+	} else if existing := wc.FindCompletedStep("refine_intent", "", nil); existing != nil {
+		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Intent already refined (refine_intent)."
+		intent.RefinedPrompt, _ = existing.Params["refined_prompt"].(string)
+		intent.Language, _ = existing.Params["language"].(string)
+		intent.TargetAudience, _ = existing.Params["target_audience"].(string)
+		if intent.RefinedPrompt == "" {
+			intent.RefinedPrompt = initialPrompt
 		}
 	} else {
 		var err error
@@ -74,16 +75,17 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 
 	// 2. Draft Script
 	var script AVScript
-	if existing := wc.FindCompletedStep("draft_scenes", "", nil); existing != nil {
-		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Script already drafted."
+	if existing := wc.FindCompletedStep("content_review", "", nil); existing != nil && existing.Params["av_script"] != nil {
+		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Script already drafted (from content_review)."
 		if sceneList, ok := existing.Params["av_script"].([]interface{}); ok {
-			// Need to convert []interface{} to []Scene manually or use json marshal/unmarshal hack
 			bytes, _ := json.Marshal(sceneList)
 			_ = json.Unmarshal(bytes, &script.Scenes)
-		} else {
-			// Try to see if it was saved directly as []Scene (internal type)?
-			// Go json unmarshal usually makes it []interface{}.
-			// Let's assume the json.Marshal hack works.
+		}
+	} else if existing := wc.FindCompletedStep("draft_scenes", "", nil); existing != nil {
+		wc.OutputChan <- "⏩ [VideoWorkflow] Resuming: Script already drafted."
+		if sceneList, ok := existing.Params["av_script"].([]interface{}); ok {
+			bytes, _ := json.Marshal(sceneList)
+			_ = json.Unmarshal(bytes, &script.Scenes)
 		}
 	} else {
 		var err error
@@ -93,12 +95,6 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 		}
 		wc.OutputChan <- fmt.Sprintf("✅ [VideoWorkflow] Script Approved: %d scenes.", len(script.Scenes))
 		_ = wc.Store.LogInteraction(wc.PlanID, "VideoContentCreator", "Approved Script", w.formatScript(script))
-		wc.AppendStep(model.Step{
-			AgentID: "video-content-creator",
-			Action:  "draft_scenes",
-			Status:  "completed",
-			Params:  map[string]interface{}{"av_script": script.Scenes},
-		})
 	}
 
 	// 3. Asset Production Phases
@@ -107,7 +103,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- "🎙️ [VideoWorkflow] Phase 1/3: Audio Generation..."
 	for {
 		var err error
-		script.Scenes, err = w.runPhase(wc, "audio-creator", "text-to-speech", script.Scenes, func(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
+		script.Scenes, err = w.runPhase(wc, "audio_creator", "text_to_speech", script.Scenes, func(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
 			return w.generateAudio(wc, s, intent.Language)
 		})
 		if err != nil {
@@ -127,7 +123,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- "🎨 [VideoWorkflow] Phase 2/3: Image Generation..."
 	for {
 		var err error
-		script.Scenes, err = w.runPhase(wc, "image-creator", "image-generation", script.Scenes, w.generateImage)
+		script.Scenes, err = w.runPhase(wc, "image_creator", "image_generation", script.Scenes, w.generateImage)
 		if err != nil {
 			return err
 		}
@@ -145,7 +141,7 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	wc.OutputChan <- "🎬 [VideoWorkflow] Phase 3/3: Video Generation..."
 	for {
 		var err error
-		script.Scenes, err = w.runPhase(wc, "video-creator", "video-generation", script.Scenes, w.generateVideo)
+		script.Scenes, err = w.runPhase(wc, "video_creator", "video_generation", script.Scenes, w.generateVideo)
 		if err != nil {
 			return err
 		}
@@ -160,16 +156,17 @@ func (w *VideoCreationWorkflow) Run(wc *WorkflowContext, initialPrompt string) e
 	}
 
 	// 4. Merge
-	finalVideo, err := w.mergeVideo(wc, script.Scenes)
+	finalVideo, usage, err := w.mergeVideo(wc, script.Scenes)
 	if err != nil {
 		return err
 	}
 	wc.AppendStep(model.Step{
-		AgentID: "video-content-creator",
-		Action:  "content-merge",
+		AgentID: "video_content_creator",
+		Action:  "content_merge",
 		Status:  "completed",
 		Params:  map[string]interface{}{"av_script": script.Scenes},
 		Result:  fmt.Sprintf("RESULT_VIDEO_FILE=%s", finalVideo),
+		Usage:   usage,
 	})
 
 	wc.OutputChan <- "🎉 [VideoWorkflow] Workflow Completed Successfully!"
@@ -293,7 +290,7 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 	stepID := 2000 + len(_scenes) + int(time.Now().Unix()%1000)
 	wc.AppendStep(model.Step{
 		ID:      stepID,
-		AgentID: "video-content-creator",
+		AgentID: "video_content_creator",
 		Action:  actionName,
 		Status:  "waiting_input",
 		Result:  w.formatReviewData(phaseName, _scenes),
@@ -309,7 +306,7 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 		if input == "/stop" {
 			wc.AppendStep(model.Step{
 				ID:      stepID,
-				AgentID: "video-content-creator",
+				AgentID: "video_content_creator",
 				Action:  actionName,
 				Status:  "failed",
 				Result:  "User rejected validation",
@@ -320,7 +317,7 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 			wc.OutputChan <- fmt.Sprintf("✅ [Review] %s Approved.", phaseName)
 			wc.AppendStep(model.Step{
 				ID:      stepID,
-				AgentID: "video-content-creator",
+				AgentID: "video_content_creator",
 				Action:  actionName,
 				Status:  "completed",
 				Result:  "Approved by user",
@@ -331,7 +328,7 @@ func (w *VideoCreationWorkflow) reviewPhase(wc *WorkflowContext, phaseName strin
 		// Feedback
 		wc.AppendStep(model.Step{
 			ID:      stepID,
-			AgentID: "video-content-creator",
+			AgentID: "video_content_creator",
 			Action:  actionName,
 			Status:  "rejected",
 			Result:  fmt.Sprintf("Rejected: %s", input),
@@ -349,29 +346,41 @@ If the request is too vague, formulate 1 short question to clarify (in the user'
 If it is clear, output the refined project details.
 Detect the language of the user request (e.g. 'nl', 'en', 'fr') and use it for the "language" field.
 Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clarification": false, "refined_prompt": "...", "language": "detected_code", "target_audience": "..." }`
-
 	// Try to load prompt from agent definition
-	if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+	if agent, err := wc.GetAgent("video_content_creator"); err == nil {
 		if p, ok := agent.Prompts["refine_intent"]; ok && p != "" {
 			sysPrompt = p
 		}
 	}
 
+	refineStepID := 0
+	questionStepID := 0
+	var cumulativeUsage model.TokenUsage
+
 	for {
 		// Register running step
-		stepID := wc.AppendStep(model.Step{
-			AgentID: "video-content-creator",
+		refineStepID = wc.AppendStep(model.Step{
+			ID:      refineStepID,
+			AgentID: "video_content_creator",
 			Action:  "refine_intent",
 			Status:  "running",
+			Usage:   &cumulativeUsage,
 		})
 
 		// Retrieve Provider from Agent Definition
 		var providerName string
-		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+		if agent, err := wc.GetAgent("video_content_creator"); err == nil {
 			providerName = agent.Provider
 		}
 
 		resp, usagePtr, err := wc.CallLLM(sysPrompt+"\nUser Request: "+prompt, "Refine Intent", providerName)
+		if usagePtr != nil {
+			cumulativeUsage.PromptTokens += usagePtr.PromptTokens
+			cumulativeUsage.CompletionTokens += usagePtr.CompletionTokens
+			cumulativeUsage.TotalTokens += usagePtr.TotalTokens
+			cumulativeUsage.EstimatedCost += usagePtr.EstimatedCost
+		}
+
 		if wc.UpdateTokenUsage != nil && usagePtr != nil {
 			wc.UpdateTokenUsage(*usagePtr)
 		}
@@ -380,7 +389,7 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			if usagePtr != nil {
 				usageVal = *usagePtr
 			}
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), Usage: &usageVal})
+			wc.AppendStep(model.Step{ID: refineStepID, Status: "failed", Result: err.Error(), Usage: &usageVal})
 			return ProjectIntent{}, err
 		}
 
@@ -400,10 +409,11 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			question, _ := raw["question"].(string)
 			wc.OutputChan <- fmt.Sprintf("🤔 [Intent] Question: %s", question)
 
-			// Update running step to waiting_input
-			wc.AppendStep(model.Step{
-				ID:      stepID,
-				AgentID: "video-content-creator",
+			// Update last refine_intent to complete/paused?
+			// Actually just add the question step.
+			questionStepID = wc.AppendStep(model.Step{
+				ID:      questionStepID,
+				AgentID: "video_content_creator",
 				Action:  "ask_questions",
 				Status:  "waiting_input",
 				Result:  question,
@@ -416,8 +426,8 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			case input := <-wc.InputChan:
 				// Mark the question step as completed with the answer
 				wc.AppendStep(model.Step{
-					ID:      stepID,
-					AgentID: "video-content-creator",
+					ID:      questionStepID,
+					AgentID: "video_content_creator",
 					Action:  "ask_questions",
 					Status:  "completed",
 					Result:  fmt.Sprintf("Question: %s\nAnswer: %s", question, input),
@@ -432,22 +442,23 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 		intent.OriginalPrompt = prompt
 		intent.RefinedPrompt, _ = raw["refined_prompt"].(string)
 		intent.Language, _ = raw["language"].(string)
+		intent.TargetAudience, _ = raw["target_audience"].(string)
 		intent.Parameters = raw
 
 		// 4. Mark "refine_intent" as COMPLETED with Usage
 		wc.AppendStep(model.Step{
-			ID:      stepID,
-			AgentID: "video-content-creator",
+			ID:      refineStepID,
+			AgentID: "video_content_creator",
 			Action:  "refine_intent",
 			Status:  "completed",
 			Result:  "Intent refined",
-			Usage:   usagePtr,
+			Usage:   &cumulativeUsage,
 		})
 
-		// 5. Create NEW step for content-review
+		// 5. Create NEW step for content_review
 		reviewStepID := wc.AppendStep(model.Step{
-			AgentID: "video-content-creator",
-			Action:  "content-review", // Matches user request for skill: content-review
+			AgentID: "video_content_creator",
+			Action:  "content_review", // Matches user request for skill: content_review
 			Status:  "waiting_input",
 			Result:  fmt.Sprintf("Proposed Intent:\n%s", intent.RefinedPrompt),
 		})
@@ -464,8 +475,8 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			if input == "/accept" || input == "ok" || input == "" || strings.EqualFold(input, "accept") {
 				wc.AppendStep(model.Step{
 					ID:      reviewStepID,
-					AgentID: "video-content-creator",
-					Action:  "content-review",
+					AgentID: "video_content_creator",
+					Action:  "content_review",
 					Status:  "completed",
 					Result:  "Intent Approved",
 				})
@@ -478,8 +489,8 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 			wc.OutputChan <- fmt.Sprintf("🔄 [Intent] Feedback: %s. Refining...", input)
 			wc.AppendStep(model.Step{
 				ID:      reviewStepID,
-				AgentID: "video-content-creator",
-				Action:  "content-review",
+				AgentID: "video_content_creator",
+				Action:  "content_review",
 				Status:  "rejected",
 				Result:  fmt.Sprintf("Rejected: %s", input),
 			})
@@ -492,17 +503,24 @@ Output JSON: { "needs_clarification": true, "question": "..." } OR { "needs_clar
 func (w *VideoCreationWorkflow) draftScript(wc *WorkflowContext, intent ProjectIntent) (AVScript, error) {
 	currentPrompt := intent.RefinedPrompt
 	iteration := 0
+	draftStepID := 0
+	reviewStepID := 0
+	var cumulativeUsage model.TokenUsage
 
 	for {
 		iteration++
+		if iteration > 5 {
+			return AVScript{}, fmt.Errorf("failed to draft valid script after 5 attempts")
+		}
 		wc.OutputChan <- "📝 [VideoWorkflow] Drafting Script..."
 
 		// Show "running" state
-		stepID := wc.AppendStep(model.Step{
-			ID:      1000 + iteration, // Keep ID stable for iteration
-			AgentID: "video-content-creator",
+		draftStepID = wc.AppendStep(model.Step{
+			ID:      draftStepID,
+			AgentID: "video_content_creator",
 			Action:  "draft_scenes",
 			Status:  "running",
+			Usage:   &cumulativeUsage,
 		})
 
 		sysPrompt := `You are a Screenwriter. Create a JSON script for a video.
@@ -512,7 +530,7 @@ Key Rules:
 - IF the Request contains "Fix:" and "Prev:", you MUST Modify the "Prev" script according to the "Fix" instructions. Apply the changes requested in "Fix" to the content in "Prev".`
 
 		// Try to load prompt from agent definition
-		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+		if agent, err := wc.GetAgent("video_content_creator"); err == nil {
 			if p, ok := agent.Prompts["draft_script"]; ok && p != "" {
 				sysPrompt = p
 			}
@@ -523,11 +541,27 @@ Key Rules:
 
 		// Retrieve Provider from Agent Definition
 		var providerName string
-		if agent, err := wc.GetAgent("video-content-creator"); err == nil {
+		if agent, err := wc.GetAgent("video_content_creator"); err == nil {
 			providerName = agent.Provider
 		}
 
-		resp, usagePtr, err := wc.CallLLM(sysPrompt+"\nRequest: "+currentPrompt, "Draft Script", providerName)
+		// Enrich request with intent details
+		reqPrompt := currentPrompt
+		if intent.Language != "" {
+			reqPrompt += "\nLanguage: " + intent.Language
+		}
+		if intent.TargetAudience != "" {
+			reqPrompt += "\nTarget Audience: " + intent.TargetAudience
+		}
+
+		resp, usagePtr, err := wc.CallLLM(sysPrompt+"\nRequest: "+reqPrompt, "Draft Script", providerName)
+		if usagePtr != nil {
+			cumulativeUsage.PromptTokens += usagePtr.PromptTokens
+			cumulativeUsage.CompletionTokens += usagePtr.CompletionTokens
+			cumulativeUsage.TotalTokens += usagePtr.TotalTokens
+			cumulativeUsage.EstimatedCost += usagePtr.EstimatedCost
+		}
+
 		if wc.UpdateTokenUsage != nil && usagePtr != nil {
 			wc.UpdateTokenUsage(*usagePtr)
 		}
@@ -536,7 +570,7 @@ Key Rules:
 			if usagePtr != nil {
 				usageVal = *usagePtr
 			}
-			wc.AppendStep(model.Step{ID: stepID, Status: "failed", Result: err.Error(), AgentID: "video-content-creator", Action: "draft_scenes", Usage: &usageVal})
+			wc.AppendStep(model.Step{ID: draftStepID, Status: "failed", Result: err.Error(), AgentID: "video_content_creator", Action: "draft_scenes", Usage: &usageVal})
 			return AVScript{}, err
 		}
 
@@ -554,23 +588,30 @@ Key Rules:
 			continue
 		}
 
+		if len(script.Scenes) == 0 {
+			wc.OutputChan <- "⚠️ [VideoWorkflow] Script generated with 0 scenes. Retrying..."
+			continue
+		}
+
 		wc.OutputChan <- "\n🎥 **Review Draft Script:**"
 		wc.OutputChan <- w.formatScript(script)
 		wc.OutputChan <- "Options: [Type feedback] | '/accept' to proceed"
 
 		// Mark generation completed
 		wc.AppendStep(model.Step{
-			ID:      stepID,
-			AgentID: "video-content-creator",
+			ID:      draftStepID,
+			AgentID: "video_content_creator",
 			Action:  "draft_scenes",
 			Status:  "completed",
 			Result:  "Script Drafted",
-			Usage:   usagePtr,
+			Params:  map[string]interface{}{"av_script": script.Scenes},
+			Usage:   &cumulativeUsage,
 		})
 
 		// Create Review Step
-		reviewStepID := wc.AppendStep(model.Step{
-			AgentID: "video-content-creator",
+		reviewStepID = wc.AppendStep(model.Step{
+			ID:      reviewStepID,
+			AgentID: "video_content_creator",
 			Action:  "draft_scenes_review",
 			Status:  "waiting_input",
 			Result:  w.formatScript(script),
@@ -588,7 +629,7 @@ Key Rules:
 			if input == "/accept" || input == "" || strings.EqualFold(input, "accept") {
 				wc.AppendStep(model.Step{
 					ID:      reviewStepID,
-					AgentID: "video-content-creator",
+					AgentID: "video_content_creator",
 					Action:  "draft_scenes_review",
 					Status:  "completed",
 					Result:  "Approved",
@@ -600,7 +641,7 @@ Key Rules:
 
 			wc.AppendStep(model.Step{
 				ID:      reviewStepID,
-				AgentID: "video-content-creator",
+				AgentID: "video_content_creator",
 				Action:  "draft_scenes_review",
 				Status:  "rejected",
 				Result:  fmt.Sprintf("Rejected: %s", input),
@@ -632,13 +673,20 @@ func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, lang
 		if language != "" {
 			params["language"] = language
 		}
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "text-to-speech", Params: params}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "text_to_speech", Params: params}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {
 		wc.OutputChan <- fmt.Sprintf("  %s", msg)
 		if strings.HasPrefix(msg, "RESULT_AUDIO_FILE=") {
 			capturedFile = strings.TrimPrefix(msg, "RESULT_AUDIO_FILE=")
+		}
+		if strings.HasPrefix(msg, "RESULT_DURATION=") {
+			dStr := strings.TrimPrefix(msg, "RESULT_DURATION=")
+			dStr = strings.TrimSuffix(dStr, "s")
+			if dInt, err := strconv.Atoi(dStr); err == nil {
+				s.Duration = dInt
+			}
 		}
 		if u := parseUsage(msg); u != nil {
 			usage = u
@@ -653,12 +701,12 @@ func (w *VideoCreationWorkflow) generateAudio(wc *WorkflowContext, s Scene, lang
 }
 
 func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
-	executor, _ := wc.Dispatcher.GetExecutor("image-generation")
+	executor, _ := wc.Dispatcher.GetExecutor("image_generation")
 	execChan := make(chan string, 100)
 	var capturedFile string
 	var usage *model.TokenUsage
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "image-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "image_generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {
@@ -679,12 +727,12 @@ func (w *VideoCreationWorkflow) generateImage(wc *WorkflowContext, s Scene) (Sce
 }
 
 func (w *VideoCreationWorkflow) generateVideo(wc *WorkflowContext, s Scene) (Scene, *model.TokenUsage, error) {
-	executor, _ := wc.Dispatcher.GetExecutor("video-generation")
+	executor, _ := wc.Dispatcher.GetExecutor("video_generation")
 	execChan := make(chan string, 100)
 	var capturedFile string
 	var usage *model.TokenUsage
 	go func() {
-		_ = executor.Execute(wc.Ctx, model.Step{Action: "video-generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "audio_file": s.AudioFile, "image_file": s.ImageFile, "duration": s.Duration, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
+		_ = executor.Execute(wc.Ctx, model.Step{Action: "video_generation", Params: map[string]interface{}{"visual_prompt": s.VisualPrompt, "audio_file": s.AudioFile, "image_file": s.ImageFile, "duration": s.Duration, "scene_id": s.ID, "plan_id": wc.PlanID}}, execChan)
 		close(execChan)
 	}()
 	for msg := range execChan {
@@ -726,10 +774,42 @@ func parseUsage(msg string) *model.TokenUsage {
 	return nil
 }
 
-func (w *VideoCreationWorkflow) mergeVideo(wc *WorkflowContext, _ []Scene) (string, error) {
-	wc.OutputChan <- "🎬 [VideoWorkflow] Merging final video..."
-	time.Sleep(2 * time.Second)
-	return "final_video_production.mp4", nil
+func (w *VideoCreationWorkflow) mergeVideo(wc *WorkflowContext, scenes []Scene) (string, *model.TokenUsage, error) {
+	executor, err := wc.Dispatcher.GetExecutor("content_merge")
+	if err != nil {
+		return "", nil, err
+	}
+
+	execChan := make(chan string, 100)
+	var capturedFile string
+	var usage *model.TokenUsage
+
+	go func() {
+		_ = executor.Execute(wc.Ctx, model.Step{
+			Action: "content_merge",
+			Params: map[string]interface{}{
+				"av_script": scenes,
+				"plan_id":   wc.PlanID,
+			},
+		}, execChan)
+		close(execChan)
+	}()
+
+	for msg := range execChan {
+		wc.OutputChan <- fmt.Sprintf("  %s", msg)
+		if strings.HasPrefix(msg, "RESULT_VIDEO_FILE=") {
+			capturedFile = strings.TrimPrefix(msg, "RESULT_VIDEO_FILE=")
+		}
+		if u := parseUsage(msg); u != nil {
+			usage = u
+		}
+	}
+
+	if usage != nil && wc.UpdateTokenUsage != nil {
+		wc.UpdateTokenUsage(*usage)
+	}
+
+	return capturedFile, usage, nil
 }
 
 func (w *VideoCreationWorkflow) formatReviewData(phaseName string, scenes []Scene) string {

@@ -1,13 +1,13 @@
 ---
-id: video-content-creator
+id: video_content_creator
 name: "Video Content Creator"
 description: "Lead agent for Video production. Handles orchestration, scripting, and quality control."
-type: spec-agent
-sub_agents: ["audio-creator", "video-creator", "image-creator"]
+type: spec_agent
+sub_agents: ["audio_creator", "video_creator", "image_creator"]
 condition: "Run to orchestrate the entire video creation workflow (Refinement -> Script -> Audio -> Video)."
 version: 2.1.0
 native: true
-skills: ["ask_questions", "content-review", "expand_loop", "video-review", "image-review", "audio-review"]
+skills: ["ask_questions", "content_review", "expand_loop", "video_review", "image_review", "audio_review"]
 priority: 100.0
 prompts:
   refine_intent: |
@@ -30,7 +30,7 @@ workflow: |
     
     state Intent {
       direction LR
-      state "Task: Create Video Intent\nSkill: content-review" as CreateIntent
+      state "Task: Create Video Intent\nSkill: content_review" as CreateIntent
       [*] --> CreateIntent
       CreateIntent --> CreateIntent: Refine Intent
       CreateIntent --> [*]: Approved Intent
@@ -40,7 +40,7 @@ workflow: |
     
     state Scenes {
       direction LR
-      state "Task: Draft Scenes\nSkill: content-review" as DraftScenes
+      state "Task: Draft Scenes\nSkill: content_review" as DraftScenes
       [*] --> DraftScenes
       DraftScenes --> DraftScenes: Refine Scenes
       DraftScenes --> [*]: Approved Scenes
@@ -49,7 +49,7 @@ workflow: |
     Scenes --> AudioTrack
     state "(EXPAND av_script) Audio PHASE" as AudioTrack {
         state "Task: Generate Audio Loop\nSkill: expand_loop" as GenerateAudio
-        state "Skill: audio-review" as ReviewAudio
+        state "Skill: audio_review" as ReviewAudio
         [*] --> GenerateAudio
         GenerateAudio --> ReviewAudio: Generated
         ReviewAudio --> GenerateAudio: Refine
@@ -58,7 +58,7 @@ workflow: |
     
     state "(EXPAND av_script) Image PHASE" as StaticImage {
         state "Task: Generate Image Loop\nSkill: expand_loop" as GenerateImage
-        state "Skill: image-review" as ReviewImage
+        state "Skill: image_review" as ReviewImage
         [*] --> GenerateImage
         GenerateImage --> ReviewImage: Generated
         ReviewImage --> GenerateImage: Refine
@@ -72,7 +72,7 @@ workflow: |
           direction LR
           state VideoTrack {
             state "Task: Generate Video Loop\nSkill: expand_loop" as GenerateVideo
-            state "Skill: video-review" as ReviewSceneVideo
+            state "Skill: video_review" as ReviewSceneVideo
             [*] --> GenerateVideo
             GenerateVideo --> ReviewSceneVideo: Generated
             ReviewSceneVideo --> GenerateVideo: Refine
@@ -84,8 +84,8 @@ workflow: |
     state Finalize {
       direction LR
       [*] --> MergeVideo
-      state "Block: content-merge - av_script[]" as MergeVideo
-      state "Skill: video-review" as ReviewFinalVideo
+      state "Block: content_merge - av_script[]" as MergeVideo
+      state "Skill: video_review" as ReviewFinalVideo
       MergeVideo --> ReviewFinalVideo
       ReviewFinalVideo --> [*]: Approved Video
      
@@ -105,8 +105,8 @@ You are the **Lead Producer** for Video content projects. You are the specialist
 - **Language**: Questions and Assumptions MUST be in the `User Language`.
 - **Output**: `prompt`
 
-### 2. Draft Scenes (`content-review`)
-- **Action**: `content-review`
+### 2. Draft Scenes (`content_review`)
+- **Action**: `content_review`
 - **GENERATION TASK**: YOU are the screenwriter. You MUST write the detailed `av_script` NOW and include it in the `params`.
 - **Output Parameter**: `av_script` (Array of Objects).
 - **CRITICAL RULE**: Do NOT just list requirements. You must output the ACTUAL script: `{"av_script": [{"scene_id": 1, ...}]}`.
@@ -117,29 +117,29 @@ You are the **Lead Producer** for Video content projects. You are the specialist
 - **Action**: `expand_loop`
 - **Params**:
   - `iterator_key`: "av_script"
-  - `target_agent`: "audio-creator"
-  - `target_action`: "text-to-speech"
-- **NEGATIVE CONSTRAINT**: Do NOT schedule `text-to-speech` directly. Use `expand_loop`.
+  - `target_agent`: "audio_creator"
+  - `target_action`: "text_to_speech"
+- **NEGATIVE CONSTRAINT**: Do NOT schedule `text_to_speech` directly. Use `expand_loop`.
 
 ### 4. StaticImage
 - **Action**: `expand_loop`
 - **Params**:
   - `iterator_key`: "av_script"
-  - `target_agent`: "image-creator"
-  - `target_action`: "image-generation"
-- **NEGATIVE CONSTRAINT**: Do NOT schedule `image-generation` directly. Use `expand_loop`.
+  - `target_agent`: "image_creator"
+  - `target_action`: "image_generation"
+- **NEGATIVE CONSTRAINT**: Do NOT schedule `image_generation` directly. Use `expand_loop`.
 
 ### 5. VideoTrack
 - **Action**: `expand_loop`
 - **Params**:
   - `iterator_key`: "av_script"
-  - `target_agent`: "video-creator"
-  - `target_action`: "video-generation"
-- **NEGATIVE CONSTRAINT**: Do NOT schedule `video-generation` directly. Use `expand_loop`.
+  - `target_agent`: "video_creator"
+  - `target_action`: "video_generation"
+- **NEGATIVE CONSTRAINT**: Do NOT schedule `video_generation` directly. Use `expand_loop`.
 
 ### 6. Finalize
-- **Block**: `content-merge` (Merge Audio/Video).
-- **Skill**: `video-review` (Review Final Output).
+- **Block**: `content_merge` (Merge Audio/Video).
+- **Skill**: `video_review` (Review Final Output).
 - **Anti-Pattern**: Do NOT schedule extra "ensure_availability", "optimization", or "quality-check" steps after the Review. If Approved, the workflow ENDS.
 - **Transitions**:
   - "Approved Video" -> Done.

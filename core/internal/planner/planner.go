@@ -111,16 +111,16 @@ Rules:
 1. Return exactly one JSON array of strings containing Agent IDs.
 2. Sort the array by relevance (most relevant first).
 3. Select ALL agents necessary for the complete workflow.
-   - **CRITICAL**: If the goal involves creating, writing, or modifying code/files, YOU MUST INCLUDE 'developer'.
+   - **CRITICAL**: If the goal involves writing source code, building software, or technical implementation of apps, YOU MUST INCLUDE 'developer'.
 4. Guidelines:
-   - Video content -> 'video-content-creator'
-   - Research/Data -> 'data-scientist'
-   - Infrastructure/Ops -> 'infrastructure-engineer'
+   - Video projects -> 'video_content_creator' (This agent handles its own sub-agents like audio/image).
+   - Research/Data -> 'data_scientist'
+   - Infrastructure/Ops -> 'infrastructure_engineer'
    - Compliance/Policy -> 'compliance'
    - Architecture -> 'architect'
-   - General/Ambiguous -> 'business-analyst'
+   - General/Ambiguous -> 'business_analyst' (Skip if a specialized agent like 'video_content_creator' is selected).
 
-Example: ["business-analyst"]`, intent.Prompt, detailedList)
+Example: ["business_analyst"]`, intent.Prompt, detailedList)
 
 	resp, usage, err := p.llm.Generate(ctx, "Select Agents", prompt)
 	if err != nil {
@@ -152,7 +152,9 @@ Example: ["business-analyst"]`, intent.Prompt, detailedList)
 
 	// Log interaction for visibility
 	if p.Store != nil {
-		_ = p.Store.LogInteraction(planID, "Planner", "Agent Selection", fmt.Sprintf("Goal: %s\nSelected: %v\n(Limited to Top %d)", intent.Prompt, selected, p.MaxAgentSelection))
+		_ = p.Store.LogInteraction(planID, "Agent Selection",
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", prompt),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---\n\nGoal: %s\nSelected: %v\n(Limited to Top %d)", resp, intent.Prompt, selected, p.MaxAgentSelection))
 	}
 
 	return selected, usage
@@ -378,12 +380,17 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 		"%goal%", intent.Prompt,
 		"%action%", intent.Action,
 		"%language%", intent.Language,
-		"%tools%", fmt.Sprintf("%v", blockNames),
-		"%agents%", fmt.Sprintf("%v", agentList),
+		"%tools%", fmt.Sprintf("--- AVAILABLE TOOLS & BLOCKS ---\n%v\n--- END TOOLS ---", blockNames),
+		"%agents%", fmt.Sprintf("--- AVAILABLE AGENT DEFINITIONS ---\n%v\n--- END AGENTS ---", agentList),
 	)
 
 	if p.Store != nil {
-		_ = p.Store.LogInteraction(planID, "Planner", "Context Assembly", fmt.Sprintf("Selected Tools/Blocks: %v", blockNames))
+		reqTools := make([]string, 0, len(requiredTools))
+		for k := range requiredTools {
+			reqTools = append(reqTools, k)
+		}
+		_ = p.Store.LogInteraction(planID, "Planner", "Context Assembly",
+			fmt.Sprintf("Built context for plan %s.\nIncluded Agents: %v\nRequested Tools: %v\nFound Tools/Blocks: %v", planID, sortedIDs, reqTools, blockNames))
 	}
 
 	sysPrompt := replacer.Replace(sysTemplate)
@@ -464,7 +471,26 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 
 			// CRITICAL VALIDATION: Content Review MUST have av_script
 			action := strings.ToLower(steps[i].Action)
-			if action == "content-review" || action == "draft-scenes" || action == "draft_scenes" {
+			// Action is normalized to snake_case in CreatePlan parsing, but here we process raw steps from slice
+			// Wait, parsing happens AFTER validation in the current file flow?
+			// No, CreatePlan -> Generate -> Unwrap -> newSteps loop.
+			// This block (lines 400-500) seems to be inside CreatePlan loop?
+			// Wait, CreatePlan calls Generate.
+			// Snippet 4136 showed parsing logic at line 900.
+			// Snippet 4197 shows validation at 460?
+			// Is 460 inside CreatePlan?
+			// CreatePlan in Snippet 4133 lines 700+.
+			// Validation seems to be inside a loop RETRYING generation (lines 600-900?).
+			// If this loops over `steps`, `steps` are `ParsingStep`.
+			// `ParsingStep` `Action` is RAW from LLM.
+			// So normalization to snake_case hasn't happened yet if it happens at line 930.
+
+			// Ah, I should normalize `steps[i].Action` HERE too if I want consistency.
+			// Or check both. But user wants code to be standard.
+			// I'll normalize `action` variable.
+			action = strings.ReplaceAll(action, "-", "_")
+
+			if action == "content_review" || action == "draft_scenes" {
 				if _, ok := steps[i].Params["av_script"]; !ok {
 					// Check aliases again just in case (redundant but safe)
 					found := false
@@ -475,7 +501,7 @@ func (p *Planner) CreatePlan(ctx context.Context, intent model.Intent, planID st
 						}
 					}
 					if !found {
-						validationErr = fmt.Errorf("step %d (content-review) is MISSING required param 'av_script'. Params found: %v", steps[i].ID, steps[i].Params)
+						validationErr = fmt.Errorf("step %d (content_review) is MISSING required param 'av_script'. Params found: %v", steps[i].ID, steps[i].Params)
 						break
 					}
 				}
@@ -540,7 +566,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		// If it was already completed (by TaskManager /accept logic), just ensure the result is set if empty
 		if status == "completed" {
 			action := plan.Steps[i].Action
-			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
+			if action == "ask_questions" || action == "copywriting" || action == "video_design" || action == "content_review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
 				if plan.Steps[i].Result == "" {
 					plan.Steps[i].Result = feedback
 				}
@@ -551,7 +577,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		if status == "pending" || status == "waiting_input" || status == "running" {
 			// If it's a question or content creation step, mark it as completed
 			action := plan.Steps[i].Action
-			if action == "ask_questions" || action == "copywriting" || action == "video-design" || action == "content-review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
+			if action == "ask_questions" || action == "copywriting" || action == "video_design" || action == "content_review" || action == "draft_scenes" || action == "review_and_governance" || action == "review_governance" || action == "audit_request" {
 				plan.Steps[i].Status = "completed"
 				plan.Steps[i].Result = feedback
 				break
@@ -692,9 +718,9 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			if lastStep.Action == "promote_plugin" ||
 				lastStep.Action == "run_code" ||
 				lastStep.Action == "tool_usage" ||
-				lastStep.Action == "image-generation" ||
-				lastStep.Action == "video-generation" ||
-				lastStep.Action == "text-to-speech" {
+				lastStep.Action == "image_generation" ||
+				lastStep.Action == "video_generation" ||
+				lastStep.Action == "text_to_speech" {
 				if p.Store != nil {
 					_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
 				}
@@ -761,8 +787,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		"%goal%", plan.Intent.Prompt,
 		"%action%", plan.Intent.Action,
 		"%language%", plan.Intent.Language,
-		"%tools%", fmt.Sprintf("%v", blockNames),
-		"%agents%", fmt.Sprintf("%v", updatedAgentList),
+		"%tools%", fmt.Sprintf("--- AVAILABLE TOOLS & BLOCKS ---\n%v\n--- END TOOLS ---", blockNames),
+		"%agents%", fmt.Sprintf("--- AVAILABLE AGENT DEFINITIONS ---\n%v\n--- END AGENTS ---", updatedAgentList),
 	)
 	baseSystemPrompt := replacer.Replace(sysTemplate)
 
@@ -930,7 +956,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		s := model.Step{
 			ID:      ps.StepID,
 			AgentID: ps.AgentID,
-			Action:  ps.Action,
+			Action:  strings.ReplaceAll(ps.Action, "-", "_"),
 			Params:  ps.Params,
 		}
 
@@ -997,7 +1023,10 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	// Adjust IDs using existing startID
-	// startID is already calculated above
+	// Recalculate startID based on current plan state (including replanning step)
+	if len(plan.Steps) > 0 {
+		startID = plan.Steps[len(plan.Steps)-1].ID
+	}
 
 	for i := range newSteps {
 		newSteps[i].ID = startID + i + 1

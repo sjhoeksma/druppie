@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sjhoeksma/druppie/core/internal/llm"
@@ -16,10 +20,11 @@ type VideoCreatorExecutor struct {
 }
 
 func (e *VideoCreatorExecutor) CanHandle(action string) bool {
-	return action == "video-creator" || action == "video-generation"
+	return action == "video_creator" || action == "video_generation"
 }
 
 func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
+
 	// Extract Scene ID
 	sceneID := fmt.Sprintf("%d", step.ID)
 	if sID, ok := step.Params["scene_id"]; ok {
@@ -81,7 +86,7 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 			if err == nil && resp != "" {
 				filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
 				if planID != "" {
-					if err := saveAsset(planID, filename, resp); err == nil {
+					if err := SaveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Video Creator] Generated via Provider: %s", filename)
 						outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
 						if usage.EstimatedCost > 0 || usage.TotalTokens > 0 {
@@ -107,7 +112,35 @@ func (e *VideoCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	}
 
 	filename := fmt.Sprintf("video_scene_%s.mp4", sceneID)
-	// Mock
+	if planID != "" {
+		basePath := fmt.Sprintf(".druppie/plans/%s/files", planID)
+		_ = os.MkdirAll(basePath, 0755)
+		fullPath := filepath.Join(basePath, filename)
+
+		// Try to use ffmpeg to create a video from the image or black color
+		ffmpegPath, err := exec.LookPath("ffmpeg")
+		if err == nil {
+			cleanDuration := strings.TrimSuffix(duration, "s")
+			if cleanDuration == "" {
+				cleanDuration = "1"
+			}
+
+			imgIn := filepath.Join(basePath, imageFile)
+			var cmd *exec.Cmd
+			if _, err := os.Stat(imgIn); err == nil && imageFile != "" {
+				// Create video from still image: ffmpeg -loop 1 -i <img> -c:v libx264 -t <dur> -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y <out>
+				cmd = exec.Command(ffmpegPath, "-loop", "1", "-i", imgIn, "-c:v", "libx264", "-t", cleanDuration, "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-y", fullPath)
+			} else {
+				// Fallback to black color
+				cmd = exec.Command(ffmpegPath, "-f", "lavfi", "-i", fmt.Sprintf("color=c=black:s=640x360:d=%s", cleanDuration), "-pix_fmt", "yuv420p", "-y", fullPath)
+			}
+			_ = cmd.Run()
+		} else {
+			// Fallback to dummy data
+			_ = SaveAsset(planID, filename, "mock_video_data")
+		}
+	}
+
 	outputChan <- fmt.Sprintf("✅ [Video Creator] Asset Generated (Mock): %s", filename)
 	outputChan <- fmt.Sprintf("RESULT_VIDEO_FILE=%s", filename)
 	outputChan <- "RESULT_TOKEN_USAGE=0,0,0,0.00100"

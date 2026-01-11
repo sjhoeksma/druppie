@@ -107,7 +107,7 @@ func (r *Registry) ListAgents(userGroups []string) []model.AgentDefinition {
 
 	list := make([]model.AgentDefinition, 0, len(r.Agents))
 	for _, v := range r.Agents {
-		if v.Type == "system-agent" {
+		if v.Type == "system_agent" {
 			continue
 		}
 		if hasAccess(v.AuthGroups, userGroups) {

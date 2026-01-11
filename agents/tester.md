@@ -2,9 +2,9 @@
 id: tester
 name: "QA / Test Expert"
 description: "QA and testing strategies. Ensures validation and verification."
-type: execution-agent
+type: execution_agent
 version: 1.0.0
-skills: ["sub-agent", "test_plugin"]
+skills: ["sub_agent", "test_plugin"]
 tools: []
 priority: 10.0
 workflow: |

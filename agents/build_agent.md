@@ -1,8 +1,8 @@
 ---
-id: build-agent
+id: build_agent
 name: "Build Agent"
 description: "Specialized agent for building code projects (Node.js, Python, Go) into executable artifacts."
-type: execution-agent
+type: execution_agent
 version: 1.0.0
 native: true
 skills: ["build_code"]

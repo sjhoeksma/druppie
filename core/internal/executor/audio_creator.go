@@ -5,6 +5,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +22,7 @@ type AudioCreatorExecutor struct {
 }
 
 func (e *AudioCreatorExecutor) CanHandle(action string) bool {
-	return action == "audio-creator" || action == "text-to-speech"
+	return action == "audio_creator" || action == "text_to_speech"
 }
 
 func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, outputChan chan<- string) error {
@@ -93,7 +97,7 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 
 				filename := fmt.Sprintf("audio_scene_%s%s", sceneID, ext)
 				if planID != "" {
-					if err := saveAsset(planID, filename, resp); err == nil {
+					if err := SaveAsset(planID, filename, resp); err == nil {
 						outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated via Provider: %s", filename)
 						outputChan <- fmt.Sprintf("RESULT_AUDIO_FILE=%s", filename)
 						if usage.EstimatedCost > 0 || usage.TotalTokens > 0 {
@@ -125,7 +129,24 @@ func (e *AudioCreatorExecutor) Execute(ctx context.Context, step model.Step, out
 	durationStr := fmt.Sprintf("%ds", durationSeconds)
 
 	filename := fmt.Sprintf("audio_scene_%s.mp3", sceneID)
-	// Mock file creation if planID exists?
+	// Mock file creation if planID exists
+	if planID != "" {
+		basePath := fmt.Sprintf(".druppie/plans/%s/files", planID)
+		_ = os.MkdirAll(basePath, 0755)
+		fullPath := filepath.Join(basePath, filename)
+
+		// Try to use ffmpeg to create a real 1s silent mp3
+		ffmpegPath, err := exec.LookPath("ffmpeg")
+		if err == nil {
+			// ffmpeg -f lavfi -i anullsrc=r=44100:cl=stereo -t <duration> -y <file>
+			cmd := exec.Command(ffmpegPath, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", strconv.Itoa(durationSeconds), "-y", fullPath)
+			_ = cmd.Run()
+		} else {
+			// Fallback to dummy data
+			_ = SaveAsset(planID, filename, "mock_audio_data")
+		}
+	}
+
 	outputChan <- fmt.Sprintf("✅ [Audio Creator] Generated (Mock): %s (Duration: %s)", filename, durationStr)
 
 	// Return structural result

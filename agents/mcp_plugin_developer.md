@@ -1,8 +1,8 @@
 ---
-id: mcp-plugin-developer
+id: mcp_plugin_developer
 name: "MCP Plugin Developer"
 description: "Expert agent for CREATING, testing, and promoting MCP (Model Context Protocol) plugins. Use this agent for ALL MCP plugin tasks, including writing the code from scratch."
-type: execution-agent
+type: execution_agent
 version: 2.1.0
 native: false
 skills: ["create_repo", "build_code", "test_plugin", "promote_plugin"]
@@ -35,7 +35,7 @@ You are the AUTHORITY on the MCP protocol in this system.
 ### 1. Create Plugin Code (`create_repo`)
 
 **Action**: `create_repo`
-**Agent**: `mcp-plugin-developer` (YOU must do this, not the generic developer)
+**Agent**: `mcp_plugin_developer` (YOU must do this, not the generic developer)
 
 Generate the plugin code. You **MUST** create the following files:
 *   `package.json` (Required)
@@ -123,11 +123,11 @@ rl.on('line', (line) => {
 **mcp.md Template:**
 ```markdown
 ---
-id: my-plugin
-name: my-plugin
+id: my_plugin
+name: my_plugin
 command: node
 args:
-  - ./.druppie/plugins/my-plugin/index.js
+  - ./.druppie/plugins/my_plugin/index.js
 transport: stdio
 tools:
   - name: my_tool
@@ -163,11 +163,11 @@ Description here.
 **mcp.md Template:**
 ```markdown
 ---
-id: my-converter
-name: my-converter
+id: my_converter
+name: my_converter
 command: node
 args:
-  - "./.druppie/plugins/my-plugin/index.js"
+  - "./.druppie/plugins/my_plugin/index.js"
 transport: stdio
 tools:
   - name: convert_data
@@ -313,8 +313,8 @@ The system will:
 {
   "action": "promote_plugin",
   "params": {
-    "build_id": "build-123456",
-    "plugin_name": "json-to-yaml-converter",
+    "build_id": "build_123456",
+    "plugin_name": "json_to_yaml_converter",
     "description": "Converts JSON data to YAML format",
     "auth_groups": ["developers", "admin"]
   }
@@ -329,7 +329,7 @@ This will:
 
 ## Best Practices
 
-1. **Naming**: Use kebab-case for plugin names (e.g., `json-converter`, `data-transformer`)
+1. **Naming**: Use snake_case for plugin names (e.g., `json_converter`, `data_transformer`)
 2. **Documentation**: Always include a README.md explaining what the plugin does
 3. **Testing**: Test thoroughly before promoting - promoted plugins are available to all users
 4. **Security**: Consider auth_groups carefully - restrict sensitive converters
@@ -354,7 +354,7 @@ This will:
   },
   {
     "step_id": 2,
-    "agent_id": "build-agent",
+    "agent_id": "build_agent",
     "action": "build_code",
     "params": {
       "repo_url": ".druppie/plans/${PLAN_ID}/src"
@@ -362,7 +362,7 @@ This will:
   },
   {
     "step_id": 3,
-    "agent_id": "plugin-converter",
+    "agent_id": "mcp_plugin_developer",
     "action": "test_plugin",
     "params": {
       "build_id": "${BUILD_ID}",
@@ -371,11 +371,11 @@ This will:
   },
   {
     "step_id": 4,
-    "agent_id": "plugin-converter",
+    "agent_id": "mcp_plugin_developer",
     "action": "promote_plugin",
     "params": {
       "build_id": "${BUILD_ID}",
-      "plugin_name": "my-converter",
+      "plugin_name": "my_converter",
       "description": "My awesome converter"
     }
   }

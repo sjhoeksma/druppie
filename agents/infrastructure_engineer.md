@@ -1,11 +1,11 @@
 ---
-id: infrastructure-engineer
+id: infrastructure_engineer
 name: "Infrastructure Engineer"
 description: "Agent responsible for provisioning, deploying, and maintaining infrastructure and applications on Kubernetes."
-type: execution-agent
+type: execution_agent
 condition: "Execute the 'ensure_availability' action BEFORE any step that requires a Building Block (Tool/Service)."
 version: 1.0.0
-skills: ["kubernetes", "gitops", "iac", "scripting", "check-block-status", "ensure_availability", "sub-agent", "create_project", "coding", "deployment", "validation", "verification"]
+skills: ["kubernetes", "gitops", "iac", "scripting", "check_block_status", "ensure_availability", "sub_agent", "create_project", "coding", "deployment", "validation", "verification"]
 tools: ["helm", "kubectl", "flux", "terraform"]
 priority: 50.0
 workflow: |

@@ -20,17 +20,17 @@ type ArchitectExecutor struct {
 }
 
 func (e *ArchitectExecutor) CanHandle(action string) bool {
-	return action == "architectural-design" ||
-		action == "documentation-assembly" || action == "documentation_assembly" ||
-		action == "motivation-modeling" || action == "motivation_modeling" ||
-		action == "baseline-modeling" || action == "baseline_modeling" ||
-		action == "target-modeling" || action == "target_modeling" ||
-		action == "viewpoint-derivation" || action == "viewpoint_derivation" ||
-		action == "principles-consistency-check" || action == "principles_consistency_check" || action == "principles_and_consistency_check" ||
-		action == "decision-recording" || action == "decision_recording" ||
-		action == "roadmap-gaps" || action == "roadmap_gaps" ||
-		action == "roadmap-and-gaps" || action == "roadmap_and_gaps" ||
-		action == "review-governance" || action == "review_governance" || action == "review_and_governance" ||
+	return action == "architectural_design" ||
+		action == "documentation_assembly" ||
+		action == "motivation_modeling" ||
+		action == "baseline_modeling" ||
+		action == "target_modeling" ||
+		action == "viewpoint_derivation" ||
+		action == "principles_consistency_check" || action == "principles_and_consistency_check" ||
+		action == "decision_recording" ||
+		action == "roadmap_gaps" ||
+		action == "roadmap_and_gaps" ||
+		action == "review_governance" || action == "review_and_governance" ||
 		action == "intake" || action == "completion" || action == "iteration"
 }
 
@@ -165,7 +165,7 @@ func (e *ArchitectExecutor) Execute(ctx context.Context, step model.Step, output
 
 func (e *ArchitectExecutor) getFallbackResult(action string) string {
 	switch action {
-	case "architectural-design", "target-modeling", "target_modeling":
+	case "architectural_design", "target_modeling":
 		return "Architecture Design Complete.\n\n" +
 			"### Proposed Solution\n" +
 			"- **Frontend**: React SPA\n" +
@@ -181,7 +181,7 @@ func (e *ArchitectExecutor) getFallbackResult(action string) string {
 			"  ServiceA --> DB\n" +
 			"```"
 
-	case "documentation-assembly", "documentation_assembly":
+	case "documentation_assembly":
 		return "# Architecture Documentation\n\n" +
 			"## Executive Summary\n" +
 			"Following the architectural design, this document outlines the proposed solution.\n\n" +
@@ -196,13 +196,13 @@ func (e *ArchitectExecutor) getFallbackResult(action string) string {
 	case "intake":
 		return "## Intake Summary\nScope verified. Stakeholders: Admin, Dev Team."
 
-	case "motivation-modeling", "motivation_modeling":
+	case "motivation_modeling":
 		return "## Motivation Model\n**Driver**: Modernization\n**Goal**: Improve scalability."
 
-	case "roadmap-gaps", "roadmap_gaps", "roadmap-and-gaps", "roadmap_and_gaps":
+	case "roadmap_gaps", "roadmap_and_gaps":
 		return "## Roadmap\n1. Phase 1: Foundation\n2. Phase 2: Migration"
 
-	case "review-governance", "review_governance", "review_and_governance":
+	case "review_governance", "review_and_governance":
 		return "## Governance Review\n**Status**: APPROVED\n\nAll architecture principles and compliance requirements have been met. Proceed to completion."
 
 	case "iteration":

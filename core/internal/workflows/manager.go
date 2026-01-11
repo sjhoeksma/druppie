@@ -66,6 +66,11 @@ func (wc *WorkflowContext) CallLLM(prompt string, systemPrompt string, opts ...s
 	if providerName != "" {
 		if mgr, ok := wc.LLM.(*llm.Manager); ok {
 			resp, usage, err := mgr.GenerateWithProvider(wc.Ctx, providerName, prompt, systemPrompt)
+			if wc.Store != nil {
+				_ = wc.Store.LogInteraction(wc.PlanID, "Workflow ("+systemPrompt+") ["+providerName+"]",
+					fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", prompt),
+					fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---", resp))
+			}
 			if err != nil {
 				return "", nil, err
 			}
@@ -75,6 +80,11 @@ func (wc *WorkflowContext) CallLLM(prompt string, systemPrompt string, opts ...s
 	}
 
 	resp, usage, err := wc.LLM.Generate(wc.Ctx, prompt, systemPrompt)
+	if wc.Store != nil {
+		_ = wc.Store.LogInteraction(wc.PlanID, "Workflow ("+systemPrompt+")",
+			fmt.Sprintf("--- PROMPT ---\n%s\n--- END PROMPT ---", prompt),
+			fmt.Sprintf("--- RESPONSE ---\n%s\n--- END RESPONSE ---", resp))
+	}
 	if err != nil {
 		return "", nil, err
 	}

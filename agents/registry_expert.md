@@ -1,10 +1,10 @@
 ---
-id: registry-expert
+id: registry_expert
 name: "Registry Expert"
 description: "Expert agent for examining the native Druppie registry to find existing components (Agents, MCPs, Skills, Blocks) that match a user request."
-type: support-agent
+type: support_agent
 priority: 80.0
-skills: ["registry-lookup"]
+skills: ["registry_lookup"]
 tools: [] 
 ---
 

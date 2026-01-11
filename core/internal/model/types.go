@@ -1,5 +1,12 @@
 package model
 
+import (
+	"encoding/json"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
 // BuildingBlockType defines the category of a building block
 type BuildingBlockType string
 
@@ -24,6 +31,17 @@ type BuildingBlock struct {
 	AuthGroups []string          `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
+func (b *BuildingBlock) UnmarshalYAML(value *yaml.Node) error {
+	type Alias BuildingBlock
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*b = BuildingBlock(aux)
+	b.ID = strings.ReplaceAll(b.ID, "-", "_")
+	return nil
+}
+
 // Skill represents an AI persona or system prompt
 type Skill struct {
 	ID           string   `json:"id" yaml:"id"`
@@ -32,6 +50,17 @@ type Skill struct {
 	SystemPrompt string   `json:"system_prompt" yaml:"system_prompt"`
 	AllowedTools []string `json:"allowed_tools" yaml:"allowed_tools"`
 	AuthGroups   []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
+}
+
+func (s *Skill) UnmarshalYAML(value *yaml.Node) error {
+	type Alias Skill
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*s = Skill(aux)
+	s.ID = strings.ReplaceAll(s.ID, "-", "_")
+	return nil
 }
 
 // Intent represents the analyzed user request
@@ -68,6 +97,33 @@ type Step struct {
 	Usage         *TokenUsage            `json:"usage,omitempty"`          // Token usage for this step
 }
 
+func (s *Step) UnmarshalJSON(data []byte) error {
+	type Alias Step
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	s.AgentID = strings.ReplaceAll(s.AgentID, "-", "_")
+	s.Action = strings.ReplaceAll(s.Action, "-", "_")
+	return nil
+}
+
+func (s *Step) UnmarshalYAML(value *yaml.Node) error {
+	type Alias Step
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*s = Step(aux)
+	s.AgentID = strings.ReplaceAll(s.AgentID, "-", "_")
+	s.Action = strings.ReplaceAll(s.Action, "-", "_")
+	return nil
+}
+
 // ExecutionPlan represents a sequence of steps to fulfill an intent
 type ExecutionPlan struct {
 	ID                       string     `json:"plan_id"`
@@ -97,6 +153,17 @@ type MCPServer struct {
 	AuthGroups []string         `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
+func (m *MCPServer) UnmarshalYAML(value *yaml.Node) error {
+	type Alias MCPServer
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*m = MCPServer(aux)
+	m.ID = strings.ReplaceAll(m.ID, "-", "_")
+	return nil
+}
+
 // ToolDefinition allows advertising tools in the MCP template
 type ToolDefinition struct {
 	Name        string `json:"name" yaml:"name"`
@@ -107,7 +174,7 @@ type ToolDefinition struct {
 type AgentDefinition struct {
 	ID           string            `json:"id" yaml:"id"`
 	Name         string            `json:"name" yaml:"name"`
-	Type         string            `json:"type" yaml:"type"` // e.g. "spec-agent", "execution-agent", "support-agent", "system-agent"
+	Type         string            `json:"type" yaml:"type"` // e.g. "spec_agent", "execution_agent", "support_agent", "system_agent"
 	Description  string            `json:"description" yaml:"description"`
 	Instructions string            `json:"instructions" yaml:"instructions"` // Inline system prompt
 	Provider     string            `json:"provider" yaml:"provider"`         //When empty use default provider
@@ -121,6 +188,49 @@ type AgentDefinition struct {
 	AuthGroups   []string          `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`
 }
 
+func (a *AgentDefinition) UnmarshalJSON(data []byte) error {
+	type Alias AgentDefinition
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	a.ID = strings.ReplaceAll(a.ID, "-", "_")
+	for i, s := range a.Skills {
+		a.Skills[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	for i, s := range a.Tools {
+		a.Tools[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	for i, s := range a.SubAgents {
+		a.SubAgents[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	return nil
+}
+
+func (a *AgentDefinition) UnmarshalYAML(value *yaml.Node) error {
+	type Alias AgentDefinition
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*a = AgentDefinition(aux)
+	a.ID = strings.ReplaceAll(a.ID, "-", "_")
+	for i, s := range a.Skills {
+		a.Skills[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	for i, s := range a.Tools {
+		a.Tools[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	for i, s := range a.SubAgents {
+		a.SubAgents[i] = strings.ReplaceAll(s, "-", "_")
+	}
+	return nil
+}
+
 // ComplianceRule represents a policy
 type ComplianceRule struct {
 	ID          string `json:"id" yaml:"id"`
@@ -128,4 +238,15 @@ type ComplianceRule struct {
 	Description string `json:"description" yaml:"description"`
 	RegoPolicy  string `json:"rego_policy" yaml:"rego_policy"`
 	Sensitivity string `json:"sensitivity" yaml:"sensitivity"` // low, medium, high
+}
+
+func (c *ComplianceRule) UnmarshalYAML(value *yaml.Node) error {
+	type Alias ComplianceRule
+	var aux Alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*c = ComplianceRule(aux)
+	c.ID = strings.ReplaceAll(c.ID, "-", "_")
+	return nil
 }
