@@ -920,7 +920,7 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// Add a temporary replanning step to show in Kanban
 	replanID := 1
 	if len(plan.Steps) > 0 {
-		replanID = plan.Steps[len(plan.Steps)-1].ID + 1
+		replanID = plan.Steps[len(plan.Steps)-1].ID //Same ID as last step
 	}
 	replanStep := model.Step{
 		ID:      replanID,
@@ -1108,13 +1108,13 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// Adjust IDs using existing startID
 	// Recalculate startID based on current plan state (including replanning step)
 	// Recalculate startID based on current plan state (including replanning step)
-	isReplanningSequence := false
-	if len(plan.Steps) > 0 {
-		startID = plan.Steps[len(plan.Steps)-1].ID
-		if plan.Steps[len(plan.Steps)-1].Action == "replanning" {
-			isReplanningSequence = true
-		}
-	}
+	// isReplanningSequence := false
+	// if len(plan.Steps) > 0 {
+	// 	startID = plan.Steps[len(plan.Steps)-1].ID
+	// 	if plan.Steps[len(plan.Steps)-1].Action == "replanning" {
+	// 		isReplanningSequence = true
+	// 	}
+	// }
 
 	for i := range newSteps {
 		newSteps[i].ID = startID + i + 1
@@ -1199,16 +1199,13 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 				}
 
 				if found {
-					// Apply Shift: If we are in a replanning sequence and the dependency points to the step
-					// immediately preceding the replanner (startID - 1), shift it to the replanner (startID).
-					// This ensures the new plan links to the replanning event, not just the old history.
-					if isReplanningSequence && resolvedID == startID-1 {
-						resolvedID = startID
-					}
-					for j, d := range newSteps[i].DependsOn {
-						newSteps[i].DependsOn[j] = d + 1
-					}
-					//newSteps[i].DependsOn = append(newSteps[i].DependsOn, resolvedID)
+					// // Apply Shift: If we are in a replanning sequence and the dependency points to the step
+					// // immediately preceding the replanner (startID - 1), shift it to the replanner (startID).
+					// // This ensures the new plan links to the replanning event, not just the old history.
+					// if isReplanningSequence && resolvedID == startID-1 {
+					// 	resolvedID = startID
+					// }
+					newSteps[i].DependsOn = append(newSteps[i].DependsOn, resolvedID)
 				}
 			}
 

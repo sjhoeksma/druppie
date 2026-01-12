@@ -47,3 +47,9 @@
 - [x] Feedback loop is not counting
 - [ ] A task to create repo and upload is using mcp server
 
+- [ ] Move Replanning to high task number and do not shift tasks
+- [ ] Remove replanning shift
+- [ ] End planning after plan is completed not replanning
+
+
+

@@ -128,7 +128,7 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 			if strings.Contains(strings.ToLower(pCfg.Model), "dutch") || strings.Contains(strings.ToLower(pCfg.Model), "nl") {
 				lang = "nl"
 			}
-			return NewSherpaTTSProvider(lang, pCfg.Model, pCfg.PricePerWord)
+			return NewSherpaTTSProvider(pCfg.URL, lang, pCfg.Model, pCfg.PricePerWord)
 		case "stable-diffusion":
 			// Use BaseURL field from config which maps to APIURL usually?
 			// Config struct has APIURL? Let's check config struct in next step if needed,
