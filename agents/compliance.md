@@ -22,18 +22,6 @@ prompts:
 
     Output format example:
     "[VIOLATION] <Localized Description>"
-workflow: |
-  flowchart TD
-    A([Start]) --> B{Has Policy Context?}
-    B -- No --> C[Request Context]
-    B -- Yes --> D[Assess Request]
-    D --> E{Violation Detected?}
-    E -- Yes --> F[Flag Violation]
-    F --> G[Request Approval]
-    E -- No --> H[Approve Request]
-    G --> I([End])
-    H --> I
-    C --> B
   compliance_check: |
     You are a Compliance Officer. Perform a **Compliance Check**.
     
@@ -55,6 +43,18 @@ workflow: |
     1. Identify the high-risk action requiring approval.
     2. Determine the correct approval group (Security, Legal, Privacy).
     3. Formulate a clear justification for why approval is needed.
+workflow: |
+  flowchart TD
+    A([Start]) --> B{Has Policy Context?}
+    B -- No --> C[Request Context]
+    B -- Yes --> D[Assess Request]
+    D --> E{Violation Detected?}
+    E -- Yes --> F[Flag Violation]
+    F --> G[Request Approval]
+    E -- No --> H[Approve Request]
+    G --> I([End])
+    H --> I
+    C --> B
 ---
 
 You are the **Compliance Agent** of the Druppie Platform.
