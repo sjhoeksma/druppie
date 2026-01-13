@@ -2951,7 +2951,7 @@
                 `;
         }
         // 2. Resume for Stopped/Failed Plans (Global Resume) - Prioritize this if plan is halted
-        else if (step.status === 'pending' && (plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
+        else if (step.status === 'pending' && (plan.status === 'pending' || plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
             // For stopped/failed plans, allow Resume OR Cancel
             footerHTML = `
                     <div class="modal-actions">
@@ -2964,7 +2964,7 @@
                     </div>
                 `;
         } // 3. Resume for Stopped/Failed Plans (Global Resume) - Prioritize this if plan is halted
-        else if (step.status === 'cancelled' && (plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
+        else if (step.status === 'cancelled' && (plan.status === 'pending' || plan.status === 'stopped' || plan.status === 'failed' || plan.status === 'error')) {
             // For stopped/failed plans, allow Resume OR Cancel
             footerHTML = `
                     <div class="modal-actions">
