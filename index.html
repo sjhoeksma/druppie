@@ -2378,7 +2378,7 @@
                 let valueHtml = v;
 
                 if (Array.isArray(v)) {
-                    if (k === 'skills' || k === 'subagents' || k === 'sub_agents' || k === 'capabilities') {
+                    if (k === 'skills' || k === 'subagents' || k === 'sub_agents' || k === 'capabilities' || k === 'final_actions') {
                         valueHtml = `<div class="flex flex-wrap gap-1 mt-0.5">` +
                             v.map(item => `<span class="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0.5 rounded border border-slate-300">${item}</span>`).join('') +
                             `</div>`;

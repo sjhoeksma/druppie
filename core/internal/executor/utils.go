@@ -63,6 +63,15 @@ func SanitizeAndFixMarkdown(input string) string {
 	result = reMermaid.ReplaceAllStringFunc(result, func(match string) string {
 		inner := match[10 : len(match)-3] // strip ```mermaid and ```
 		fixedInner := fixer(inner)
+
+		// Extra sanitization for Flowcharts/Graphs (which don't support 'Note right of')
+		lowerInner := strings.ToLower(fixedInner)
+		if strings.Contains(lowerInner, "flowchart") || strings.Contains(lowerInner, "graph ") {
+			// Comment out "Note right/left/over of ..." lines as they break flowcharts
+			reInvalidNote := regexp.MustCompile(`(?i)(?m)^\s*Note (right|left|over) of .*$`)
+			fixedInner = reInvalidNote.ReplaceAllString(fixedInner, "%% $0")
+		}
+
 		return "```mermaid" + fixedInner + "```"
 	})
 

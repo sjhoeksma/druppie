@@ -51,5 +51,5 @@
 - [ ] Remove replanning shift
 - [ ] End planning after plan is completed not replanning
 - When restarting all running plans should be set to pending
-
+- Configurable list of exist state in planner to terminate plan
 

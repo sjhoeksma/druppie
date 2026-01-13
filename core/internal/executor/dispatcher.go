@@ -39,6 +39,7 @@ func NewDispatcher(buildEngine builder.BuildEngine, mcpManager *mcp.Manager, llm
 			&ComplianceExecutor{LLM: llmProvider, Registry: reg},      // Compliance/Approval Handler
 			&BusinessAnalystExecutor{LLM: llmProvider, Registry: reg}, // Business Analyst Handler
 			&StandardExecutor{StdCtx: stdCtx},                         // Standard/Infra Handler (Replaces InfrastructureExecutor)
+			&DataScientistExecutor{LLM: llmProvider, Registry: reg},   // Data Scientist Handler
 			&ArchitectExecutor{LLM: llmProvider, Registry: reg},       // Architect Handler
 			&ContentMergerExecutor{},                                  // Final Video Merger
 			// Legacy/Fallback last

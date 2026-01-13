@@ -782,18 +782,20 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		}
 
 		if lastStep != nil {
-			// Hard Stop for 'promote_plugin' (Terminal action for Plugin workflow)
-			if lastStep.Action == "promote_plugin" ||
-				lastStep.Action == "run_code" ||
-				lastStep.Action == "tool_usage" ||
-				lastStep.Action == "image_generation" ||
-				lastStep.Action == "video_generation" ||
-				lastStep.Action == "text_to_speech" ||
-				lastStep.Action == "verification" {
-				if p.Store != nil {
-					_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
+			// Load Planner Agent Definition to get Configured Final Actions
+			if plannerAgent, err := p.Registry.GetAgent("planner"); err == nil {
+				for _, finalAction := range plannerAgent.FinalActions {
+					// Normalize for comparison
+					finalAction = strings.ReplaceAll(strings.ToLower(finalAction), "-", "_")
+					checkAction := strings.ReplaceAll(strings.ToLower(lastStep.Action), "-", "_")
+
+					if checkAction == finalAction {
+						if p.Store != nil {
+							_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", fmt.Sprintf("Detected final action '%s' (configured in planner.md). Stopping plan.", finalAction))
+						}
+						return plan, nil
+					}
 				}
-				return plan, nil
 			}
 		}
 	}

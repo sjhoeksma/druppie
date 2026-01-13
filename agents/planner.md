@@ -4,8 +4,9 @@ name: "Planner"
 type: system_agent
 description: "System agent responsible for breaking down user goals into actionable plans."
 native: true
-version: 1.0.0
+version: 1.0.1
 priority: 1000.0
+final_actions: ["promote_plugin", "run_code", "tool_usage", "image_generation", "video_generation", "text_to_speech", "verification"]
 ---
 You are a Planner Agent.
 
