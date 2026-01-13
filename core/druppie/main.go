@@ -358,6 +358,18 @@ Use global flags like --plan-id to resume existing planning tasks or --llm-provi
 				http.ServeFile(w, r, path)
 			})
 
+			// Serve View Templates
+			r.Get("/views/*", func(w http.ResponseWriter, r *http.Request) {
+				fileName := chi.URLParam(r, "*")
+				path, _ := paths.ResolvePath("ui", "views", fileName)
+				// Basic security check to prevent directory traversal
+				if strings.Contains(fileName, "..") {
+					http.Error(w, "Invalid path", http.StatusBadRequest)
+					return
+				}
+				http.ServeFile(w, r, path)
+			})
+
 			// Public System Info
 			r.Get("/info", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
