@@ -2259,8 +2259,29 @@
                 }
                 break;
 
+            case '/reload':
+                try {
+                    addChatMessage('ai', '🔄 Reloading registry...');
+                    const resp = await fetch('/v1/registry/reload', { method: 'POST' });
+                    if (!resp.ok) throw new Error(await resp.text());
+                    const data = await resp.json();
+
+                    let statsMsg = '';
+                    if (data.stats) {
+                        statsMsg = `\nBlocks: ${data.stats.building_blocks}, Skills: ${data.stats.skills}, Agents: ${data.stats.agents}`;
+                    }
+                    addChatMessage('ai', `✅ ${data.message}${statsMsg}`);
+                } catch (e) {
+                    addChatMessage('ai', `❌ Reload failed: ${e.message}`);
+                }
+                break;
+
+            case '/help':
+                addChatMessage('ai', `📚 Beschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
+                break;
+
             default:
-                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
+                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
         }
     }
 

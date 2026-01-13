@@ -86,6 +86,7 @@ general:
         ensure_availability: 0.01
         check_block_status: 0.005
     server_port: "8080"
+    cleanup_days: 7
     max_agent_selections: 5
     memory:
         max_window_tokens: 12000
@@ -97,6 +98,10 @@ scheduled_jobs:
     schedule: "@daily"
     params:
       days: "7"
+
+  - name: "Registry Auto-Reload"
+    type: "registry_reload"
+    schedule: "@hourly"
 
   # Example LLM Job (Uncomment to use)
   # - name: "Nightly Analysis"

@@ -46,10 +46,15 @@
 - [ ] Paths for project libraries
 - [x] Feedback loop is not counting
 - [ ] A task to create repo and upload is using mcp server
-
-- [ ] Move Replanning to high task number and do not shift tasks
-- [ ] Remove replanning shift
+- [X] Move Replanning to same task number and do not shift tasks
+- [x] Remove replanning shift
 - [ ] End planning after plan is completed not replanning
-- When restarting all running plans should be set to pending
-- Configurable list of exist state in planner to terminate plan
+- [ ] When restarting all running plans should be set to pending
+- [x] Configurable list of exist state in planner to final_action plan
+- [x] Fix issue with MCP server
+- [x] sherpa-server fix 
+- [x] Add auto reload of agents, skills an all othere repofile
+- [x] Add registry reload job type to scheduler
+
+
 
