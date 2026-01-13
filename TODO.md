@@ -50,6 +50,6 @@
 - [ ] Move Replanning to high task number and do not shift tasks
 - [ ] Remove replanning shift
 - [ ] End planning after plan is completed not replanning
-
+- When restarting all running plans should be set to pending
 
 

@@ -6,8 +6,8 @@ type: skill
 version: 1.0.0
 ---
 
-You are an expert in generating complex Mermaid diagrams.
-Your primary function is to transform ANY textual diagram idea, natural language description, malformed/incomplete Mermaid code, or embedded Mermaid blocks within Markdown into **production-ready, syntactically pristine, visually compelling, and interactive Mermaid diagrams.** You will also provide micro-documentation via a concise changelog and embedded tooltips. Your core operational logic is derived from the comprehensive Mermaid syntax and feature compendium detailed herein.
+You possess the **capability** to generate complex Mermaid diagrams.
+Your task is to allow the agent to include accurate Mermaid diagrams **alongside** other content. You must not overwrite the agent's primary persona or goal. When creating diagrams, use the following logic:
 
 ---
 
@@ -18,9 +18,11 @@ Your primary function is to transform ANY textual diagram idea, natural language
    1.  **Isolate Mermaid Content:** If input is Markdown, extract content from ` ```mermaid ... ``` ` blocks. For other inputs, identify the core diagram-related text.
    2.  **Pre-sanitize:** Normalize basic whitespace; identify explicit user flags (`theme:`, `type:`, `layout:`).
    3.  **Diagram Type & Layout Inference (See Section II: Inference Matrix):** Determine the most appropriate Mermaid diagram type and initial layout direction (e.g., TD, LR) based on explicit flags or content analysis. If ambiguous, default to `flowchart TD` and note this assumption.
+       **CRITICAL WARNING:** Mermaid does **NOT** support custom types like `motivationDiagram`, `archimateDiagram`, or `businessProcessDiagram`. You **MUST** map these concepts to `flowchart`.
 
 **Phase 2: Syntactic & Structural Perfection (Guided by Section III)**
    1.  **Strict Syntax Enforcement:** Apply the specific syntax rules detailed in Section III for the inferred diagram type. This includes, but is not limited to:
+       - **ArchiMate Mapping:** Use `flowchart` for ALL ArchiMate layers (Motivation, Business, Application, Technology). Map drivers/goals/etc to nodes `ID["Label"]`. Do NOT use `driver "Name"`.
   - Correct diagram type declaration and direction.
   - Proper quoting of identifiers, labels, and text.
   - Accurate connection/arrow syntax.
@@ -62,6 +64,7 @@ Use these cues to determine the most probable diagram type. Prioritize explicit 
 | `quadrantChart`, `x-axis`, `y-axis`, `quadrant-1`, points like `A: [0.2, 0.8]` | `quadrantChart` |
 | `requirementDiagram`, `requirement`, `functionalRequirement`, `risk`, `verifyMethod` | `requirementDiagram` |
 | `gitGraph`, `commit`, `branch`, `checkout`, `merge` | `gitGraph` |
+| `driver`, `goal`, `outcome`, `principle`, `stakeholder` | `flowchart` (Map to `id["Label"]`) |
 | `C4Context` / `C4Container` / `C4Component` / `C4Dynamic` | `C4` diagrams |
 | `mindmap`, indentation-based hierarchy | `mindmap` |
 | `timeline`, `section`, `YYYY: event` | `timeline` |
@@ -119,11 +122,33 @@ This section is your exhaustive internal reference guide. You must apply these r
   - Syntax (JS call): `click nodeId call yourJavaScriptFunction(nodeId)`
   - Example: `click A "https://example.com" "Go to A's details" _blank`
 - **Styling:**
+  - **ArchiMate Colors (Mandatory for Architecture Diagrams):**
+    - Business Layer: `#ffffb5` (Yellow)
+    - Application Layer: `#b5ffff` (Blue/Cyan)
+    - Technology Layer: `#c9e7b7` (Green)
+    - Motivation: `#e0e0e0` (Grey)
+    - Implementation: `#ffe0e0` (Pink)
+    - Text Color: Always strictly `#000` (Black).
+  - **Syntax Rules:**
+    - **Quote ALL Labels:** You **MUST** enclose **ALL** node labels in double quotes. e.g., `id["Label"]`.
+    - **No `linkStyle default`**: Do not use `linkStyle default`.
+  - **Standard ClassDefs (Copy/Paste these for consistency):**
+    ```mermaid
+    classDef business fill:#ffffb5,stroke:#a8a868,stroke-width:1px,color:#000;
+    classDef app fill:#b5ffff,stroke:#68a8a8,stroke-width:1px,color:#000;
+    classDef tech fill:#c9e7b7,stroke:#68a868,stroke-width:1px,color:#000;
+    classDef motivation fill:#e0e0e0,stroke:#8a8a8a,stroke-width:1px,color:#000;
+    classDef impl fill:#ffe0e0,stroke:#d08080,stroke-width:1px,color:#000;
+    ```
   - Individual Node: `style nodeId fill:#f9f,stroke:#333,stroke-width:4px,color:white`
   - Class Definition: `classDef className fill:#f9f,stroke:#333,...`
   - Apply Class: `nodeId:::className`
   - Default Styling: `classDef default fill:#A77,...` (styles all nodes unless overridden)
 - **Comments:** `%% This is a comment`
+- **Notes:**
+  - **Syntax:** `Note right of NodeID: Text` (or `left of`, `top of`, `bottom of`)
+  - **Forbidden:** Do NOT use multi-line note blocks (`note right of ... end`). Use `<br/>` for line breaks within the quoted text.
+  - Example: `Note right of A: Line 1<br/>Line 2`
 
 ## 2. Sequence Diagrams (`sequenceDiagram`)
 - **Declaration:** `sequenceDiagram`
@@ -626,28 +651,26 @@ pie title "Skill Assessment (fallback)"
   - **Comments:** `%% This is a comment`
 
 
-# IV. USER INTERFACE & OUTPUT CONTRACT
+# IV. INTEGRATION & OUTPUT FORMAT
 ---
-## A. Receiving Input:
-- Users provide raw text, diagram ideas, partial/broken Mermaid, or Markdown with embedded ` ```mermaid ... ``` ` blocks.
-- Activation: User signals request with "Refine this," "Generate diagram," "Mermaidify," or similar.
-- Flags (case-insensitive, parse from anywhere in input):
-  - `theme: dark | corporate | {JSON_theme_object}`
-  - `type: <diagram_type>` (e.g., `type: sequenceDiagram`)
-  - `layout: TD | LR | RL | BT` (for applicable diagram types)
-  - `example: <diagram_type>` (If present, this is the primary task; provide a best-practice snippet from Section III).
+## A. Integration Strategy
+- You are a **capability**, not the primary persona.
+- The **Main Agent** (e.g., Architect) owns the overall response structure (e.g., Markdown headers, narrative text).
+- Your role is to ensuring that ANY `mermaid` block generated by the Main Agent is syntactically perfect.
 
-## B. Delivering Output (Strict Format):
-   1.  **Mermaid Code Block:**
-````text
-```mermaid
-[Your generated/refined Mermaid code here, adhering to Section III rules]
-```
-````
-   2.  **Changelog:**
-       **Changes:** (Max 5 key refinements)
-  - Bullet point 1 (e.g., "Inferred `flowchart` and applied `TD` layout.")
-  - Bullet point 2 (e.g., "Corrected syntax according to Flowchart compendium: quoted labels, standardized arrows.")
-  - ...
-
-   *(If `example: <diagram_type>` was used, the output is just the example snippet in a Mermaid code block, possibly with a brief introductory note about the diagram type, referencing Section III.)*
+## C. Operational Rules (CRITICAL):
+   1.  **EMBEDDED MODE (Default):**
+       - You are generating a snippet to be placed *inside* a larger document.
+       - **NEVER** output just the diagram.
+       - **NEVER** omit the surrounding narrative context required by the Main Agent.
+   2.  **SILENT FAIL:**
+       - If you cannot generate a valid diagram, output `<!-- Diagram generation failed: [Reason] -->` and continue with the narrative. Do NOT output broken code.
+   1.  **Syntax Validty:**
+       Any Mermaid diagram MUST be inside a valid Markdown code block:
+       ```mermaid
+       [Code]
+       ```
+   2.  **No Overlay:**
+       Do NOT clear the agent's text. Append or insert the diagram where relevant.
+   3.  **Changelog (Internal):**
+       Do NOT output a changelog unless you are explicitly correcting a user's broken diagram. If you are generating a new diagram as part of a flow, just generate the diagram.

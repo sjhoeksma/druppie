@@ -710,9 +710,14 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	}
 
 	var activeAgents []model.AgentDefinition
+	uniqueAgentIDs := make(map[string]bool) // Prevent duplicates in active list
+
 	for _, a := range allRegistryAgents {
 		if allowedMap[a.ID] {
-			activeAgents = append(activeAgents, a)
+			if !uniqueAgentIDs[a.ID] {
+				activeAgents = append(activeAgents, a)
+				uniqueAgentIDs[a.ID] = true
+			}
 		}
 	}
 	// Fallback: If map is empty (legacy plan?), use all
@@ -742,9 +747,14 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 		if len(a.SubAgents) > 0 {
 			sb.WriteString(fmt.Sprintf("  Sub-Agents: %v\n", a.SubAgents))
 		}
+		// Only list skills if they are NOT in the Skills registry (i.e. simple string skills)
+		// Or if we want to be explicit.
+		// Use p.Registry.GetSkill check?
+		// Better: Provide full list of skills, but maybe just names if they are standard.
 		if len(a.Skills) > 0 {
 			sb.WriteString(fmt.Sprintf("  Skills: %v\n", a.Skills))
 		}
+
 		sb.WriteString(fmt.Sprintf("  Priority: %.1f\n", a.Priority))
 		sb.WriteString(fmt.Sprintf("  Description: %s\n", a.Description))
 		if a.Workflow != "" {
@@ -778,7 +788,8 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 				lastStep.Action == "tool_usage" ||
 				lastStep.Action == "image_generation" ||
 				lastStep.Action == "video_generation" ||
-				lastStep.Action == "text_to_speech" {
+				lastStep.Action == "text_to_speech" ||
+				lastStep.Action == "verification" {
 				if p.Store != nil {
 					_ = p.Store.LogInteraction(plan.ID, "Planner", "Auto-Stop", "Detected terminal action. Stopping plan.")
 				}
@@ -1031,9 +1042,6 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 			for k := len(plan.Steps) - 1; k >= limit; k-- {
 				oldStep := plan.Steps[k]
 				// Skip 'replanning' steps in history comparison
-				if oldStep.Action == "replanning" {
-					continue
-				}
 
 				if oldStep.AgentID == s.AgentID && oldStep.Action == s.Action {
 					// Deep Compare Params
@@ -1108,13 +1116,6 @@ func (p *Planner) UpdatePlan(ctx context.Context, plan *model.ExecutionPlan, fee
 	// Adjust IDs using existing startID
 	// Recalculate startID based on current plan state (including replanning step)
 	// Recalculate startID based on current plan state (including replanning step)
-	// isReplanningSequence := false
-	// if len(plan.Steps) > 0 {
-	// 	startID = plan.Steps[len(plan.Steps)-1].ID
-	// 	if plan.Steps[len(plan.Steps)-1].Action == "replanning" {
-	// 		isReplanningSequence = true
-	// 	}
-	// }
 
 	for i := range newSteps {
 		newSteps[i].ID = startID + i + 1

@@ -69,16 +69,23 @@ func (e *BusinessAnalystExecutor) Execute(ctx context.Context, step model.Step, 
 			}
 		}
 
-		// Construct System Prompt
-		systemPrompt := "You are a Senior Business Analyst. Analyze the request and provide structured requirements, stories, or validation reports in Markdown format."
-
-		// Use Agent Instructions if available (User Request)
+		// Construct System Prompt (Hierarchical: Action Prompt > Agent Instructions > Default)
+		defaultPrompt := "You are a Senior Business Analyst. Analyze the request and provide structured requirements, stories, or validation reports in Markdown format."
 		if agentInstructions != "" {
-			systemPrompt = agentInstructions
+			defaultPrompt = agentInstructions
+		}
+		systemPrompt := GetActionPrompt(e.Registry, step.AgentID, action, defaultPrompt)
+
+		// Lookup and Append Skill Instructions (Action + Agent Skills)
+		skillInstructions := GetCompositeSkillInstructions(e.Registry, step.AgentID, step.Action)
+
+		if skillInstructions != "" {
+			systemPrompt += skillInstructions
 		}
 
+		// FINAL LANGUAGE ENFORCEMENT: Override English bias
 		if language != "" {
-			systemPrompt = fmt.Sprintf("IMPORTANT: You MUST write in %s language.\n%s", language, systemPrompt)
+			systemPrompt += fmt.Sprintf("\n\n### LANGUAGE REQUIREMENT\n**CRITICAL**: The entire response (narrative, labels, notes) MUST be in **%s**.\nDo NOT translate technical terms if they are standard in English (e.g. AWS, Kubernetes), but all explanations must be in %s.", language, language)
 		}
 
 		// Construct User Prompt with Context
@@ -128,6 +135,9 @@ func (e *BusinessAnalystExecutor) Execute(ctx context.Context, step model.Step, 
 	} else {
 		result = e.getFallbackResult(action)
 	}
+
+	// Sanitize Output: Fix Mermaid/Markdown syntax
+	result = SanitizeAndFixMarkdown(result)
 
 	// Write to File
 	safeAction := strings.ReplaceAll(step.Action, "/", "-")

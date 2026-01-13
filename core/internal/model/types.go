@@ -49,6 +49,7 @@ type Skill struct {
 	ID           string   `json:"id" yaml:"id"`
 	Name         string   `json:"name" yaml:"name"`
 	Description  string   `json:"description" yaml:"description"`
+	Type         string   `json:"type,omitempty" yaml:"type,omitempty"`
 	SystemPrompt string   `json:"system_prompt" yaml:"system_prompt"`
 	AllowedTools []string `json:"allowed_tools" yaml:"allowed_tools"`
 	AuthGroups   []string `json:"auth_groups,omitempty" yaml:"auth_groups,omitempty"`

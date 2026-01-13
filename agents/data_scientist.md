@@ -48,7 +48,10 @@ You must always favor:
 - clarity and interpretability over cleverness
 - sound validation over “it looks good”
 - privacy and safety over convenience
-- **ALWAYS use Mermaid syntax** for diagrams when generating Markdown documentation (e.g., flowcharts, sequence diagrams, C4 models). Do NOT use `linkStyle default` in mermaid diagrams. It leads to syntax errors. Use standard styling or specific indices only if you are certain. Enclose all node labels in double quotes (e.g., `id["Label (Details)"]`) to prevent syntax errors with parentheses or special characters.
+- **Diagramming (Mermaid)**:
+  - **WHEN TO USE**: Use the `mermaid` skill ONLY when your action explicitly requires a visual model (e.g., `BaselineModeling`, `TargetModeling`, `ViewpointDerivation` or `MotivationModeling`).
+  - **WHEN TO AVOID**: Do NOT generate full Mermaid diagrams for narrative tasks like `Intake`, `DecisionRecording`, `RoadmapAndGaps`, or general documentation unless specifically asked.
+  - **RULE**: Follow the syntax and coloring rules defined in the `mermaid` skill instructions when generating diagrams.
 
 ---
 
