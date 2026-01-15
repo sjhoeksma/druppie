@@ -2800,6 +2800,13 @@
                 switchTab('inspector');
             }
         }
+
+        // Auto-load document from URL parameter (?doc=path/to/file.md)
+        const urlParams = new URLSearchParams(window.location.search);
+        const docParam = urlParams.get('doc');
+        if (docParam) {
+            loadMarkdown(docParam);
+        }
     </script>
 
     <!-- BOTTOM TAB BAR (Mobile Only) -->

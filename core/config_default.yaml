@@ -85,7 +85,7 @@ general:
         verification: 0.01
         ensure_availability: 0.01
         check_block_status: 0.005
-    server_port: "8080"
+    server_port: "80"
     cleanup_days: 7
     max_agent_selections: 5
     memory:

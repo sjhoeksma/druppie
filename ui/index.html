@@ -2281,35 +2281,12 @@
                 }
                 break;
 
-            case '/viewpoint':
-                // Demo for Viewpoint Derivation (Step 9 of specific plan)
-                try {
-                    const planId = 'plan-1768331589';
-                    addChatMessage('ai', '🔍 Loading viewpoint derivation example...');
-
-                    const resp = await fetch(`/v1/plans/${planId}`);
-                    if (!resp.ok) throw new Error(`Plan ${planId} not found`);
-                    const plan = await resp.json();
-
-                    // Find step with action 'viewpoint_derivation'
-                    const step = plan.steps.find(s => s.action === 'viewpoint_derivation');
-
-                    if (!step) {
-                        addChatMessage('ai', '❌ Step "viewpoint_derivation" not found in plan.');
-                    } else {
-                        await addTemplateChatMessage('ai', 'viewpoint_derivation.html', step.params);
-                    }
-                } catch (e) {
-                    addChatMessage('ai', `❌ Error: ${e.message}`);
-                }
-                break;
-
             case '/help':
-                addChatMessage('ai', `📚 Beschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /viewpoint - Demo viewpoint chat template\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
+                addChatMessage('ai', `📚 Beschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
                 break;
 
             default:
-                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /viewpoint - Demo viewpoint chat template\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
+                addChatMessage('ai', `❓ Onbekend commando: ${command}\n\nBeschikbare commando's:\n• /help - Toon dit menu\n• /list - Toon alle plannen\n• /usage - Toon token usage\n• /reload - Herlaad registry (agents/skills)\n• /stop - Stop huidige plan\n• /switch <plan-id> - Verander naar een ander plan\n• /del <plan-id> - Verwijder een plan\n• /resume <plan-id> - Hervat een gestopt plan\n• /add_group <group> - Voeg toegangsgroep toe\n• /remove_group <group> - Verwijder toegangsgroep\n• /list_groups - Toon toegangsgroepen`);
         }
     }
 
