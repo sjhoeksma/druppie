@@ -160,8 +160,10 @@ func (r *Registry) Load(rootDir string) error {
 		// Fallback ID to parent directory name if missing
 		if mcp.ID == "" {
 			mcp.ID = filepath.Base(filepath.Dir(path))
-			mcp.ID = strings.ReplaceAll(mcp.ID, "-", "_")
 		}
+
+		// Ensure normalization: - to _
+		mcp.ID = strings.ReplaceAll(mcp.ID, "-", "_")
 
 		// Force category to plugin
 		mcp.Category = "plugin"

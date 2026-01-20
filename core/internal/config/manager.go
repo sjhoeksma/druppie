@@ -80,6 +80,7 @@ type LLMConfig struct {
 	DefaultProvider string                    `yaml:"default_provider" json:"default_provider"` // "gemini", "ollama", "lmstudio"
 	TimeoutSeconds  int                       `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
 	Retries         int                       `yaml:"retries,omitempty" json:"retries,omitempty"`
+	SystemPrompt    string                    `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"` // Global system prompt override
 	Providers       map[string]ProviderConfig `yaml:"providers" json:"providers"`
 }
 
@@ -87,6 +88,7 @@ type ProviderConfig struct {
 	Type                    string  `yaml:"type" json:"type"` // "gemini", "ollama", "lmstudio"
 	APIKey                  string  `yaml:"api_key,omitempty" json:"api_key,omitempty"`
 	Model                   string  `yaml:"model,omitempty" json:"model,omitempty"` // Default model for this provider
+	SystemPrompt            *string `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"` // Override global system prompt. Use "" to disable.
 	URL                     string  `yaml:"url,omitempty" json:"url,omitempty"`     // For local LLMs
 	ProjectID               string  `yaml:"project_id,omitempty" json:"project_id,omitempty"`
 	ClientID                string  `yaml:"client_id,omitempty" json:"client_id,omitempty"`

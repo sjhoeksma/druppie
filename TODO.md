@@ -55,6 +55,6 @@
 - [x] sherpa-server fix 
 - [x] Add auto reload of agents, skills an all othere repofile
 - [x] Add registry reload job type to scheduler
-
+- [ ] CamelCase for the plugin name
 
 

@@ -50,6 +50,14 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 	// Helper to create a provider based on type and details
 	// Helper to create a provider based on type and details
 	createFn := func(pCfg config.ProviderConfig) (Provider, error) {
+		var configSystemPrompt *string
+		if pCfg.SystemPrompt != nil {
+			configSystemPrompt = pCfg.SystemPrompt
+		} else if cfg.SystemPrompt != "" {
+			val := cfg.SystemPrompt
+			configSystemPrompt = &val
+		}
+
 		switch strings.ToLower(pCfg.Type) {
 		case "gemini":
 			model := pCfg.Model
@@ -68,6 +76,7 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 					model:                   model,
 					PricePerPromptToken:     pCfg.PricePerPromptToken,
 					PricePerCompletionToken: pCfg.PricePerCompletionToken,
+					configSystemPrompt:      configSystemPrompt,
 				}, nil
 			} else {
 				if pCfg.ProjectID == "" && pCfg.ClientID == "" {
@@ -85,6 +94,7 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 					model:                   model,
 					PricePerPromptToken:     pCfg.PricePerPromptToken,
 					PricePerCompletionToken: pCfg.PricePerCompletionToken,
+					configSystemPrompt:      configSystemPrompt,
 				}, nil
 			}
 		case "ollama":
@@ -101,6 +111,7 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				BaseURL:                 baseURL,
 				PricePerPromptToken:     pCfg.PricePerPromptToken,
 				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				configSystemPrompt:      configSystemPrompt,
 			}, nil
 		case "lmstudio":
 			baseURL := "http://localhost:1234/v1"
@@ -112,6 +123,7 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				BaseURL:                 baseURL,
 				PricePerPromptToken:     pCfg.PricePerPromptToken,
 				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				configSystemPrompt:      configSystemPrompt,
 			}, nil
 		case "openrouter":
 			model := pCfg.Model
@@ -119,8 +131,9 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				model = "google/gemini-2.0-flash-exp:free"
 			}
 			return &OpenRouterProvider{
-				Model:  model,
-				APIKey: pCfg.APIKey,
+				Model:              model,
+				APIKey:             pCfg.APIKey,
+				configSystemPrompt: configSystemPrompt,
 			}, nil
 		case "sherpa-onnx":
 			// Language from configuration or default to EN
@@ -144,7 +157,26 @@ func NewManager(ctx context.Context, cfg config.LLMConfig) (*Manager, error) {
 				APIKey:                  pCfg.APIKey,
 				PricePerPromptToken:     pCfg.PricePerPromptToken,
 				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				configSystemPrompt:      configSystemPrompt,
 			}, nil
+		case "groq":
+			model := pCfg.Model
+			if model == "" {
+				model = "llama3-70b-8192"
+			}
+			baseURL := "https://api.groq.com/openai/v1"
+			if pCfg.URL != "" {
+				baseURL = pCfg.URL
+			}
+			return &GroqProvider{
+				Model:                   model,
+				BaseURL:                 baseURL,
+				APIKey:                  pCfg.APIKey,
+				PricePerPromptToken:     pCfg.PricePerPromptToken,
+				PricePerCompletionToken: pCfg.PricePerCompletionToken,
+				configSystemPrompt:      configSystemPrompt,
+			}, nil
+
 		case "stable-diffusion":
 			// Use BaseURL field from config which maps to APIURL usually?
 			// Config struct has APIURL? Let's check config struct in next step if needed,
@@ -291,9 +323,13 @@ type GeminiProvider struct {
 	model                   string
 	PricePerPromptToken     float64
 	PricePerCompletionToken float64
+	configSystemPrompt      *string
 }
 
 func (p *GeminiProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
 	// Case 1: Standard API Key usage
 	if p.genaiClient != nil {
 		modelVal := p.genaiClient.GenerativeModel(p.model)
@@ -532,9 +568,13 @@ type OllamaProvider struct {
 	BaseURL                 string
 	PricePerPromptToken     float64
 	PricePerCompletionToken float64
+	configSystemPrompt      *string
 }
 
 func (p *OllamaProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
 	url := fmt.Sprintf("%s/api/generate", p.BaseURL)
 
 	// Ollama API payload
@@ -589,9 +629,13 @@ type LMStudioProvider struct {
 	BaseURL                 string
 	PricePerPromptToken     float64
 	PricePerCompletionToken float64
+	configSystemPrompt      *string
 }
 
 func (p *LMStudioProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
 	url := fmt.Sprintf("%s/chat/completions", p.BaseURL)
 
 	payload := map[string]interface{}{
@@ -672,11 +716,15 @@ func (p *LMStudioProvider) Close() error {
 // --- OpenRouter Provider ---
 
 type OpenRouterProvider struct {
-	Model  string
-	APIKey string
+	Model              string
+	APIKey             string
+	configSystemPrompt *string
 }
 
 func (p *OpenRouterProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
 	url := "https://openrouter.ai/api/v1/chat/completions"
 
 	payload := map[string]interface{}{
@@ -781,9 +829,13 @@ type ZAIProvider struct {
 	APIKey                  string
 	PricePerPromptToken     float64
 	PricePerCompletionToken float64
+	configSystemPrompt      *string
 }
 
 func (p *ZAIProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
 	// OpenAI compatible endpoint construction
 	// If BaseURL is "https://api.z.ai/api/paas/v4", we append "/chat/completions"
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(p.BaseURL, "/"))
@@ -857,5 +909,95 @@ func (p *ZAIProvider) Generate(ctx context.Context, prompt string, systemPrompt 
 }
 
 func (p *ZAIProvider) Close() error {
+	return nil
+}
+
+// --- Groq Provider ---
+
+type GroqProvider struct {
+	Model                   string
+	BaseURL                 string
+	APIKey                  string
+	PricePerPromptToken     float64
+	PricePerCompletionToken float64
+	configSystemPrompt      *string
+}
+
+func (p *GroqProvider) Generate(ctx context.Context, prompt string, systemPrompt string) (string, model.TokenUsage, error) {
+	if p.configSystemPrompt != nil {
+		systemPrompt = *p.configSystemPrompt
+	}
+	// OpenAI compatible endpoint construction
+	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(p.BaseURL, "/"))
+
+	payload := map[string]interface{}{
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": prompt},
+		},
+		"model":       p.Model,
+		"temperature": 0.7,
+		"stream":      false,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", model.TokenUsage{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return "", model.TokenUsage{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if p.APIKey != "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.APIKey))
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", model.TokenUsage{}, fmt.Errorf("groq request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", model.TokenUsage{}, fmt.Errorf("groq error %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// OpenAI format response
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", model.TokenUsage{}, fmt.Errorf("failed to decode groq response: %w", err)
+	}
+
+	if len(result.Choices) == 0 {
+		return "", model.TokenUsage{}, fmt.Errorf("no content from groq")
+	}
+
+	usage := model.TokenUsage{
+		PromptTokens:     result.Usage.PromptTokens,
+		CompletionTokens: result.Usage.CompletionTokens,
+		TotalTokens:      result.Usage.TotalTokens,
+	}
+	usage.EstimatedCost = (float64(usage.PromptTokens)/1000000.0)*p.PricePerPromptToken +
+		(float64(usage.CompletionTokens)/1000000.0)*p.PricePerCompletionToken
+
+	return cleanResponse(result.Choices[0].Message.Content), usage, nil
+}
+
+func (p *GroqProvider) Close() error {
 	return nil
 }

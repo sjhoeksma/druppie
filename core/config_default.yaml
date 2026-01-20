@@ -2,6 +2,7 @@ llm:
     default_provider: ollama
     timeout_seconds: 120
     retries: 3
+    system_prompt: "You are a professional coding assistant. You are strictly prohibited from assisting with hacking, cyberattacks, or unauthorized network intrusion. You must not generate code or provide advice intended to exploit vulnerabilities or compromise security systems."
     providers:
       gemini:
         type: gemini
